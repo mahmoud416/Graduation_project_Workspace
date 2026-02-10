@@ -1,0 +1,124 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+/* Tailwind CSS v4 */
+@import "tailwindcss";
+
+/* Force dark mode to use class strategy instead of media query */
+@variant dark (&:where(.dark, .dark *));
+
+/* Define content sources for Tailwind to scan */
+@source "../src";
+
+/* Theme customization */
+@theme {
+  /* Typography */
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+
+  /* Colors */
+  --color-primary: #1d7bf4;
+  --color-background: #f8f9fb;
+  --color-surface: #ffffff;
+  --color-text-dark: #1a1a1a;
+  --color-text-gray: #6b7280;
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+  --color-border: #e5e7eb;
+}
+
+/* Base layer - global resets and defaults */
+@layer base {
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html {
+    height: 100%;
+    font-size: 16px;
+  }
+
+  body {
+    min-height: 100%;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background-color: #f8f9fb;
+    color: #1a1a1a;
+    line-height: 1.5;
+    text-rendering: optimizeLegibility;
+    transition: background-color 200ms ease, color 200ms ease;
+  }
+
+  /* Dark mode baseline so pages without explicit classes still invert */
+  body.dark {
+    background-color: #0b1220;
+    color: #e5e7eb;
+  }
+
+  #root {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Improve focus visibility for accessibility */
+  :focus-visible {
+    outline: 2px solid #1d7bf4;
+    outline-offset: 2px;
+  }
+}
+
+/* Components layer - reusable patterns */
+@layer components {
+
+  /* Buttons */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed select-none;
+  }
+
+  .btn-primary {
+    @apply bg-primary text-white hover:bg-blue-600 active:bg-blue-700 focus:ring-primary/30 shadow-sm hover:shadow;
+  }
+
+  .btn-secondary {
+    @apply bg-white text-text-dark border border-gray-300 hover:bg-gray-50 active:bg-gray-100 focus:ring-gray-300/30;
+  }
+
+  /* Inputs */
+  .input-field {
+    @apply w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm text-text-dark placeholder:text-text-gray focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all disabled:bg-gray-100 disabled:cursor-not-allowed;
+  }
+
+  /* Cards */
+  .card {
+    @apply bg-white rounded-xl border border-gray-200 shadow-sm p-6;
+  }
+
+  .card-hover {
+    @apply bg-white rounded-xl border border-gray-200 shadow-sm p-6 hover:shadow-md hover:border-gray-300 transition-all;
+  }
+
+  /* Surfaces */
+  .surface {
+    @apply bg-white border border-gray-200;
+  }
+}
+
+/* Utilities layer - custom utilities */
+@layer utilities {
+
+  /* Text utilities */
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* Scrollbar utilities */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+  }
+}

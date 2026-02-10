@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>workspace-app</title>
+  </head>
+  <body>
+    <script>
+      (() => {
+        const storageKey = 'theme';
+        const root = document.documentElement;
+        const body = document.body;
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const saved = window.localStorage.getItem(storageKey);
+        const mode = saved === 'dark' || saved === 'light' || saved === 'system' ? saved : 'light';
+        const resolved = mode === 'dark' || (mode === 'system' ? prefersDark : false) ? 'dark' : 'light';
+        [root, body].forEach((node) => {
+          if (!node) return;
+          node.classList.toggle('dark', resolved === 'dark');
+          node.dataset.theme = resolved;
+          node.dataset.mode = mode;
+        });
+      })();
+    </script>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
