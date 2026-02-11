@@ -11,6 +11,7 @@ import SettingsPage from './pages/SettingsPage';
 import TaskMasterDashboard from './pages/TaskMasterDashboard';
 import SubAdminPortal from './pages/SubAdminPortal';
 import TaskFlowDetail from './pages/TaskFlowDetail';
+import CreateTask from './pages/CreateTask';
 
 function App() {
   return (
@@ -29,6 +30,7 @@ function App() {
         <Route path="/taskmaster" element={<TaskMasterDashboard />} />
         <Route path="/subadmin" element={<SubAdminPortal />} />
         <Route path="/taskflow" element={<TaskFlowDetail />} />
+        <Route path="/create-task" element={<CreateTask />} />
       </Routes>
     </BrowserRouter>
   );

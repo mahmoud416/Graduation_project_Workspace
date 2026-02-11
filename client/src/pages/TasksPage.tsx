@@ -1,5 +1,9 @@
+import { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
+import { useNavigate } from 'react-router-dom';
+
+const API_BASE = (import.meta.env.VITE_API_BASE ?? 'http://localhost:8000/api/v1').replace(/\/$/, '');
 
 interface TaskItem {
     id: string;
@@ -13,6 +17,7 @@ interface TaskItem {
 }
 
 const TasksPage = () => {
+    const navigate = useNavigate();
     const completionStats = {
         completed: 24,
         inProgress: 9,
@@ -208,7 +213,7 @@ const TasksPage = () => {
                         {/* Table Header */}
                         <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700 text-xs font-semibold text-text-gray dark:text-gray-300 uppercase transition-colors">
                             <div className="col-span-1 flex items-center">
-                                <input type="checkbox" className="w-4 h-4 border-gray-300 rounded" />
+
                             </div>
                             <div className="col-span-4">Task Name</div>
                             <div className="col-span-2">Assignee</div>
@@ -228,8 +233,8 @@ const TasksPage = () => {
                                         <input type="checkbox" className="w-4 h-4 border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800" />
                                     </div>
 
-                                    <div className="col-span-4">
-                                        <div className="text-sm font-semibold text-text-dark dark:text-gray-100">{task.name}</div>
+                                    <div className="col-span-4" onClick={() => navigate('/taskflow')}>
+                                        <div className="text-sm font-semibold text-text-dark dark:text-gray-100 cursor-pointer hover:text-primary transition-colors">{task.name}</div>
                                         <div className="text-xs text-text-gray dark:text-gray-400 mt-0.5">{task.category}</div>
                                     </div>
 
@@ -269,11 +274,7 @@ const TasksPage = () => {
                                             </svg>
                                             {task.priority}
                                         </span>
-                                        <button className="w-6 h-6 flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors">
-                                            <svg className="w-4 h-4 text-text-gray dark:text-gray-400" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                                            </svg>
-                                        </button>
+
                                     </div>
                                 </div>
                             ))}

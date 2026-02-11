@@ -1,55 +1,89 @@
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 import type { Project } from '../types';
+import CreateTask from './CreateTask';
+
+const API_BASE = (import.meta.env.VITE_API_BASE ?? 'http://localhost:8000/api/v1').replace(/\/$/, '');
 
 const Projects = () => {
-    const projects: Project[] = [
-        {
-            id: '1',
-            title: 'Q4 Marketing Campaign',
-            description: 'Developing cross-channel strategies for year-end growth and customer acquisition.',
-            status: 'ACTIVE',
-            progress: 85,
-            team: ['SW', 'MC', 'ER'],
-            updatedAt: 'Updated 1h ago',
-        },
-        {
-            id: '2',
-            title: 'iOS App Redesign',
-            description: 'Complete overhaul of the user experience for iOS and Android platforms.',
-            status: 'ON HOLD',
-            progress: 20,
-            team: ['JM', 'SW'],
-            updatedAt: 'Updated 1d ago',
-        },
-        {
-            id: '3',
-            title: 'Annual Audit 2023',
-            description: 'Year-end financial and compliance review for the fiscal year 2023.',
-            status: 'COMPLETED',
-            progress: 100,
-            team: ['ER'],
-            updatedAt: 'Completed Oct 20',
-        },
-        {
-            id: '4',
-            title: 'Customer Portal Update',
-            description: 'Improving self-service tools for enterprise clients and billing transparency.',
-            status: 'ACTIVE',
-            progress: 45,
-            team: ['MC', 'JM', 'SW'],
-            updatedAt: 'Updated 3h ago',
-        },
-        {
-            id: '5',
-            title: 'Social Media Assets',
-            description: 'Standard templates and brand assets for multi-channel distribution.',
-            status: 'ACTIVE',
-            progress: 62,
-            team: ['ER', 'MC'],
-            updatedAt: 'Updated 5h ago',
-        },
-    ];
+    const navigate = useNavigate();
+    const [isCreateTaskOpen, setIsCreateTaskOpen] = useState(false);
+    const [projects, setProjects] = useState<Project[]>([]);
+
+    const fetchProjects = async () => {
+        const userId = localStorage.getItem('userId');
+        if (!userId) {
+            console.error('UserId is missing from localStorage');
+            return;
+        }
+
+        try {
+            console.log('Fetching teams for user:', userId);
+            // 1. Fetch user's teams
+            const teamRes = await fetch(`${API_BASE}/teams`, {
+                headers: { 'X-User-Id': userId }
+            });
+
+            if (!teamRes.ok) {
+                console.error('Failed to fetch teams:', await teamRes.text());
+                return;
+            }
+
+            const teams = await teamRes.json();
+            console.log('Teams fetched:', teams);
+
+            if (!teams || teams.length === 0) {
+                setProjects([]);
+                return;
+            }
+
+            // 2. Fetch tasks for each team
+            const tasksPromises = teams.map(async (team: any) => {
+                try {
+                    const tasksRes = await fetch(`${API_BASE}/tasks?team_id=${team.id || team._id}`, {
+                        headers: { 'X-User-Id': userId }
+                    });
+                    if (tasksRes.ok) {
+                        const tasks = await tasksRes.json();
+                        // Attach team info to tasks
+                        return tasks.map((t: any) => ({ ...t, teamName: team.name }));
+                    }
+                    console.error('Failed to fetch tasks for team:', team.name, await tasksRes.text());
+                    return [];
+                } catch (err) {
+                    console.error('Error fetching tasks for team:', team.name, err);
+                    return [];
+                }
+            });
+
+            const tasksResults = await Promise.all(tasksPromises);
+            const allTasks = tasksResults.flat();
+            console.log('All tasks fetched:', allTasks);
+
+            // 3. Map to Project format
+            const mappedProjects: Project[] = allTasks.map((t) => ({
+                id: t.id || t._id,
+                title: t.title,
+                description: t.description || 'No description provided',
+                status: t.status === 'done' ? 'COMPLETED' : (t.status === 'in_progress' ? 'ACTIVE' : 'ON HOLD'),
+                progress: t.status === 'done' ? 100 : (t.status === 'in_progress' ? 50 : 0),
+                team: [t.teamName ? t.teamName.substring(0, 2).toUpperCase() : 'TM'],
+                updatedAt: new Date(t.created_at || Date.now()).toLocaleDateString()
+            }));
+
+            // Sort by createdAt desc if possible, or just reverse to show newest first
+            setProjects(mappedProjects.reverse());
+
+        } catch (error) {
+            console.error('Failed to fetch projects:', error);
+        }
+    };
+
+    useEffect(() => {
+        fetchProjects();
+    }, []);
 
     const getStatusColor = (status: string) => {
         if (status === 'ACTIVE') return 'bg-green-100 text-success';
@@ -85,51 +119,9 @@ const Projects = () => {
                 <main className="pt-16 p-8">
                     {/* Page Header */}
                     <div className="flex items-center justify-between mb-6">
-                        <h1 className="text-2xl font-bold text-text-dark dark:text-white">Projects</h1>
+                        <h1 className="text-2xl font-bold text-text-dark dark:text-white">no</h1>
 
-                        <div className="flex items-center gap-3">
-                            {/* View Toggle */}
-                            <div className="flex items-center gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-1">
-                                <button className="w-8 h-8 flex items-center justify-center bg-primary text-white rounded-md">
-                                    <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-                                    </svg>
-                                </button>
-                                <button className="w-8 h-8 flex items-center justify-center text-text-gray dark:text-gray-400 hover:text-text-dark dark:hover:text-gray-200 rounded-md">
-                                    <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path d="M4 6h16M4 12h16M4 18h16" />
-                                    </svg>
-                                </button>
-                            </div>
 
-                            {/* Search */}
-                            <div className="relative">
-                                <input
-                                    type="text"
-                                    placeholder="Search projects..."
-                                    className="w-[240px] h-10 pl-9 pr-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-text-dark dark:text-gray-200 placeholder:text-text-gray dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                                />
-                                <svg
-                                    className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-gray"
-                                    fill="none"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth="2"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
-                                >
-                                    <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                </svg>
-                            </div>
-
-                            {/* Create Button */}
-                            <button className="h-10 px-4 bg-primary text-white font-medium text-sm rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2">
-                                <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path d="M12 4v16m8-8H4" />
-                                </svg>
-                                Create New Project
-                            </button>
-                        </div>
                     </div>
 
                     {/* Sort */}
@@ -150,7 +142,11 @@ const Projects = () => {
                     {/* Projects Grid */}
                     <div className="grid grid-cols-3 gap-5">
                         {projects.map((project) => (
-                            <div key={project.id} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md transition-shadow">
+                            <div
+                                key={project.id}
+                                onClick={() => navigate('/taskflow')}
+                                className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md hover:border-primary transition-all cursor-pointer"
+                            >
                                 <div className="flex items-start justify-between mb-4">
                                     <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase ${getStatusColor(project.status)}`}>
                                         {project.status}
@@ -200,7 +196,10 @@ const Projects = () => {
                         ))}
 
                         {/* Add New Project Card */}
-                        <button className="bg-white dark:bg-gray-800 rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-700 p-6 hover:border-primary hover:bg-blue-50/50 dark:hover:bg-blue-900/20 transition-all flex flex-col items-center justify-center min-h-[280px] group">
+                        <button
+                            onClick={() => setIsCreateTaskOpen(true)}
+                            className="bg-white dark:bg-gray-800 rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-700 p-6 hover:border-primary hover:bg-blue-50/50 dark:hover:bg-blue-900/20 transition-all flex flex-col items-center justify-center min-h-[280px] group"
+                        >
                             <div className="w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-700 group-hover:bg-primary/10 dark:group-hover:bg-primary/20 flex items-center justify-center mb-3 transition-colors">
                                 <svg className="w-6 h-6 text-text-gray dark:text-gray-400 group-hover:text-primary transition-colors" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
                                     <path d="M12 4v16m8-8H4" />
@@ -212,6 +211,15 @@ const Projects = () => {
                     </div>
                 </main>
             </div>
+            {isCreateTaskOpen && (
+                <CreateTask
+                    onClose={() => setIsCreateTaskOpen(false)}
+                    onSuccess={() => {
+                        setIsCreateTaskOpen(false);
+                        fetchProjects();
+                    }}
+                />
+            )}
         </div>
     );
 };
