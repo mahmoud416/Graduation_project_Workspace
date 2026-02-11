@@ -31,6 +31,7 @@ function App() {
         <Route path="/subadmin" element={<SubAdminPortal />} />
         <Route path="/taskflow" element={<TaskFlowDetail />} />
         <Route path="/create-task" element={<CreateTask />} />
+        <Route path="/task-master" element={<TaskMasterDashboard />} />
       </Routes>
     </BrowserRouter>
   );
