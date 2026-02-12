@@ -8,6 +8,8 @@ USERS_COLLECTION = "users"
 TEAMS_COLLECTION = "teams"
 MEMBERSHIPS_COLLECTION = "memberships"
 TASKS_COLLECTION = "tasks"
+PROJECTS_COLLECTION = "projects"
+TASK_BOARDS_COLLECTION = "task_boards"
 
 
 async def create_indexes(db):
@@ -35,5 +37,14 @@ async def create_indexes(db):
     await db[TASKS_COLLECTION].create_index("team_id")
     await db[TASKS_COLLECTION].create_index("assigned_to")
     await db[TASKS_COLLECTION].create_index("created_by")
+
+    # Projects collection indexes
+    await db[PROJECTS_COLLECTION].create_index("owner_id")
+    await db[PROJECTS_COLLECTION].create_index("sub_admin_id")
+    await db[PROJECTS_COLLECTION].create_index("staff_ids")
+
+    # Task boards collection indexes
+    await db[TASK_BOARDS_COLLECTION].create_index("project_id", unique=True)
+    await db[TASK_BOARDS_COLLECTION].create_index("members.user_id")
     
     print("✓ Database indexes created")

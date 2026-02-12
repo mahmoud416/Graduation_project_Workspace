@@ -110,10 +110,10 @@ const TeamPage = () => {
         <div className="flex min-h-screen bg-background dark:bg-gray-950 transition-colors">
             <Sidebar />
 
-            <div className="flex-1 ml-[240px]">
+            <div className="flex-1 ml-[var(--sidebar-width)] transition-[margin] duration-200">
                 <Header title="Team" />
 
-                <main className="pt-16 p-8">
+                <main className="page-main p-8">
                     {/* Page Header */}
                     <div className="flex items-center justify-between mb-6">
                         <div>

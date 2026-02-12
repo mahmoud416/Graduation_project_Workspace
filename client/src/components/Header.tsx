@@ -1,19 +1,99 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/useTheme';
 
 interface HeaderProps {
     title: string;
 }
 
+const USER_UPDATE_EVENT = 'workspace:user-update';
+
 const Header = ({ title }: HeaderProps) => {
     const { setTheme, isDark } = useTheme();
+    const navigate = useNavigate();
+    const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const [fullName, setFullName] = useState(() => (typeof window !== 'undefined' ? localStorage.getItem('fullName') ?? '' : ''));
+    const [email, setEmail] = useState(() => (typeof window !== 'undefined' ? localStorage.getItem('email') ?? '' : ''));
+    const profileButtonRef = useRef<HTMLButtonElement | null>(null);
+    const menuRef = useRef<HTMLDivElement | null>(null);
 
     const toggleTheme = () => {
         const nextTheme = isDark ? 'light' : 'dark';
         setTheme(nextTheme);
     };
 
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const syncUser = () => {
+            setFullName(localStorage.getItem('fullName') ?? '');
+            setEmail(localStorage.getItem('email') ?? '');
+        };
+
+        window.addEventListener('storage', syncUser);
+        window.addEventListener(USER_UPDATE_EVENT, syncUser);
+        return () => {
+            window.removeEventListener('storage', syncUser);
+            window.removeEventListener(USER_UPDATE_EVENT, syncUser);
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!isMenuOpen) return;
+        const handleClickOutside = (event: MouseEvent) => {
+            const target = event.target as Node;
+            if (menuRef.current?.contains(target)) return;
+            if (profileButtonRef.current?.contains(target)) return;
+            setIsMenuOpen(false);
+        };
+
+        const handleEscape = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                setIsMenuOpen(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        document.addEventListener('keydown', handleEscape);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+            document.removeEventListener('keydown', handleEscape);
+        };
+    }, [isMenuOpen]);
+
+    const initials = useMemo(() => {
+        if (!fullName.trim()) return 'W';
+        const segments = fullName.trim().split(/\s+/).slice(0, 2);
+        return segments.map((segment) => segment[0]?.toUpperCase() ?? '').join('');
+    }, [fullName]);
+
+    const firstName = useMemo(() => {
+        if (!fullName.trim()) return 'there';
+        return fullName.trim().split(/\s+/)[0];
+    }, [fullName]);
+
+    const handleProfileNavigation = () => {
+        setIsMenuOpen(false);
+        navigate('/settings', { state: { tab: 'profile' } });
+    };
+
+    const handleLogout = () => {
+        localStorage.removeItem('userId');
+        localStorage.removeItem('role');
+        localStorage.removeItem('fullName');
+        localStorage.removeItem('email');
+        localStorage.removeItem('jobTitle');
+        localStorage.removeItem('phone');
+        localStorage.removeItem('bio');
+        window.dispatchEvent(new Event(USER_UPDATE_EVENT));
+        setIsMenuOpen(false);
+        navigate('/login', { replace: true });
+    };
+
     return (
-        <header className="h-16 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 fixed top-0 left-[240px] right-0 z-10">
+        <header
+            className="h-16 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 fixed top-0 right-0 z-10 transition-[left] duration-200"
+            style={{ left: 'var(--sidebar-width)' }}
+        >
             <div className="h-full px-8 flex items-center justify-between">
                 <h1 className="text-sm font-medium text-text-dark dark:text-gray-100">{title}</h1>
 
@@ -71,9 +151,55 @@ const Header = ({ title }: HeaderProps) => {
                     </button>
 
                     {/* Profile */}
-                    <button className="w-9 h-9 rounded-full bg-gradient-to-br from-orange-400 to-pink-400 flex items-center justify-center text-white font-medium text-sm hover:opacity-90 transition-opacity">
-                        A
-                    </button>
+                    <div className="relative">
+                        <button
+                            ref={profileButtonRef}
+                            type="button"
+                            onClick={() => setIsMenuOpen((prev) => !prev)}
+                            className="w-9 h-9 rounded-full bg-gradient-to-br from-orange-400 to-pink-500 flex items-center justify-center text-white font-semibold text-sm hover:opacity-90 transition-opacity"
+                            aria-haspopup="menu"
+                            aria-expanded={isMenuOpen}
+                            aria-label="Account menu"
+                        >
+                            {initials}
+                        </button>
+
+                        {isMenuOpen && (
+                            <div
+                                ref={menuRef}
+                                className="absolute right-0 mt-3 w-72 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-xl overflow-hidden"
+                                role="menu"
+                                aria-label="Account options"
+                            >
+                                <div className="p-4 bg-gradient-to-br from-gray-50 to-white dark:from-gray-800 dark:to-gray-900 border-b border-gray-200 dark:border-gray-800">
+                                    <p className="text-xs font-semibold text-text-gray dark:text-gray-400 mb-1">Hi, {firstName}!</p>
+                                    <p className="text-base font-bold text-text-dark dark:text-gray-100 break-words">
+                                        {fullName || 'Workspace Member'}
+                                    </p>
+                                    <p className="text-xs text-text-gray dark:text-gray-400 break-words">
+                                        {email || 'No email connected'}
+                                    </p>
+                                </div>
+                                <div className="p-2">
+                                    <button
+                                        type="button"
+                                        onClick={handleProfileNavigation}
+                                        className="w-full flex items-center justify-between px-4 py-2 rounded-xl text-sm font-medium text-text-dark dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800"
+                                    >
+                                        Profile settings
+                                        <span className="text-xs text-text-gray dark:text-gray-400">&gt;</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleLogout}
+                                        className="w-full mt-2 px-4 py-2 rounded-xl text-sm font-semibold text-danger hover:bg-red-50 dark:hover:bg-red-900/30"
+                                    >
+                                        Log out
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
         </header>

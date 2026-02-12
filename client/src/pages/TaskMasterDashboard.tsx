@@ -109,10 +109,10 @@ const TaskMasterDashboard = () => {
         <div className="flex min-h-screen bg-[#F8FAFC] dark:bg-gray-950">
             <Sidebar />
 
-            <div className="flex-1 ml-[240px]">
+            <div className="flex-1 ml-[var(--sidebar-width)] transition-[margin] duration-200">
                 <Header title="TaskMaster" />
 
-                <main className="pt-20 p-8 space-y-8">
+                <main className="page-main p-8 space-y-8">
                     {/* Welcome Section */}
                     <div className="flex items-center justify-between">
                         <div>

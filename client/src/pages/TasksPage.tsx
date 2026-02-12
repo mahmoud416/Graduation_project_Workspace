@@ -117,10 +117,10 @@ const TasksPage = () => {
         <div className="flex min-h-screen bg-background dark:bg-gray-950 transition-colors">
             <Sidebar />
 
-            <div className="flex-1 ml-[240px]">
+            <div className="flex-1 ml-[var(--sidebar-width)] transition-[margin] duration-200">
                 <Header title="Tasks" />
 
-                <main className="pt-16 p-8">
+                <main className="page-main p-8">
                     {/* Project Completion Section */}
                     <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 mb-6 transition-colors">
                         <div className="flex items-center justify-between mb-4">

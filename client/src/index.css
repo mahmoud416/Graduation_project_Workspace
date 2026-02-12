@@ -37,6 +37,11 @@
     padding: 0;
   }
 
+  :root {
+    --sidebar-width: 88px;
+    --header-height: 64px;
+  }
+
   html {
     height: 100%;
     font-size: 16px;
@@ -87,6 +92,11 @@
 
   .btn-secondary {
     @apply bg-white text-text-dark border border-gray-300 hover:bg-gray-50 active:bg-gray-100 focus:ring-gray-300/30;
+  }
+
+  .page-main {
+    margin-top: var(--header-height);
+    padding-top: 1.5rem;
   }
 
   /* Inputs */

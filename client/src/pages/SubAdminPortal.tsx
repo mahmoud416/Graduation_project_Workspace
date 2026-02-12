@@ -63,10 +63,10 @@ const SubAdminPortal = () => {
         <div className="flex min-h-screen bg-background dark:bg-gray-950 transition-colors">
             <Sidebar />
 
-            <div className="flex-1 ml-[240px]">
+            <div className="flex-1 ml-[var(--sidebar-width)] transition-[margin] duration-200">
                 <Header title="Sub-Admin Portal" />
 
-                <main className="pt-16 p-8">
+                <main className="page-main p-8">
                     {/* Header Section */}
                     <div className="mb-8 flex items-center justify-between">
                         <div>

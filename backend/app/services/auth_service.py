@@ -2,6 +2,7 @@
 Authentication service.
 Handles user registration and login with a simple tokenless flow.
 """
+from datetime import datetime
 from typing import Optional, Dict, Any
 from bson import ObjectId
 
@@ -95,3 +96,21 @@ class AuthService:
             return None
         
         return user
+
+    @staticmethod
+    async def update_password(
+        db,
+        user_id: str,
+        new_password: str
+    ) -> bool:
+        """Update a user's password with a plain-text value."""
+        try:
+            object_id = ObjectId(user_id)
+        except Exception:
+            return False
+
+        result = await db[USERS_COLLECTION].update_one(
+            {"_id": object_id},
+            {"$set": {"password": new_password, "updated_at": datetime.utcnow()}}
+        )
+        return result.modified_count == 1

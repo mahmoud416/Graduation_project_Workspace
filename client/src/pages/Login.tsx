@@ -31,6 +31,8 @@ const Login = () => {
             localStorage.setItem('userId', data._id);
             localStorage.setItem('role', data.role);
             localStorage.setItem('fullName', data.name ?? '');
+            localStorage.setItem('email', data.email ?? email);
+            window.dispatchEvent(new Event('workspace:user-update'));
 
             if (data.role === 'admin') {
                 navigate('/dashboard', { replace: true });

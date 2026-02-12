@@ -44,10 +44,10 @@ const ReportsPage = () => {
         <div className="flex min-h-screen bg-background dark:bg-gray-950">
             <Sidebar />
 
-            <div className="flex-1 ml-[240px]">
+            <div className="flex-1 ml-[var(--sidebar-width)] transition-[margin] duration-200">
                 <Header title="Reports" />
 
-                <main className="pt-16 p-8">
+                <main className="page-main p-8">
                     {/* Page Header */}
                     <div className="mb-6">
                         <div className="flex items-center text-sm text-text-gray dark:text-gray-400 mb-2">

@@ -1,15 +1,166 @@
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
-import { useState } from 'react';
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useTheme } from '../contexts/useTheme';
 import type { Theme } from '../contexts/ThemeContextDefinition';
 
+const API_BASE = (import.meta.env.VITE_API_BASE ?? 'http://localhost:8000/api/v1').replace(/\/$/, '');
+
+type SettingsTab = 'general' | 'profile' | 'notifications' | 'billing' | 'integrations';
+
+const USER_UPDATE_EVENT = 'workspace:user-update';
+
+const formatRoleLabel = (value: string | null) => {
+    if (!value) return 'Member';
+    return value
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, (char) => char.toUpperCase());
+};
+
 const SettingsPage = () => {
-    const [activeTab, setActiveTab] = useState<'general' | 'profile' | 'notifications' | 'billing' | 'integrations'>('general');
+    const location = useLocation();
+    const requestedTab = (location.state as { tab?: SettingsTab } | null)?.tab;
+    const [activeTab, setActiveTab] = useState<SettingsTab>(requestedTab ?? 'general');
     const { theme, setTheme } = useTheme();
+    const readProfileFromStorage = () => {
+        if (typeof window === 'undefined') {
+            return { fullName: '', email: '', phone: '' };
+        }
+        return {
+            fullName: localStorage.getItem('fullName') ?? '',
+            email: localStorage.getItem('email') ?? '',
+            phone: localStorage.getItem('phone') ?? ''
+        };
+    };
+    const getRoleFromStorage = () => (typeof window !== 'undefined' ? localStorage.getItem('role') : null);
+    const [profileForm, setProfileForm] = useState(readProfileFromStorage);
+    const [roleValue, setRoleValue] = useState<string | null>(getRoleFromStorage);
+    const [profileMessage, setProfileMessage] = useState<string | null>(null);
+    const [savingProfile, setSavingProfile] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
+    const [isPasswordEditing, setIsPasswordEditing] = useState(false);
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [passwordStatus, setPasswordStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+    const [savingPassword, setSavingPassword] = useState(false);
+
+    useEffect(() => {
+        if (requestedTab && requestedTab !== activeTab) {
+            setActiveTab(requestedTab);
+        }
+    }, [requestedTab, activeTab]);
+
+    useEffect(() => {
+        const syncProfile = () => {
+            setProfileForm(readProfileFromStorage());
+            setRoleValue(getRoleFromStorage());
+        };
+        window.addEventListener('storage', syncProfile);
+        window.addEventListener(USER_UPDATE_EVENT, syncProfile);
+        return () => {
+            window.removeEventListener('storage', syncProfile);
+            window.removeEventListener(USER_UPDATE_EVENT, syncProfile);
+        };
+    }, []);
 
     const handleThemeChange = (newTheme: Theme) => {
         setTheme(newTheme);
+    };
+
+    const handleProfileChange = (field: keyof typeof profileForm) => (event: ChangeEvent<HTMLInputElement>) => {
+        const { value } = event.target;
+        setProfileForm((prev) => ({ ...prev, [field]: value }));
+        setProfileMessage(null);
+    };
+
+    const handleProfileSubmit = (event: FormEvent) => {
+        event.preventDefault();
+        if (typeof window === 'undefined') return;
+        setSavingProfile(true);
+        Object.entries(profileForm).forEach(([key, value]) => {
+            localStorage.setItem(key, value);
+        });
+        window.dispatchEvent(new Event(USER_UPDATE_EVENT));
+        setProfileMessage('Profile updated successfully');
+        setSavingProfile(false);
+        setIsEditing(false);
+        setTimeout(() => setProfileMessage(null), 4000);
+    };
+
+    const handleProfileReset = () => {
+        setProfileForm(readProfileFromStorage());
+        setProfileMessage(null);
+        setIsEditing(false);
+    };
+
+    const profileInitials = useMemo(() => {
+        if (!profileForm.fullName.trim()) return 'W';
+        return profileForm.fullName
+            .trim()
+            .split(/\s+/)
+            .slice(0, 2)
+            .map((segment) => segment[0]?.toUpperCase() ?? '')
+            .join('');
+    }, [profileForm.fullName]);
+
+    const roleLabel = useMemo(() => formatRoleLabel(roleValue), [roleValue]);
+
+    const resetPasswordForm = () => {
+        setNewPassword('');
+        setConfirmPassword('');
+        setSavingPassword(false);
+    };
+
+    const handleTogglePasswordEditor = () => {
+        if (isPasswordEditing) {
+            resetPasswordForm();
+            setPasswordStatus(null);
+        }
+        setIsPasswordEditing((prev) => !prev);
+    };
+
+    const handlePasswordSave = async () => {
+        if (!isPasswordEditing) return;
+        setPasswordStatus(null);
+
+        if (newPassword.trim().length < 3) {
+            setPasswordStatus({ type: 'error', message: 'Password must be at least 3 characters.' });
+            return;
+        }
+
+        if (newPassword !== confirmPassword) {
+            setPasswordStatus({ type: 'error', message: 'Passwords do not match.' });
+            return;
+        }
+
+        const userId = typeof window !== 'undefined' ? localStorage.getItem('userId') : null;
+        if (!userId) {
+            setPasswordStatus({ type: 'error', message: 'Missing user information. Please sign in again.' });
+            return;
+        }
+
+        try {
+            setSavingPassword(true);
+            const response = await fetch(`${API_BASE}/auth/change-password`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id: userId, new_password: newPassword })
+            });
+
+            if (!response.ok) {
+                const message = await response.text();
+                throw new Error(message || 'Failed to update password');
+            }
+
+            setPasswordStatus({ type: 'success', message: 'Password updated successfully.' });
+            resetPasswordForm();
+            setIsPasswordEditing(false);
+        } catch (error: any) {
+            setPasswordStatus({ type: 'error', message: error.message || 'Failed to update password.' });
+        } finally {
+            setSavingPassword(false);
+        }
     };
 
     // Sidebar navigation
@@ -25,10 +176,10 @@ const SettingsPage = () => {
         <div className="flex min-h-screen bg-background dark:bg-gray-950 transition-colors duration-200">
             <Sidebar />
 
-            <div className="flex-1 ml-[240px]">
+            <div className="flex-1 ml-[var(--sidebar-width)] transition-[margin] duration-200">
                 <Header title="Settings" />
 
-                <main className="pt-16 p-8 relative">
+                <main className="page-main p-8 relative">
 
                     <div className="flex gap-8">
                         {/* Settings Sidebar */}
@@ -41,6 +192,7 @@ const SettingsPage = () => {
                                 <nav className="space-y-1">
                                     {settingsTabs.map((tab) => (
                                         <button
+                                            type="button"
                                             key={tab.id}
                                             onClick={() => setActiveTab(tab.id)}
                                             className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${activeTab === tab.id
@@ -208,110 +360,202 @@ const SettingsPage = () => {
                             )}
 
                             {activeTab === 'profile' && (
-                                <div className="bg-white rounded-xl border border-gray-200 p-8">
-                                    <div className="mb-8">
-                                        <h1 className="text-2xl font-bold text-text-dark mb-2">Profile Settings</h1>
-                                        <p className="text-sm text-text-gray">Update your personal information and security preferences.</p>
-                                    </div>
-
-                                    {/* Profile Picture */}
-                                    <div className="mb-8">
-                                        <h2 className="text-base font-bold text-text-dark mb-4">Profile Picture</h2>
+                                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-8 transition-colors">
+                                    <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                                         <div className="flex items-center gap-4">
-                                            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-white text-2xl font-bold">
-                                                AJ
+                                            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 text-white text-2xl font-bold flex items-center justify-center">
+                                                {profileInitials}
                                             </div>
-                                            <div className="flex gap-3">
-                                                <button className="h-10 px-4 bg-white border border-gray-300 rounded-lg text-sm font-medium text-text-dark hover:bg-gray-50 transition-colors">
-                                                    Change Photo
-                                                </button>
-                                                <button className="h-10 px-4 text-sm font-medium text-danger hover:bg-red-50 rounded-lg transition-colors">
-                                                    Remove
-                                                </button>
+                                            <div>
+                                                <p className="text-xs uppercase font-semibold text-text-gray dark:text-gray-400">Signed in as</p>
+                                                <p className="text-2xl font-bold text-text-dark dark:text-white">
+                                                    {profileForm.fullName || 'Workspace Member'}
+                                                </p>
+                                                <p className="text-sm text-text-gray dark:text-gray-400 break-words">
+                                                    {profileForm.email || 'No email on file'}
+                                                </p>
+                                                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-gray-100 dark:bg-gray-900 text-text-gray dark:text-gray-300 mt-2">
+                                                    {roleLabel}
+                                                </span>
                                             </div>
                                         </div>
-                                        <p className="text-xs text-text-gray mt-2">JPG, GIF or PNG. Max size of 2MB.</p>
-                                    </div>
-
-                                    {/* Personal Information */}
-                                    <div className="mb-8">
-                                        <h2 className="text-base font-bold text-text-dark mb-4">Personal Information</h2>
-                                        <div className="grid grid-cols-2 gap-4 mb-4">
-                                            <div>
-                                                <label className="block text-sm font-medium text-text-dark mb-2">Full Name</label>
-                                                <input
-                                                    type="text"
-                                                    defaultValue="Alex Johnson"
-                                                    className="w-full h-10 px-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium text-text-dark mb-2">Email Address</label>
-                                                <input
-                                                    type="email"
-                                                    defaultValue="alex.j@acme.com"
-                                                    className="w-full h-10 px-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                                                />
-                                            </div>
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div>
-                                                <label className="block text-sm font-medium text-text-dark mb-2">Job Title</label>
-                                                <input
-                                                    type="text"
-                                                    defaultValue="Senior Project Manager"
-                                                    className="w-full h-10 px-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium text-text-dark mb-2">Phone Number</label>
-                                                <input
-                                                    type="tel"
-                                                    defaultValue="+1 (555) 123-4567"
-                                                    className="w-full h-10 px-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Password & Security */}
-                                    <div className="mb-8">
-                                        <h2 className="text-base font-bold text-text-dark mb-4">Password & Security</h2>
-
-                                        <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg mb-4">
-                                            <div>
-                                                <div className="text-sm font-semibold text-text-dark mb-1">Password</div>
-                                                <div className="text-xs text-text-gray">Last changed 3 months ago</div>
-                                            </div>
-                                            <button className="h-9 px-4 bg-white border border-gray-300 rounded-lg text-sm font-medium text-text-dark hover:bg-gray-50 transition-colors">
-                                                Change Password
+                                        {!isEditing && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsEditing(true)}
+                                                className="self-start h-10 px-4 rounded-lg border border-gray-300 dark:border-gray-600 text-sm font-semibold text-text-dark dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700"
+                                            >
+                                                Edit profile
                                             </button>
-                                        </div>
+                                        )}
+                                    </div>
 
-                                        <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                                            <div>
-                                                <div className="flex items-center gap-2 mb-1">
-                                                    <span className="text-sm font-semibold text-text-dark">Two-Factor Authentication</span>
-                                                    <span className="px-2 py-0.5 bg-success text-white text-[10px] font-bold rounded uppercase">Recommended</span>
+                                    {profileMessage && (
+                                        <div className="mb-6 rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 px-4 py-3 text-sm text-green-700 dark:text-green-200">
+                                            {profileMessage}
+                                        </div>
+                                    )}
+
+                                    <form className="space-y-8" onSubmit={handleProfileSubmit}>
+                                        <section>
+                                            <div className="mb-4 flex items-center justify-between">
+                                                <div>
+                                                    <h2 className="text-base font-bold text-text-dark dark:text-gray-100">Personal Information</h2>
+                                                    <p className="text-xs text-text-gray dark:text-gray-400">View your account details or enable editing to update them.</p>
                                                 </div>
-                                                <div className="text-xs text-text-gray">Add an extra layer of security to your account</div>
+                                                <span className="text-xs text-text-gray dark:text-gray-500">Stored locally</span>
                                             </div>
-                                            <label className="relative inline-flex items-center cursor-pointer">
-                                                <input type="checkbox" className="sr-only peer" defaultChecked />
-                                                <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-                                            </label>
-                                        </div>
-                                    </div>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="block text-sm font-medium text-text-dark dark:text-gray-300 mb-2">Full Name</label>
+                                                    <input
+                                                        type="text"
+                                                        value={profileForm.fullName}
+                                                        onChange={handleProfileChange('fullName')}
+                                                        disabled={!isEditing}
+                                                        className="w-full h-11 px-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm text-text-dark dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:bg-gray-100 dark:disabled:bg-gray-900/50 disabled:text-text-gray dark:disabled:text-gray-500 disabled:cursor-not-allowed"
+                                                        placeholder="Your full name"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-text-dark dark:text-gray-300 mb-2">Email Address</label>
+                                                    <input
+                                                        type="email"
+                                                        value={profileForm.email}
+                                                        onChange={handleProfileChange('email')}
+                                                        disabled={!isEditing}
+                                                        className="w-full h-11 px-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm text-text-dark dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:bg-gray-100 dark:disabled:bg-gray-900/50 disabled:text-text-gray dark:disabled:text-gray-500 disabled:cursor-not-allowed"
+                                                        placeholder="you@company.com"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-text-dark dark:text-gray-300 mb-2">Role</label>
+                                                    <input
+                                                        type="text"
+                                                        value={roleLabel}
+                                                        disabled
+                                                        className="w-full h-11 px-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/40 text-sm text-text-dark dark:text-gray-200"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-text-dark dark:text-gray-300 mb-2">Phone Number</label>
+                                                    <input
+                                                        type="tel"
+                                                        value={profileForm.phone}
+                                                        onChange={handleProfileChange('phone')}
+                                                        disabled={!isEditing}
+                                                        className="w-full h-11 px-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm text-text-dark dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:bg-gray-100 dark:disabled:bg-gray-900/50 disabled:text-text-gray dark:disabled:text-gray-500 disabled:cursor-not-allowed"
+                                                        placeholder="+20 10 0000 0000"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </section>
 
-                                    {/* Action Buttons */}
-                                    <div className="flex items-center justify-end gap-3 pt-6 border-t border-gray-200">
-                                        <button className="h-10 px-6 text-sm font-medium text-text-dark hover:bg-gray-100 rounded-lg transition-colors">
-                                            Cancel
-                                        </button>
-                                        <button className="h-10 px-6 bg-primary text-white font-medium text-sm rounded-lg hover:bg-blue-600 transition-colors">
-                                            Update Profile
-                                        </button>
-                                    </div>
+                                        <section>
+                                            <h2 className="text-base font-bold text-text-dark dark:text-gray-100 mb-4">Password & Security</h2>
+                                            <div className="p-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 flex items-center justify-between">
+                                                <div>
+                                                    <p className="text-sm font-semibold text-text-dark dark:text-gray-100">Password</p>
+                                                    <p className="text-xs text-text-gray dark:text-gray-400">Last changed 3 months ago</p>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={handleTogglePasswordEditor}
+                                                    className="h-9 px-4 rounded-lg border border-gray-300 dark:border-gray-600 text-sm font-medium text-text-dark dark:text-gray-100 hover:bg-white dark:hover:bg-gray-800"
+                                                >
+                                                    {isPasswordEditing ? 'Close' : 'Change'}
+                                                </button>
+                                            </div>
+
+                                            {passwordStatus && (
+                                                <div
+                                                    className={`mt-4 rounded-lg border px-4 py-3 text-sm ${passwordStatus.type === 'success'
+                                                        ? 'border-green-200 bg-green-50 text-green-700'
+                                                        : 'border-red-200 bg-red-50 text-red-700'
+                                                        }`}
+                                                >
+                                                    {passwordStatus.message}
+                                                </div>
+                                            )}
+
+                                            {isPasswordEditing && (
+                                                <div className="mt-4 space-y-4">
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                        <div>
+                                                            <label className="block text-sm font-medium text-text-dark dark:text-gray-300 mb-2">New Password</label>
+                                                            <input
+                                                                type="password"
+                                                                value={newPassword}
+                                                                onChange={(event) => setNewPassword(event.target.value)}
+                                                                className="w-full h-11 px-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm text-text-dark dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                                                                placeholder="Enter new password"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-sm font-medium text-text-dark dark:text-gray-300 mb-2">Confirm Password</label>
+                                                            <input
+                                                                type="password"
+                                                                value={confirmPassword}
+                                                                onChange={(event) => setConfirmPassword(event.target.value)}
+                                                                className="w-full h-11 px-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm text-text-dark dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                                                                placeholder="Repeat new password"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center justify-end gap-3">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                resetPasswordForm();
+                                                                setIsPasswordEditing(false);
+                                                                setPasswordStatus(null);
+                                                            }}
+                                                            className="h-10 px-6 rounded-lg text-sm font-medium text-text-dark dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700"
+                                                        >
+                                                            Cancel
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={handlePasswordSave}
+                                                            disabled={savingPassword}
+                                                            className="h-10 px-6 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-blue-600 disabled:opacity-60"
+                                                        >
+                                                            {savingPassword ? 'Saving...' : 'Save password'}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </section>
+
+                                        {isEditing ? (
+                                            <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+                                                <button
+                                                    type="button"
+                                                    onClick={handleProfileReset}
+                                                    className="h-10 px-6 rounded-lg text-sm font-medium text-text-dark dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700"
+                                                >
+                                                    Cancel
+                                                </button>
+                                                <button
+                                                    type="submit"
+                                                    disabled={savingProfile}
+                                                    className="h-10 px-6 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-blue-600 disabled:opacity-60"
+                                                >
+                                                    {savingProfile ? 'Saving...' : 'Save changes'}
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <div className="pt-4 border-t border-gray-200 dark:border-gray-700 text-right">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setIsEditing(true)}
+                                                    className="inline-flex items-center justify-center h-10 px-6 rounded-lg border border-gray-300 dark:border-gray-600 text-sm font-semibold text-text-dark dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700"
+                                                >
+                                                    Edit profile
+                                                </button>
+                                            </div>
+                                        )}
+                                    </form>
                                 </div>
                             )}
 

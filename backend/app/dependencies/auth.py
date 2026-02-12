@@ -24,15 +24,21 @@ async def get_current_user(
             detail="Missing X-User-Id header"
         )
 
-    try:
-        user_obj_id = ObjectId(x_user_id)
-    except Exception:
+    normalized_id = x_user_id.strip()
+    if not normalized_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid user id format"
         )
 
-    user = await db[USERS_COLLECTION].find_one({"_id": user_obj_id})
+    user_lookup_id: Any
+    if ObjectId.is_valid(normalized_id):
+        user_lookup_id = ObjectId(normalized_id)
+    else:
+        # Support legacy string-based identifiers from seeded data
+        user_lookup_id = normalized_id
+
+    user = await db[USERS_COLLECTION].find_one({"_id": user_lookup_id})
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

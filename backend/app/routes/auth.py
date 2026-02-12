@@ -4,8 +4,9 @@ Handles user registration, login, and profile retrieval.
 """
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.schemas.user import UserCreate, UserLogin, UserResponse
+from app.schemas.user import UserCreate, UserLogin, UserResponse, PasswordUpdateRequest
 from app.services.auth_service import AuthService
+from app.services.task_board_service import TaskBoardService
 from app.dependencies.auth import get_current_user
 from app.db.mongodb import get_database
 
@@ -41,6 +42,8 @@ async def register(
             phone=user_data.phone,
             status=user_data.status or "active"
         )
+
+        await TaskBoardService.ensure_public_membership_for_user(db, user)
         
         # Convert ObjectId to string for response
         user["_id"] = str(user["_id"])
@@ -107,3 +110,24 @@ async def get_current_user_profile(
     # Convert ObjectId to string for response
     current_user["_id"] = str(current_user["_id"])
     return current_user
+
+
+@router.post("/change-password")
+async def change_password(
+    payload: PasswordUpdateRequest,
+    db = Depends(get_database)
+):
+    """Update a user's password using their identifier."""
+    updated = await AuthService.update_password(
+        db,
+        user_id=payload.user_id,
+        new_password=payload.new_password
+    )
+
+    if not updated:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unable to update password"
+        )
+
+    return {"success": True}

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import SignUp from './pages/SignUp';
 import Login from './pages/Login';
@@ -12,26 +13,70 @@ import TaskMasterDashboard from './pages/TaskMasterDashboard';
 import SubAdminPortal from './pages/SubAdminPortal';
 import TaskFlowDetail from './pages/TaskFlowDetail';
 import CreateTask from './pages/CreateTask';
+import ConfigurationPage from './pages/ConfigurationPage';
+
+const USER_UPDATE_EVENT = 'workspace:user-update';
 
 function App() {
+  const [role, setRole] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('role');
+    }
+    return null;
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const syncRole = () => setRole(localStorage.getItem('role'));
+    const handleUserUpdate = () => syncRole();
+    window.addEventListener('storage', syncRole);
+    window.addEventListener(USER_UPDATE_EVENT, handleUserUpdate);
+    return () => {
+      window.removeEventListener('storage', syncRole);
+      window.removeEventListener(USER_UPDATE_EVENT, handleUserUpdate);
+    };
+  }, []);
+
+  const restrictForStaff = (page: JSX.Element) => {
+    if (role === 'staff') {
+      return <Navigate to="/dashboard" replace />;
+    }
+    return page;
+  };
+
+  const restrictForSubAdminOnly = (page: JSX.Element) => {
+    if (role !== 'sub_admin') {
+      return <Navigate to="/dashboard" replace />;
+    }
+    return page;
+  };
+
+  const redirectSubAdminDashboard = (page: JSX.Element) => {
+    if (role === 'sub_admin') {
+      return <Navigate to="/subadmin" replace />;
+    }
+    return page;
+  };
+
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/signup" element={<SignUp />} />
         <Route path="/login" element={<Login />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/projects" element={<Projects />} />
-        <Route path="/tasks" element={<TasksPage />} />
+        <Route path="/dashboard" element={redirectSubAdminDashboard(<Dashboard />)} />
+        <Route path="/projects" element={restrictForStaff(<Projects />)} />
+        <Route path="/tasks" element={restrictForStaff(<TasksPage />)} />
         <Route path="/calendar" element={<CalendarPage />} />
-        <Route path="/team" element={<TeamPage />} />
-        <Route path="/reports" element={<ReportsPage />} />
+        <Route path="/team" element={restrictForStaff(<TeamPage />)} />
+        <Route path="/reports" element={restrictForStaff(<ReportsPage />)} />
         <Route path="/settings" element={<SettingsPage />} />
-        <Route path="/taskmaster" element={<TaskMasterDashboard />} />
+        <Route path="/taskmaster" element={restrictForSubAdminOnly(<TaskMasterDashboard />)} />
         <Route path="/subadmin" element={<SubAdminPortal />} />
         <Route path="/taskflow" element={<TaskFlowDetail />} />
         <Route path="/create-task" element={<CreateTask />} />
         <Route path="/task-master" element={<TaskMasterDashboard />} />
+        <Route path="/configuration" element={<ConfigurationPage />} />
       </Routes>
     </BrowserRouter>
   );

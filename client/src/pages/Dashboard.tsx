@@ -1,8 +1,114 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
-import type { Activity, Task } from '../types';
+import type { Activity, Project, Task } from '../types';
+
+const API_BASE = (import.meta.env.VITE_API_BASE ?? 'http://localhost:8000/api/v1').replace(/\/$/, '');
+
+const STAFF_SAMPLE_PROJECTS: Project[] = [
+    {
+        id: 'social-assets',
+        title: 'Social Media Assets',
+        description: 'Standard templates and brand assets for multi-channel distribution.',
+        status: 'ACTIVE',
+        progress: 82,
+        team: ['ED', 'JN', 'SK', 'TG', 'LM'],
+        updatedAt: new Date(Date.now() - 35 * 60 * 1000).toISOString(),
+        updatedAtRaw: new Date(Date.now() - 35 * 60 * 1000).toISOString(),
+        subAdminName: 'Emily Davis'
+    },
+    {
+        id: 'q4-campaign',
+        title: 'Q4 Marketing Campaign',
+        description: 'Developing cross-channel strategies for year-end growth and customer retention.',
+        status: 'ACTIVE',
+        progress: 65,
+        team: ['AN', 'SV', 'VL', 'HK', 'PR'],
+        updatedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+        updatedAtRaw: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+        subAdminName: 'Alex Morgan'
+    },
+    {
+        id: 'customer-portal',
+        title: 'Customer Portal Update',
+        description: 'Improving self-service tools for enterprise clients and billing portals.',
+        status: 'ACTIVE',
+        progress: 45,
+        team: ['NB', 'OC', 'WR'],
+        updatedAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
+        updatedAtRaw: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
+        subAdminName: 'Nora Blake'
+    },
+    {
+        id: 'annual-audit',
+        title: 'Annual Audit 2023',
+        description: 'Year-end financial and compliance review for the fiscal year 2023.',
+        status: 'COMPLETED',
+        progress: 100,
+        team: ['FK', 'DZ'],
+        updatedAt: new Date('2023-10-20T09:00:00Z').toISOString(),
+        updatedAtRaw: new Date('2023-10-20T09:00:00Z').toISOString(),
+        subAdminName: 'Finance Pod'
+    }
+];
+
+const getStatusColor = (status: string) => {
+    if (status === 'COMPLETED') return 'bg-emerald-50 text-emerald-700';
+    if (status === 'ON HOLD') return 'bg-amber-50 text-amber-700';
+    return 'bg-blue-50 text-blue-700';
+};
+
+const getProgressColor = (status: string) => {
+    if (status === 'COMPLETED') return 'bg-emerald-500';
+    if (status === 'ON HOLD') return 'bg-amber-500';
+    return 'bg-primary';
+};
+
+const getAvatarColor = (index: number) => {
+    const palette = [
+        'from-indigo-500 to-purple-500',
+        'from-sky-500 to-blue-500',
+        'from-pink-500 to-rose-500',
+        'from-emerald-500 to-teal-500',
+        'from-amber-500 to-orange-500'
+    ];
+    return palette[index % palette.length];
+};
+
+const getUpdatedLabel = (project: Project) => {
+    const timestamp = project.updatedAtRaw ? new Date(project.updatedAtRaw) : new Date(project.updatedAt);
+    if (Number.isNaN(timestamp.getTime())) {
+        return 'Recently updated';
+    }
+    const diffMs = Date.now() - timestamp.getTime();
+    const minutes = Math.round(diffMs / (1000 * 60));
+    const hours = Math.round(diffMs / (1000 * 60 * 60));
+    const days = Math.round(diffMs / (1000 * 60 * 60 * 24));
+
+    if (minutes < 60) return `${Math.max(minutes, 1)}m ago`;
+    if (hours < 24) return `${Math.max(hours, 1)}h ago`;
+    if (days < 30) return `${Math.max(days, 1)}d ago`;
+    return timestamp.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+};
 
 const Dashboard = () => {
+    const [role, setRole] = useState<string | null>(() => {
+        if (typeof window !== 'undefined') {
+            return localStorage.getItem('role');
+        }
+        return null;
+    });
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const handleStorage = () => setRole(localStorage.getItem('role'));
+        window.addEventListener('storage', handleStorage);
+        return () => window.removeEventListener('storage', handleStorage);
+    }, []);
+
+    const isStaff = role === 'staff';
+
     // Mock data
     const stats = [
         { title: 'TOTAL TASKS', value: '124', change: '+5%', isPositive: true },
@@ -103,10 +209,13 @@ const Dashboard = () => {
         <div className="flex min-h-screen bg-background dark:bg-gray-950">
             <Sidebar />
 
-            <div className="flex-1 ml-[240px]">
-                <Header title="Dashboard" />
+            <div className="flex-1 ml-[var(--sidebar-width)] transition-[margin] duration-200">
+                <Header title={isStaff ? 'Workspace' : 'Dashboard'} />
 
-                <main className="pt-16 p-8">
+                {isStaff ? (
+                    <StaffProjectAssignments />
+                ) : (
+                    <main className="page-main p-8">
                     {/* Welcome Section */}
                     <div className="mb-8">
                         <h1 className="text-3xl font-bold text-text-dark dark:text-white mb-1">Welcome back, Alex</h1>
@@ -224,10 +333,216 @@ const Dashboard = () => {
                             </div>
                         </div>
                     </div>
-                </main>
+                    </main>
+                )}
             </div>
         </div>
     );
 };
 
 export default Dashboard;
+
+const StaffProjectAssignments = () => {
+    const [projects, setProjects] = useState<Project[]>(STAFF_SAMPLE_PROJECTS);
+    const [usingSampleData, setUsingSampleData] = useState(true);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [sortOption, setSortOption] = useState<'updated' | 'name' | 'progress'>('updated');
+    const navigate = useNavigate();
+
+    const fetchProjects = useCallback(async () => {
+        const userId = typeof window !== 'undefined' ? localStorage.getItem('userId') : null;
+        if (!userId) {
+            setProjects(STAFF_SAMPLE_PROJECTS);
+            setUsingSampleData(true);
+            return;
+        }
+
+        try {
+            const response = await fetch(`${API_BASE}/projects`, {
+                headers: { 'X-User-Id': userId }
+            });
+
+            if (!response.ok) {
+                throw new Error(await response.text());
+            }
+
+            const payload = await response.json();
+            if (!Array.isArray(payload) || payload.length === 0) {
+                setProjects(STAFF_SAMPLE_PROJECTS);
+                setUsingSampleData(true);
+                return;
+            }
+
+            const mapped: Project[] = payload.map((proj: any) => {
+                const staffInitials = Array.isArray(proj.staff_initials) ? proj.staff_initials : [];
+                const subInitial = proj.sub_admin?.initials;
+                const combinedInitials = subInitial ? [subInitial, ...staffInitials] : staffInitials;
+                const updatedStamp = proj.updated_at || new Date().toISOString();
+
+                return {
+                    id: proj._id,
+                    title: proj.title,
+                    description: proj.description || 'No description provided',
+                    status: proj.status ?? 'ACTIVE',
+                    progress: typeof proj.progress === 'number' ? proj.progress : 0,
+                    team: combinedInitials.length ? combinedInitials : ['TM'],
+                    updatedAt: updatedStamp,
+                    updatedAtRaw: updatedStamp,
+                    subAdminName: proj.sub_admin?.name
+                };
+            });
+
+            setProjects(mapped);
+            setUsingSampleData(false);
+        } catch (error) {
+            console.error('Failed to load member projects', error);
+            setProjects(STAFF_SAMPLE_PROJECTS);
+            setUsingSampleData(true);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchProjects();
+    }, [fetchProjects]);
+
+    const filteredProjects = useMemo(() => {
+        if (!searchQuery.trim()) return projects;
+        const query = searchQuery.toLowerCase();
+        return projects.filter((project) =>
+            project.title.toLowerCase().includes(query) || project.description.toLowerCase().includes(query)
+        );
+    }, [projects, searchQuery]);
+
+    const sortedProjects = useMemo(() => {
+        const next = [...filteredProjects];
+        if (sortOption === 'name') {
+            return next.sort((a, b) => a.title.localeCompare(b.title));
+        }
+        if (sortOption === 'progress') {
+            return next.sort((a, b) => b.progress - a.progress);
+        }
+        return next.sort((a, b) => {
+            const aDate = new Date(a.updatedAt).getTime();
+            const bDate = new Date(b.updatedAt).getTime();
+            return bDate - aDate;
+        });
+    }, [filteredProjects, sortOption]);
+
+    const assignedCount = sortedProjects.length;
+
+    return (
+        <main className="page-main pb-10 px-10">
+            <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm px-8 py-7">
+                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-6">
+                    <div>
+                        <p className="text-xs uppercase font-semibold tracking-wide text-text-gray">Assigned Groups</p>
+                        <h1 className="text-3xl font-semibold text-text-dark dark:text-white">Your Project Hubs</h1>
+                        <p className="text-sm text-text-gray dark:text-gray-400 mt-1">
+                            These are the collaborative spaces you're allowed to join to work on shared tasks.
+                        </p>
+                    </div>
+                    <div className="flex flex-col gap-3 md:flex-row md:items-center">
+                        <div className="relative w-full md:w-64">
+                            <input
+                                type="text"
+                                value={searchQuery}
+                                onChange={(event) => setSearchQuery(event.target.value)}
+                                placeholder="Search groups"
+                                className="w-full h-11 pl-11 pr-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-text-dark dark:text-gray-200 focus:border-primary focus:ring-2 focus:ring-primary/20"
+                            />
+                            <svg className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-text-gray" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                                <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            </svg>
+                        </div>
+                        <select
+                            value={sortOption}
+                            onChange={(event) => setSortOption(event.target.value as 'updated' | 'name' | 'progress')}
+                            className="h-11 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 text-sm font-semibold text-text-dark dark:text-gray-200"
+                        >
+                            <option value="updated">Recently Updated</option>
+                            <option value="name">Alphabetical</option>
+                            <option value="progress">Progress</option>
+                        </select>
+                    </div>
+                </div>
+
+                {usingSampleData && (
+                    <div className="mb-6 text-xs text-text-gray dark:text-gray-400">
+                        Showing sample groups until your live assignments sync.
+                    </div>
+                )}
+
+                <div className="flex items-center justify-between mb-5">
+                    <h2 className="text-base font-semibold text-text-dark dark:text-white">Active Groups ({assignedCount})</h2>
+                    <button
+                        type="button"
+                        onClick={() => navigate('/tasks')}
+                        className="text-xs font-semibold text-primary hover:underline"
+                    >
+                        Go to shared tasks
+                    </button>
+                </div>
+
+                {sortedProjects.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-gray-300 dark:border-gray-700 p-8 text-center text-sm text-text-gray dark:text-gray-400">
+                        Your admin hasn't assigned you to any project hubs yet.
+                    </div>
+                ) : (
+                    <div className="grid gap-5 grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
+                        {sortedProjects.map((project) => (
+                            <article key={project.id} className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-6 shadow-sm">
+                                <div className="flex items-start justify-between mb-4">
+                                    <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase ${getStatusColor(project.status)}`}>
+                                        {project.status === 'ON HOLD' ? 'ON HOLD' : project.status}
+                                    </span>
+                                    <button className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors" aria-label="Open group board" onClick={() => navigate('/taskflow')}>
+                                        <svg className="w-4 h-4 text-text-gray dark:text-gray-400" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path d="M12 5v14m7-7H5" />
+                                        </svg>
+                                    </button>
+                                </div>
+
+                                <h3 className="text-base font-bold text-text-dark dark:text-white mb-2">{project.title}</h3>
+                                <div className="mb-5">
+                                    <p className="text-sm text-text-gray dark:text-gray-400 mb-1.5 line-clamp-2">{project.description}</p>
+                                    {project.subAdminName && (
+                                        <p className="text-xs text-text-gray dark:text-gray-400">Lead · {project.subAdminName}</p>
+                                    )}
+                                </div>
+
+                                <div className="mb-4">
+                                    <div className="flex items-center justify-between text-xs mb-2">
+                                        <span className="text-text-gray dark:text-gray-400 font-medium">Progress</span>
+                                        <span className="text-text-dark dark:text-gray-200 font-semibold">{project.progress}%</span>
+                                    </div>
+                                    <div className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                        <div className={`h-full ${getProgressColor(project.status)} transition-all`} style={{ width: `${project.progress}%` }} />
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center justify-between">
+                                    <div className="flex -space-x-2">
+                                        {project.team.slice(0, 3).map((member, idx) => (
+                                            <div
+                                                key={`${project.id}-${member}-${idx}`}
+                                                className={`w-7 h-7 rounded-full bg-gradient-to-br ${getAvatarColor(idx)} border-2 border-white dark:border-gray-800 flex items-center justify-center text-white text-[10px] font-semibold`}
+                                            >
+                                                {member}
+                                            </div>
+                                        ))}
+                                        {project.team.length > 3 && (
+                                            <div className="w-7 h-7 rounded-full bg-gray-200 dark:bg-gray-700 border-2 border-white dark:border-gray-800 flex items-center justify-center text-text-gray dark:text-gray-300 text-[10px] font-semibold">
+                                                +{project.team.length - 3}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <span className="text-xs text-text-gray dark:text-gray-400">{getUpdatedLabel(project)}</span>
+                                </div>
+                            </article>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </main>
+    );
+};

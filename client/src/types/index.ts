@@ -27,6 +27,9 @@ export interface Project {
     progress: number;
     team: string[];
     updatedAt: string;
+    updatedAtRaw?: string;
+    subAdminName?: string;
+    subAdminNames?: string[];
 }
 
 export interface StatCard {
