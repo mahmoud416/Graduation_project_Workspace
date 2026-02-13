@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, List, Optional, Annotated
+from typing import Annotated, Any, List, Optional, Union
 from uuid import uuid4
 
 from bson import ObjectId
@@ -220,7 +220,7 @@ async def list_available_members(
 async def add_task_board_comment(
     project_id: str,
     message: Annotated[Optional[str], Form()] = None,
-    attachments: Annotated[Optional[List[UploadFile]], File()] = None,
+    attachments: Annotated[Optional[Union[UploadFile, List[UploadFile]]], File()] = None,
     current_user=Depends(get_current_user),
     db=Depends(get_database),
 ):
@@ -232,7 +232,7 @@ async def add_task_board_comment(
         board = await TaskBoardService.ensure_board_for_project(db, project)
 
     attachment_payloads: List[StoredUpload] = []
-    for upload in attachments or []:
+    for upload in _coerce_uploads_to_list(attachments):
         stored = await _persist_upload_file(normalized_id, upload, folder="comments")
         attachment_payloads.append(stored)
 
@@ -458,6 +458,14 @@ def _ensure_resource_access(resource: dict[str, Any], current_user: dict[str, An
     if resource.get("uploaded_by") == viewer_id:
         return
     raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Access denied to this resource")
+
+
+def _coerce_uploads_to_list(value: Optional[Union[UploadFile, List[UploadFile]]]) -> List[UploadFile]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [upload for upload in value if upload is not None]
+    return [value]
 
 
 async def _persist_upload_file(project_id: str, upload: UploadFile, folder: str = "resources") -> StoredUpload:

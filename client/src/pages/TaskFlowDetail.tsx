@@ -658,11 +658,12 @@ const TaskFlowDetail = () => {
                                         <p className="text-sm text-text-gray dark:text-gray-400 leading-relaxed">
                                             {overviewDescription}
                                         </p>
-                                        {greetEveryone && (
-                                            <p className="mt-3 text-xs text-text-gray dark:text-gray-500">
-                                                قناة عامة تربط {greetEveryone}{subAdminSalute ? ` · مشرفين: ${subAdminSalute}` : ''} لتحديث كل مهام الورك سبيس.
-                                            </p>
-                                        )}
+                                            {greetEveryone && (
+                                                <p className="mt-3 text-xs text-text-gray dark:text-gray-500">
+                                                    Public channel connecting {greetEveryone}
+                                                    {subAdminSalute ? ` - Admins: ${subAdminSalute}` : ''} to sync every workspace task.
+                                                </p>
+                                            )}
                                     </div>
                                     <span className="px-3 py-1.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-lg text-xs font-medium whitespace-nowrap">
                                         {overviewStatus}

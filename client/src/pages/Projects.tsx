@@ -1,9 +1,59 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type MouseEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 import type { Project } from '../types';
 import CreateProjectModal from '../components/CreateProjectModal';
+
+const API_BASE = (import.meta.env.VITE_API_BASE ?? 'http://localhost:8000/api/v1').replace(/\/$/, '');
+
+const STATUS_OPTIONS: Array<{ value: Project['status']; label: string }> = [
+    { value: 'ACTIVE', label: 'Active' },
+    { value: 'ON HOLD', label: 'On Hold' },
+    { value: 'COMPLETED', label: 'Completed' },
+];
+
+const mapProjectResponse = (proj: any): Project => {
+    const subAdminEntries = Array.isArray(proj.sub_admins) ? proj.sub_admins : [];
+    const staffEntries = Array.isArray(proj.staff) ? proj.staff : [];
+    const subAdminNames = subAdminEntries
+        .map((entry) => entry?.name)
+        .filter((name): name is string => Boolean(name));
+    if (!subAdminNames.length && proj.sub_admin?.name) {
+        subAdminNames.push(proj.sub_admin.name);
+    }
+
+    const subAdminIds = subAdminEntries
+        .map((entry) => entry?._id || entry?.id)
+        .filter((identifier): identifier is string => typeof identifier === 'string');
+    const staffIds = staffEntries
+        .map((entry) => entry?._id || entry?.id)
+        .filter((identifier): identifier is string => typeof identifier === 'string');
+
+    const staffInitials = Array.isArray(proj.staff_initials) ? proj.staff_initials : [];
+    const subInitials = subAdminEntries
+        .map((entry) => entry?.initials)
+        .filter((initial): initial is string => Boolean(initial));
+    const combinedInitials = [...subInitials, ...staffInitials].filter(Boolean);
+    const updatedStamp = proj.updated_at || new Date().toISOString();
+    const normalizedStatus = (proj.status || 'ACTIVE').toUpperCase() as Project['status'];
+
+    return {
+        id: proj._id,
+        title: proj.title,
+        description: proj.description || 'No description provided',
+        status: normalizedStatus === 'ON HOLD' ? 'ON HOLD' : normalizedStatus,
+        progress: typeof proj.progress === 'number' ? proj.progress : 0,
+        team: (combinedInitials.length ? combinedInitials : ['TM']).slice(0, 5),
+        updatedAt: updatedStamp,
+        updatedAtRaw: updatedStamp,
+        subAdminName: subAdminNames[0],
+        subAdminNames,
+        subAdminIds,
+        staffIds,
+        isDefaultGroup: proj._id === 'public-group' || proj._id === 'all-sub-admin',
+    };
+};
 
 const GROUPED_PROJECTS: Project[] = [
     {
@@ -16,7 +66,10 @@ const GROUPED_PROJECTS: Project[] = [
         updatedAt: new Date().toISOString(),
         updatedAtRaw: new Date().toISOString(),
         subAdminName: 'All Users',
-        subAdminNames: ['All Users']
+        subAdminNames: ['All Users'],
+        subAdminIds: [],
+        staffIds: [],
+        isDefaultGroup: true,
     },
     {
         id: 'all-sub-admin',
@@ -28,7 +81,10 @@ const GROUPED_PROJECTS: Project[] = [
         updatedAt: new Date().toISOString(),
         updatedAtRaw: new Date().toISOString(),
         subAdminName: 'Sub Admin Leads',
-        subAdminNames: ['Sub Admin Leads']
+        subAdminNames: ['Sub Admin Leads'],
+        subAdminIds: [],
+        staffIds: [],
+        isDefaultGroup: true,
     }
 ];
 
@@ -42,12 +98,21 @@ const Projects = () => {
     const [sortOption, setSortOption] = useState<'updated' | 'name' | 'progress'>('updated');
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
     const [role, setRole] = useState<string | null>(null);
+    const [userId, setUserId] = useState<string | null>(null);
     const [permissionMessage, setPermissionMessage] = useState<string | null>(null);
+    const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+    const [editingProject, setEditingProject] = useState<Project | null>(null);
+    const [configDraft, setConfigDraft] = useState({ title: '', description: '', status: 'ACTIVE' as Project['status'], progress: 0 });
+    const [configError, setConfigError] = useState<string | null>(null);
+    const [configSaving, setConfigSaving] = useState(false);
+    const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
+    const [isDeletingProject, setIsDeletingProject] = useState(false);
     const messageTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
         setRole(localStorage.getItem('role'));
+        setUserId(localStorage.getItem('userId'));
 
         return () => {
             if (messageTimer.current) {
@@ -57,18 +122,20 @@ const Projects = () => {
     }, []);
 
     const fetchProjects = useCallback(async () => {
-        const userId = localStorage.getItem('userId');
-        if (!userId) {
+        const storedUserId = typeof window !== 'undefined' ? localStorage.getItem('userId') : null;
+        if (!storedUserId) {
             setProjects(GROUPED_PROJECTS);
             setUsingSampleData(true);
             setFetchError('Missing admin session. Please log in again.');
             return;
         }
 
+        setUserId(storedUserId);
+
         try {
             setFetchError(null);
-            const response = await fetch(`${import.meta.env.VITE_API_BASE ?? 'http://localhost:8000/api/v1'}/projects`, {
-                headers: { 'X-User-Id': userId },
+            const response = await fetch(`${API_BASE}/projects`, {
+                headers: { 'X-User-Id': storedUserId },
             });
 
             if (!response.ok) {
@@ -77,51 +144,21 @@ const Projects = () => {
             }
 
             const payload = await response.json();
-            if (!Array.isArray(payload) || payload.length === 0) {
-                setProjects(GROUPED_PROJECTS);
-                setUsingSampleData(true);
+            if (!Array.isArray(payload)) {
+                setProjects([]);
+                setUsingSampleData(false);
                 return;
             }
 
-            const mapped: Project[] = payload.map((proj: any) => {
-                const subAdminEntries = Array.isArray(proj.sub_admins) ? proj.sub_admins : [];
-                const subAdminNames = subAdminEntries
-                    .map((entry) => entry?.name)
-                    .filter((name): name is string => Boolean(name));
-
-                if (!subAdminNames.length && proj.sub_admin?.name) {
-                    subAdminNames.push(proj.sub_admin.name);
-                }
-
-                const primaryLead = subAdminNames[0];
-
-                return {
-                    id: proj._id,
-                    title: proj.title,
-                    description: proj.description || 'No description provided',
-                    status: proj.status || 'ACTIVE',
-                    progress: typeof proj.progress === 'number' ? proj.progress : 0,
-                    team: Array.isArray(proj.staff_initials) && proj.staff_initials.length ? proj.staff_initials.slice(0, 5) : ['TM'],
-                    updatedAt: proj.updated_at || new Date().toISOString(),
-                    updatedAtRaw: proj.updated_at || new Date().toISOString(),
-                    subAdminName: primaryLead,
-                    subAdminNames,
-                };
-            });
-
-            if (mapped.length === 0) {
-                setProjects(GROUPED_PROJECTS);
-                setUsingSampleData(true);
-            } else {
-                setProjects(mapped);
-                setUsingSampleData(false);
-            }
+            const mapped: Project[] = payload.map(mapProjectResponse);
+            setProjects(mapped);
+            setUsingSampleData(false);
         } catch (error) {
             console.error('Failed to fetch projects:', error);
             const message = error instanceof Error ? error.message : 'Unable to load projects';
             setFetchError(message);
-            setProjects(GROUPED_PROJECTS);
-            setUsingSampleData(true);
+            setProjects([]);
+            setUsingSampleData(false);
         }
     }, []);
 
@@ -129,19 +166,53 @@ const Projects = () => {
         fetchProjects();
     }, [fetchProjects]);
 
-    const filteredProjects = useMemo(() => {
-        return projects.filter((project) => {
-            if (!searchQuery.trim()) return true;
-            const query = searchQuery.toLowerCase();
-            return (
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const closeMenus = () => setOpenMenuId(null);
+        window.addEventListener('click', closeMenus);
+        return () => window.removeEventListener('click', closeMenus);
+    }, []);
+
+    const visibleProjects = useMemo(() => {
+        let scoped = projects;
+        if (role && role !== 'admin') {
+            if (role === 'sub_admin') {
+                scoped = scoped.filter((project) => {
+                    if (project.id === 'public-group' || project.id === 'all-sub-admin' || project.isDefaultGroup) {
+                        return true;
+                    }
+                    if (!userId) {
+                        return false;
+                    }
+                    return project.subAdminIds?.includes(userId) ?? false;
+                });
+            } else {
+                scoped = scoped.filter((project) => {
+                    if (project.id === 'public-group') {
+                        return true;
+                    }
+                    if (!userId) {
+                        return false;
+                    }
+                    return project.staffIds?.includes(userId) ?? false;
+                });
+            }
+        }
+
+        if (!searchQuery.trim()) {
+            return scoped;
+        }
+
+        const query = searchQuery.toLowerCase();
+        return scoped.filter(
+            (project) =>
                 project.title.toLowerCase().includes(query) ||
                 project.description.toLowerCase().includes(query)
-            );
-        });
-    }, [projects, searchQuery]);
+        );
+    }, [projects, role, userId, searchQuery]);
 
     const sortedProjects = useMemo(() => {
-        const next = [...filteredProjects];
+        const next = [...visibleProjects];
         switch (sortOption) {
             case 'name':
                 return next.sort((a, b) => a.title.localeCompare(b.title));
@@ -152,7 +223,149 @@ const Projects = () => {
                     new Date(b.updatedAtRaw ?? b.updatedAt).getTime() - new Date(a.updatedAtRaw ?? a.updatedAt).getTime()
                 );
         }
-    }, [filteredProjects, sortOption]);
+    }, [visibleProjects, sortOption]);
+
+    const requireUserHeader = () => {
+        const header = userId ?? (typeof window !== 'undefined' ? localStorage.getItem('userId') : null);
+        if (!header) {
+            setFetchError('Missing admin session. Please log in again.');
+        }
+        return header;
+    };
+
+    const handleMenuToggle = (event: MouseEvent<HTMLButtonElement>, projectId: string) => {
+        event.stopPropagation();
+        event.preventDefault();
+        setOpenMenuId((prev) => (prev === projectId ? null : projectId));
+    };
+
+    const openConfigModal = (project: Project) => {
+        setEditingProject(project);
+        setConfigDraft({
+            title: project.title,
+            description: project.description,
+            status: project.status,
+            progress: project.progress,
+        });
+        setConfigError(null);
+    };
+
+    const handleConfigureClick = (event: MouseEvent<HTMLButtonElement>, project: Project) => {
+        event.stopPropagation();
+        openConfigModal(project);
+        setOpenMenuId(null);
+    };
+
+    const handleDeleteClick = (event: MouseEvent<HTMLButtonElement>, project: Project) => {
+        event.stopPropagation();
+        setDeleteTarget(project);
+        setOpenMenuId(null);
+    };
+
+    const closeConfigModal = () => {
+        setEditingProject(null);
+        setConfigError(null);
+    };
+
+    const closeDeleteDialog = () => {
+        setDeleteTarget(null);
+    };
+
+    const handleConfigFieldChange = (
+        field: 'title' | 'description' | 'status' | 'progress',
+        value: string | number
+    ) => {
+        setConfigDraft((prev) => ({ ...prev, [field]: value }));
+    };
+
+    const handleConfigSubmit = async (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        if (!editingProject) {
+            return;
+        }
+        const headerId = requireUserHeader();
+        if (!headerId) {
+            return;
+        }
+
+        const trimmedTitle = configDraft.title.trim();
+        const trimmedDescription = configDraft.description.trim();
+        const payload: Record<string, unknown> = {};
+        if (trimmedTitle && trimmedTitle !== editingProject.title) {
+            payload.title = trimmedTitle;
+        }
+        if (trimmedDescription !== editingProject.description) {
+            payload.description = trimmedDescription;
+        }
+        if (configDraft.status !== editingProject.status) {
+            payload.status = configDraft.status;
+        }
+        if (configDraft.progress !== editingProject.progress) {
+            payload.progress = configDraft.progress;
+        }
+
+        if (!Object.keys(payload).length) {
+            setConfigError('No pending changes to save.');
+            return;
+        }
+
+        try {
+            setConfigSaving(true);
+            const response = await fetch(`${API_BASE}/projects/${editingProject.id}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-User-Id': headerId,
+                },
+                body: JSON.stringify(payload),
+            });
+
+            if (!response.ok) {
+                const detail = await response.text();
+                throw new Error(detail || 'Unable to update project');
+            }
+
+            const updated = mapProjectResponse(await response.json());
+            setProjects((prev) => prev.map((project) => (project.id === updated.id ? updated : project)));
+            setEditingProject(null);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Unable to update project';
+            setConfigError(message);
+        } finally {
+            setConfigSaving(false);
+        }
+    };
+
+    const handleConfirmDelete = async () => {
+        if (!deleteTarget) {
+            return;
+        }
+        const headerId = requireUserHeader();
+        if (!headerId) {
+            return;
+        }
+
+        try {
+            setIsDeletingProject(true);
+            const response = await fetch(`${API_BASE}/projects/${deleteTarget.id}`, {
+                method: 'DELETE',
+                headers: { 'X-User-Id': headerId },
+            });
+
+            if (!response.ok) {
+                const detail = await response.text();
+                throw new Error(detail || 'Unable to delete project');
+            }
+
+            setProjects((prev) => prev.filter((project) => project.id !== deleteTarget.id));
+            setDeleteTarget(null);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Unable to delete project';
+            setFetchError(message);
+        } finally {
+            setIsDeletingProject(false);
+        }
+    };
 
     const getStatusColor = (status: string) => {
         if (status === 'ACTIVE') return 'bg-green-100 text-success';
@@ -224,6 +437,9 @@ const Projects = () => {
     };
 
     const activeCount = sortedProjects.length;
+    const emptyStateMessage = canManageProjects
+        ? 'No project cards yet. Click Create New Project to get started.'
+        : 'No cards are assigned to your account yet. Contact the admin to be added.';
 
     return (
         <div className="flex min-h-screen bg-[#f5f6fb] dark:bg-gray-950">
@@ -356,11 +572,17 @@ const Projects = () => {
                         </div>
 
                         {/* Projects Grid */}
-                        <div className={`grid gap-5 ${viewMode === 'grid' ? 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3' : 'grid-cols-1'}`}>
-                            {sortedProjects.map((project) => {
+                        {sortedProjects.length === 0 && !usingSampleData ? (
+                            <div className="rounded-2xl border border-dashed border-gray-300 dark:border-gray-700 p-10 text-center text-sm text-text-gray dark:text-gray-400">
+                                {emptyStateMessage}
+                            </div>
+                        ) : (
+                            <div className={`grid gap-5 ${viewMode === 'grid' ? 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3' : 'grid-cols-1'}`}>
+                                {sortedProjects.map((project) => {
                                 const leadLabel = getLeadLabel(project.subAdminNames);
                                 const isDefaultGroup = project.id === 'public-group' || project.id === 'all-sub-admin';
                                 const badgeClass = isDefaultGroup ? 'bg-purple-100 text-purple-700' : getStatusColor(project.status);
+                                const showMenu = canManageProjects && !isDefaultGroup;
                                 return (
                                     <div
                                         key={project.id}
@@ -371,14 +593,54 @@ const Projects = () => {
                                             <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase ${badgeClass}`}>
                                                 {isDefaultGroup ? 'Groub' : project.status}
                                             </span>
-                                            {isDefaultGroup ? (
-                                                <span className="w-8 h-8" aria-hidden="true" />
+                                            {showMenu ? (
+                                                <div className="relative">
+                                                    <button
+                                                        type="button"
+                                                        onClick={(event) => handleMenuToggle(event, project.id)}
+                                                        className="w-9 h-9 flex items-center justify-center rounded-xl border border-gray-200 dark:border-gray-600 text-text-gray dark:text-gray-300 hover:border-primary hover:text-primary transition-colors"
+                                                        aria-haspopup="menu"
+                                                        aria-expanded={openMenuId === project.id}
+                                                        aria-label="Project actions"
+                                                    >
+                                                        <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path d="M12 5v.01M12 12v.01M12 19v.01" />
+                                                        </svg>
+                                                    </button>
+                                                    {openMenuId === project.id && (
+                                                        <div
+                                                            className="absolute right-0 mt-2 w-48 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-2xl z-10"
+                                                            onClick={(event) => event.stopPropagation()}
+                                                        >
+                                                            <button
+                                                                type="button"
+                                                                onClick={(event) => handleConfigureClick(event, project)}
+                                                                className="flex w-full items-center gap-2 px-4 py-2.5 text-sm font-semibold text-text-dark dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800"
+                                                            >
+                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden="true">
+                                                                    <circle cx="12" cy="12" r="3" />
+                                                                    <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83l-1.15 1.15a2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V22a2 2 0 01-2 2h-1.62a2 2 0 01-2-2v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0L.21 19.71a2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H0a2 2 0 01-2-2v-1.62a2 2 0 012-2h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83L2.37.21a2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H7.1a1.65 1.65 0 001-1.51V0a2 2 0 012-2h1.62a2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0l1.15 1.15a2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82v.1a1.65 1.65 0 001.51 1H22a2 2 0 012 2v1.62a2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" />
+                                                                </svg>
+                                                                Configure card
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={(event) => handleDeleteClick(event, project)}
+                                                                className="flex w-full items-center gap-2 px-4 py-2.5 text-sm font-semibold text-danger hover:bg-red-50 dark:hover:bg-red-900/20"
+                                                            >
+                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden="true">
+                                                                    <polyline points="3 6 5 6 21 6" />
+                                                                    <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
+                                                                    <path d="M10 11v6M14 11v6" />
+                                                                    <path d="M9 6V4a2 2 0 012-2h2a2 2 0 012 2v2" />
+                                                                </svg>
+                                                                Delete card
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
                                             ) : (
-                                                <button className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
-                                                    <svg className="w-4 h-4 text-text-gray dark:text-gray-400" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                                                    </svg>
-                                                </button>
+                                                <span className="w-8 h-8" aria-hidden="true" />
                                             )}
                                         </div>
 
@@ -411,7 +673,7 @@ const Projects = () => {
 
                                                 <div className="flex items-center justify-between">
                                                     <div className="flex -space-x-2">
-                                                        {project.team.map((member, idx) => (
+                                                        {project.team.slice(0, 3).map((member, idx) => (
                                                             <div
                                                                 key={member}
                                                                 className={`w-7 h-7 rounded-full bg-gradient-to-br ${getAvatarColor(idx)} border-2 border-white dark:border-gray-800 flex items-center justify-center text-white text-[10px] font-semibold`}
@@ -433,6 +695,7 @@ const Projects = () => {
                                 );
                             })}
                         </div>
+                        )}
                     </div>
                 </main>
             </div>
@@ -444,6 +707,126 @@ const Projects = () => {
                         fetchProjects();
                     }}
                 />
+            )}
+
+            {editingProject && (
+                <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4" onClick={closeConfigModal}>
+                    <div className="w-full max-w-2xl rounded-3xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-800">
+                            <div>
+                                <p className="text-xs uppercase tracking-wide text-text-gray">Configure Card</p>
+                                <h3 className="text-xl font-semibold text-text-dark dark:text-white">{editingProject.title}</h3>
+                            </div>
+                            <button type="button" onClick={closeConfigModal} className="w-9 h-9 rounded-full bg-gray-100 dark:bg-gray-800 text-text-gray flex items-center justify-center" aria-label="Close">
+                                <svg className="w-4 h-4" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none">
+                                    <line x1="18" y1="6" x2="6" y2="18" />
+                                    <line x1="6" y1="6" x2="18" y2="18" />
+                                </svg>
+                            </button>
+                        </div>
+                        <form onSubmit={handleConfigSubmit} className="px-6 py-6 space-y-5">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-semibold uppercase text-text-gray">Card title</label>
+                                    <input
+                                        type="text"
+                                        value={configDraft.title}
+                                        onChange={(event: ChangeEvent<HTMLInputElement>) => handleConfigFieldChange('title', event.target.value)}
+                                        className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-2.5 text-sm text-text-dark dark:text-gray-100 focus:border-primary focus:ring-2 focus:ring-primary/10"
+                                        required
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-semibold uppercase text-text-gray">Execution status</label>
+                                    <select
+                                        value={configDraft.status}
+                                        onChange={(event: ChangeEvent<HTMLSelectElement>) => handleConfigFieldChange('status', event.target.value as Project['status'])}
+                                        className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-2.5 text-sm text-text-dark dark:text-gray-100 focus:border-primary focus:ring-2 focus:ring-primary/10"
+                                    >
+                                        {STATUS_OPTIONS.map((option) => (
+                                            <option key={option.value} value={option.value}>
+                                                {option.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-semibold uppercase text-text-gray">Description</label>
+                                <textarea
+                                    value={configDraft.description}
+                                    onChange={(event: ChangeEvent<HTMLTextAreaElement>) => handleConfigFieldChange('description', event.target.value)}
+                                    rows={3}
+                                    className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-2.5 text-sm text-text-dark dark:text-gray-100 focus:border-primary focus:ring-2 focus:ring-primary/10"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between text-xs font-semibold text-text-gray">
+                                    <span>Progress</span>
+                                    <span className="text-text-dark dark:text-gray-100">{configDraft.progress}%</span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min={0}
+                                    max={100}
+                                    value={configDraft.progress}
+                                    onChange={(event: ChangeEvent<HTMLInputElement>) => handleConfigFieldChange('progress', Number(event.target.value))}
+                                    className="w-full accent-primary"
+                                />
+                            </div>
+                            {configError && (
+                                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                                    {configError}
+                                </div>
+                            )}
+                            <div className="flex items-center justify-end gap-3 pt-2">
+                                <button type="button" onClick={closeConfigModal} className="h-10 px-4 rounded-lg border border-gray-200 text-sm font-semibold text-text-gray">
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={configSaving}
+                                    className="h-10 px-6 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-blue-600 disabled:opacity-60"
+                                >
+                                    {configSaving ? 'Saving...' : 'Save changes'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {deleteTarget && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4" onClick={closeDeleteDialog}>
+                    <div className="w-full max-w-md rounded-3xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+                        <div className="px-6 py-5 space-y-4">
+                            <div className="flex items-start gap-3">
+                                <div className="w-10 h-10 rounded-full bg-red-100 text-danger flex items-center justify-center">
+                                    !
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-semibold text-text-dark dark:text-white">Delete {deleteTarget.title}?</h3>
+                                    <p className="text-sm text-text-gray dark:text-gray-400">
+                                        This card and all of its data will be removed from the projects board. This cannot be undone.
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex items-center justify-end gap-3">
+                                <button type="button" onClick={closeDeleteDialog} className="h-10 px-4 rounded-lg border border-gray-200 text-sm font-semibold text-text-gray">
+                                    Back
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleConfirmDelete}
+                                    disabled={isDeletingProject}
+                                    className="h-10 px-5 rounded-lg bg-red-600 text-white text-sm font-semibold hover:bg-red-700 disabled:opacity-60"
+                                >
+                                    {isDeletingProject ? 'Deleting...' : 'Delete permanently'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

@@ -5,7 +5,7 @@ Allows admins to create initiatives and assign sub-admins/staff.
 from typing import List, Optional
 
 from bson import ObjectId
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
 from app.schemas.project import (
     ProjectCreate,
@@ -21,6 +21,9 @@ from app.db.collections import PROJECTS_COLLECTION, USERS_COLLECTION
 from app.dependencies.auth import get_current_user
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
+PUBLIC_GROUP_ID = "public-group"
+SUB_ADMIN_GROUP_ID = "all-sub-admin"
+DEFAULT_GROUP_IDS = {PUBLIC_GROUP_ID, SUB_ADMIN_GROUP_ID}
 
 
 # ---------------------------------------------------------------------------
@@ -54,14 +57,22 @@ def _ensure_admin(current_user):
 
 def _visibility_filter(current_user) -> dict:
     role = current_user.get("role")
+    user_id = current_user.get("_id")
     if role == "admin":
         return {}
     if role == "sub_admin":
-        return {"$or": [
-            {"sub_admin_ids": current_user["_id"]},
-            {"owner_id": current_user["_id"]}
-        ]}
-    return {"staff_ids": current_user["_id"]}
+        clauses = [{"_id": {"$in": list(DEFAULT_GROUP_IDS)}}]
+        if user_id is not None:
+            clauses.extend([
+                {"sub_admin_ids": user_id},
+                {"owner_id": user_id}
+            ])
+        return {"$or": clauses}
+
+    clauses = [{"_id": PUBLIC_GROUP_ID}]
+    if user_id is not None:
+        clauses.append({"staff_ids": user_id})
+    return {"$or": clauses}
 
 
 async def _ensure_user_exists(db, user_id: str, expected_role: str, label: str):
@@ -254,6 +265,30 @@ async def update_project(
 
     updated = await ProjectService.update_project(db, project_obj_id, updates)
     return await _serialize_single(db, updated)
+
+
+@router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_project(
+    project_id: str,
+    current_user = Depends(get_current_user),
+    db = Depends(get_database)
+):
+    """Allow admins to delete custom project cards."""
+    _ensure_admin(current_user)
+    project_obj_id = _parse_user_id(project_id, "project_id")
+    if project_obj_id is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid project id")
+
+    identifier_str = str(project_obj_id)
+    if identifier_str in DEFAULT_GROUP_IDS:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Default workspace groups cannot be deleted")
+
+    deleted = await ProjectService.delete_project(db, project_obj_id)
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+
+    await TaskBoardService.delete_board(db, identifier_str)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/{project_id}/staff", response_model=ProjectResponse)

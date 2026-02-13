@@ -122,6 +122,12 @@ class ProjectService:
             return_document=ReturnDocument.AFTER
         )
 
+    @staticmethod
+    async def delete_project(db, project_id: Any) -> bool:
+        """Remove a project document by id."""
+        result = await db[PROJECTS_COLLECTION].delete_one({"_id": project_id})
+        return result.deleted_count == 1
+
     # ------------------------------------------------------------------
     # Serialization helpers
     # ------------------------------------------------------------------

@@ -30,6 +30,9 @@ export interface Project {
     updatedAtRaw?: string;
     subAdminName?: string;
     subAdminNames?: string[];
+    subAdminIds?: string[];
+    staffIds?: string[];
+    isDefaultGroup?: boolean;
 }
 
 export interface StatCard {

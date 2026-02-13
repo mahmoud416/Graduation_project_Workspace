@@ -22,6 +22,7 @@ class TaskBoardService:
     """Encapsulates TaskFlow board persistence logic."""
 
     PUBLIC_PROJECT_ID = "public-group"
+    SUBADMIN_PROJECT_ID = "all-sub-admin"
 
     @staticmethod
     async def ensure_board_for_project(db, project_doc: Dict[str, Any]) -> Dict[str, Any]:
@@ -31,6 +32,8 @@ class TaskBoardService:
         if existing:
             if project_identifier == TaskBoardService.PUBLIC_PROJECT_ID:
                 return await TaskBoardService._sync_public_members_if_needed(db, existing)
+            if project_identifier == TaskBoardService.SUBADMIN_PROJECT_ID:
+                return await TaskBoardService._sync_sub_admin_members_if_needed(db, existing)
             return existing
 
         members = await TaskBoardService._build_member_profiles(db, project_doc)
@@ -50,6 +53,8 @@ class TaskBoardService:
         doc["_id"] = result.inserted_id
         if project_identifier == TaskBoardService.PUBLIC_PROJECT_ID:
             return await TaskBoardService._sync_public_members_if_needed(db, doc)
+        if project_identifier == TaskBoardService.SUBADMIN_PROJECT_ID:
+            return await TaskBoardService._sync_sub_admin_members_if_needed(db, doc)
         return doc
 
     @staticmethod
@@ -72,10 +77,28 @@ class TaskBoardService:
         return await TaskBoardService.ensure_board_for_project(db, project)
 
     @staticmethod
+    async def ensure_sub_admin_board(db) -> Dict[str, Any]:
+        """Guarantee the sub-admin board exists."""
+        project = await db[PROJECTS_COLLECTION].find_one({"_id": TaskBoardService.SUBADMIN_PROJECT_ID})
+        if not project:
+            project = TaskBoardService._default_sub_admin_project_doc()
+            await db[PROJECTS_COLLECTION].update_one(
+                {"_id": project["_id"]},
+                {"$setOnInsert": project, "$set": {"updated_at": datetime.utcnow()}},
+                upsert=True,
+            )
+            project = await db[PROJECTS_COLLECTION].find_one({"_id": TaskBoardService.SUBADMIN_PROJECT_ID})
+        return await TaskBoardService.ensure_board_for_project(db, project)
+
+    @staticmethod
     async def ensure_public_membership_for_user(db, user_doc: Dict[str, Any]) -> None:
-        """Add the provided user to the public board membership list."""
+        """Add the provided user to the default board membership lists."""
         await TaskBoardService.ensure_public_board(db)
         await TaskBoardService._upsert_member_entry(db, TaskBoardService.PUBLIC_PROJECT_ID, user_doc)
+        role = (user_doc.get("role") or "").lower()
+        if role == "sub_admin":
+            await TaskBoardService.ensure_sub_admin_board(db)
+            await TaskBoardService._upsert_member_entry(db, TaskBoardService.SUBADMIN_PROJECT_ID, user_doc)
 
     @staticmethod
     async def update_overview(db, project_id: str, overview_updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -184,7 +207,16 @@ class TaskBoardService:
         if not resources:
             return []
 
-        filtered = TaskBoardService._filter_resources_for_user(resources, current_user)
+        project_id = TaskBoardService._stringify_id(board.get("project_id")) if board.get("project_id") else None
+        scoped_resources = [
+            resource
+            for resource in resources
+            if TaskBoardService._resource_matches_board(resource, project_id)
+        ]
+        if not scoped_resources:
+            return []
+
+        filtered = TaskBoardService._filter_resources_for_user(scoped_resources, current_user)
         payload: List[Dict[str, Any]] = []
         for resource in filtered:
             resource_id = resource.get("_id") or resource.get("id")
@@ -280,6 +312,24 @@ class TaskBoardService:
         }
 
     @staticmethod
+    def _default_sub_admin_project_doc() -> Dict[str, Any]:
+        """Fallback project payload for the sub-admin coordination channel."""
+        now = datetime.utcnow()
+        return {
+            "_id": TaskBoardService.SUBADMIN_PROJECT_ID,
+            "title": "All_SubAdmin",
+            "description": "Dedicated group holding every sub-admin for oversight and control.",
+            "status": "ACTIVE",
+            "progress": 100,
+            "owner_id": None,
+            "sub_admin_ids": [],
+            "staff_ids": [],
+            "team_id": None,
+            "created_at": now,
+            "updated_at": now,
+        }
+
+    @staticmethod
     def _status_label(raw_status: Optional[str]) -> str:
         if not raw_status:
             return "IN PROGRESS"
@@ -342,6 +392,19 @@ class TaskBoardService:
             if scope == "self" and resource.get("uploaded_by") == viewer_id:
                 filtered.append(resource)
         return filtered
+
+    @staticmethod
+    def _resource_matches_board(resource: Dict[str, Any], project_id: Optional[str]) -> bool:
+        if not project_id:
+            return True
+        path = resource.get("path")
+        if not isinstance(path, str) or not path:
+            return True
+        normalized_path = path.replace("\\", "/")
+        needle = f"/{project_id}/"
+        if needle in normalized_path:
+            return True
+        return normalized_path.startswith(f"{project_id}/")
 
     @staticmethod
     def _build_resource_doc(file_name: str, relative_path: str, uploader: Dict[str, Any]) -> Dict[str, Any]:
@@ -514,6 +577,11 @@ class TaskBoardService:
         )
 
     @staticmethod
+    async def delete_board(db, project_id: str) -> None:
+        """Remove the task board associated with the supplied project id."""
+        await db[TASK_BOARDS_COLLECTION].delete_one({"project_id": project_id})
+
+    @staticmethod
     async def update_member_profile(
         db,
         project_id: str,
@@ -583,4 +651,24 @@ class TaskBoardService:
             member_ids.add(user_id)
 
         refreshed = await TaskBoardService.get_board_by_project(db, TaskBoardService.PUBLIC_PROJECT_ID)
+        return refreshed or board
+
+    @staticmethod
+    async def _sync_sub_admin_members_if_needed(db, board: Dict[str, Any]) -> Dict[str, Any]:
+        member_ids: Set[str] = set(
+            member.get("user_id") for member in board.get("members", []) if member.get("user_id")
+        )
+        total_sub_admins = await db[USERS_COLLECTION].count_documents({"role": "sub_admin"})
+        if len(member_ids) >= total_sub_admins and total_sub_admins > 0:
+            return board
+
+        cursor = db[USERS_COLLECTION].find({"role": "sub_admin"})
+        async for user in cursor:
+            user_id = TaskBoardService._stringify_id(user.get("_id"))
+            if user_id in member_ids:
+                continue
+            await TaskBoardService._upsert_member_entry(db, TaskBoardService.SUBADMIN_PROJECT_ID, user)
+            member_ids.add(user_id)
+
+        refreshed = await TaskBoardService.get_board_by_project(db, TaskBoardService.SUBADMIN_PROJECT_ID)
         return refreshed or board
