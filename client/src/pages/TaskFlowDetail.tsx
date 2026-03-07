@@ -79,11 +79,19 @@ type TaskBoardResource = {
     download_url?: string;
 };
 
+type UploadRules = {
+    allowed_types?: string[];
+    max_size_mb?: number;
+    naming_pattern?: string;
+};
+
 const TaskFlowDetail = () => {
     const [searchParams] = useSearchParams();
     const projectId = searchParams.get('projectId') ?? 'public-group';
     const fileInputRef = useRef<HTMLInputElement>(null);
     const commentFileInputRef = useRef<HTMLInputElement>(null);
+    const uploadModalFileInputRef = useRef<HTMLInputElement>(null);
+    const analysisIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const [newComment, setNewComment] = useState('');
     const [commentFiles, setCommentFiles] = useState<File[]>([]);
     const [comments, setComments] = useState<BoardComment[]>([]);
@@ -111,6 +119,13 @@ const TaskFlowDetail = () => {
     const [boardError, setBoardError] = useState<string | null>(null);
     const [isSavingTask, setIsSavingTask] = useState(false);
     const [isUploadingResource, setIsUploadingResource] = useState(false);
+    const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+    const [uploadRules, setUploadRules] = useState<UploadRules | null>(null);
+    const [isLoadingRules, setIsLoadingRules] = useState(false);
+    const [uploadModalFile, setUploadModalFile] = useState<File | null>(null);
+    const [analysisProgress, setAnalysisProgress] = useState(0);
+    const [analysisDone, setAnalysisDone] = useState(false);
+    const [analysisCriteria, setAnalysisCriteria] = useState<Array<{ label: string; passed: boolean; hint: string }>>([]);
     const completedTasks = tasks.filter((task) => task.done).length;
     const progressPercent = tasks.length ? Math.round((completedTasks / tasks.length) * 100) : 0;
     const hideProgressBars = projectId === 'public-group' || projectId === 'all-sub-admin';
@@ -121,6 +136,8 @@ const TaskFlowDetail = () => {
     const currentUserRole = typeof window !== 'undefined' ? localStorage.getItem('role') : null;
     const normalizedUserRole = (currentUserRole ?? '').toLowerCase();
     const canModerateComments = normalizedUserRole === 'admin' || normalizedUserRole === 'sub_admin';
+    const isSystemCard = projectId === 'public-group' || projectId === 'all-sub-admin';
+    const canAddTask = normalizedUserRole === 'admin' || normalizedUserRole === 'sub_admin';
     const canDeleteComment = (comment: BoardComment) => {
         if (canModerateComments) {
             return true;
@@ -156,7 +173,7 @@ const TaskFlowDetail = () => {
             }
             const query = params.toString();
             const response = await fetch(`${API_BASE}/task-boards/${projectId}/members/available${query ? `?${query}` : ''}`, {
-                headers: { 'X-User-Id': userId }
+                headers: { 'X-User-Id': userId, 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') }
             });
             if (!response.ok) {
                 const detail = await response.text();
@@ -223,7 +240,7 @@ const TaskFlowDetail = () => {
         setBoardError(null);
         try {
             const response = await fetch(`${API_BASE}/task-boards/${projectId}`, {
-                headers: { 'X-User-Id': userId }
+                headers: { 'X-User-Id': userId, 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') }
             });
 
             if (!response.ok) {
@@ -266,6 +283,7 @@ const TaskFlowDetail = () => {
                     headers: {
                         'Content-Type': 'application/json',
                         'X-User-Id': userId,
+                        'Authorization': 'Bearer ' + (localStorage.getItem('token') || ''),
                     },
                     body: JSON.stringify(body),
                 });
@@ -310,7 +328,7 @@ const TaskFlowDetail = () => {
 
             const response = await fetch(`${API_BASE}/task-boards/${projectId}/resources`, {
                 method: 'POST',
-                headers: { 'X-User-Id': userId },
+                headers: { 'X-User-Id': userId, 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') },
                 body: formData,
             });
 
@@ -332,6 +350,122 @@ const TaskFlowDetail = () => {
         }
     }, [projectId, applyBoardPayload]);
 
+    const fetchUploadRules = useCallback(async () => {
+        if (!projectId) return;
+        const userId = localStorage.getItem('userId');
+        setIsLoadingRules(true);
+        try {
+            const response = await fetch(`${API_BASE}/projects/${projectId}/upload-rules`, {
+                headers: {
+                    'X-User-Id': userId || '',
+                    'Authorization': 'Bearer ' + (localStorage.getItem('token') || ''),
+                },
+            });
+            if (response.ok) {
+                const data = await response.json();
+                setUploadRules(data);
+            } else {
+                setUploadRules(null);
+            }
+        } catch {
+            setUploadRules(null);
+        } finally {
+            setIsLoadingRules(false);
+        }
+    }, [projectId]);
+
+    const runFileAnalysis = useCallback((file: File) => {
+        if (analysisIntervalRef.current) {
+            clearInterval(analysisIntervalRef.current);
+        }
+        setAnalysisProgress(0);
+        setAnalysisDone(false);
+        setAnalysisCriteria([]);
+        setIsUploadModalOpen(true);
+
+        const sizeMB = file.size / (1024 * 1024);
+        // Simulate: 1.5s for tiny files, scaling up to ~4s for large files
+        const durationMs = Math.min(Math.max(sizeMB * 600 + 1500, 1500), 4000);
+        const STEPS = 60;
+        const intervalMs = durationMs / STEPS;
+        let step = 0;
+
+        analysisIntervalRef.current = setInterval(() => {
+            step++;
+            const progress = Math.round((step / STEPS) * 100);
+            setAnalysisProgress(Math.min(progress, 100));
+
+            if (step >= STEPS) {
+                clearInterval(analysisIntervalRef.current!);
+                analysisIntervalRef.current = null;
+
+                const maxSizeMB = uploadRules?.max_size_mb ?? 10;
+                const ALLOWED_EXT = [
+                    '.pdf', '.doc', '.docx', '.xls', '.xlsx',
+                    '.ppt', '.pptx', '.txt', '.csv', '.zip',
+                    '.jpg', '.jpeg', '.png', '.gif', '.svg',
+                    '.mp4', '.mp3', '.webm',
+                ];
+                const ext = file.name.toLowerCase().slice(file.name.lastIndexOf('.'));
+                const typeOk = ALLOWED_EXT.includes(ext);
+                const sizeOk = sizeMB <= maxSizeMB;
+                const nameOk = file.name.length <= 100 && !/[<>:"/\\|?*\x00-\x1F]/.test(file.name);
+
+                setAnalysisCriteria([
+                    {
+                        label: 'File type accepted',
+                        passed: typeOk,
+                        hint: typeOk
+                            ? ''
+                            : `"${ext}" may not be supported. Supported: PDF, Office docs, images, archives, plain text.`,
+                    },
+                    {
+                        label: `File size within limit (≤ ${maxSizeMB} MB)`,
+                        passed: sizeOk,
+                        hint: sizeOk
+                            ? ''
+                            : `File is ${sizeMB.toFixed(1)} MB. Please compress or split before uploading.`,
+                    },
+                    {
+                        label: 'Filename format valid',
+                        passed: nameOk,
+                        hint: nameOk
+                            ? ''
+                            : 'Filename contains invalid characters or exceeds 100 chars. Use letters, numbers, spaces, dots, hyphens.',
+                    },
+                ]);
+                setAnalysisDone(true);
+            }
+        }, intervalMs);
+    }, [uploadRules]);
+
+    const closeUploadModal = () => {
+        if (analysisIntervalRef.current) {
+            clearInterval(analysisIntervalRef.current);
+            analysisIntervalRef.current = null;
+        }
+        setIsUploadModalOpen(false);
+        setUploadModalFile(null);
+        setAnalysisProgress(0);
+        setAnalysisDone(false);
+        setAnalysisCriteria([]);
+    };
+
+    const handleUploadModalFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            setUploadModalFile(file);
+            runFileAnalysis(file);
+        }
+        e.target.value = '';
+    };
+
+    const handleUploadModalConfirm = async () => {
+        if (!uploadModalFile) return;
+        closeUploadModal();
+        await uploadResource(uploadModalFile);
+    };
+
     const handleDeleteResource = async (resourceId?: string) => {
         if (!projectId || !resourceId) return;
         const userId = localStorage.getItem('userId');
@@ -345,7 +479,7 @@ const TaskFlowDetail = () => {
         try {
             const response = await fetch(`${API_BASE}/task-boards/${projectId}/resources/${resourceId}`, {
                 method: 'DELETE',
-                headers: { 'X-User-Id': userId },
+                headers: { 'X-User-Id': userId, 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') },
             });
 
             if (!response.ok) {
@@ -383,7 +517,7 @@ const TaskFlowDetail = () => {
 
             const response = await fetch(`${API_BASE}/task-boards/${projectId}/comments`, {
                 method: 'POST',
-                headers: { 'X-User-Id': userId },
+                headers: { 'X-User-Id': userId, 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') },
                 body: formData,
             });
 
@@ -419,7 +553,7 @@ const TaskFlowDetail = () => {
         try {
             const response = await fetch(`${API_BASE}/task-boards/${projectId}/comments/${commentId}`, {
                 method: 'DELETE',
-                headers: { 'X-User-Id': userId },
+                headers: { 'X-User-Id': userId, 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') },
             });
             if (!response.ok) {
                 const detail = await response.text();
@@ -466,7 +600,8 @@ const TaskFlowDetail = () => {
     };
 
     const handleUploadClick = () => {
-        fileInputRef.current?.click();
+        void fetchUploadRules();
+        uploadModalFileInputRef.current?.click();
     };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -584,6 +719,42 @@ const TaskFlowDetail = () => {
         setTaskDraft({ title: '', assignee: '', due: '', done: false });
     };
 
+    const handleDeleteTask = async (taskId: string) => {
+        if (!projectId || !taskId) return;
+        const confirmed = window.confirm('Delete this task permanently?');
+        if (!confirmed) return;
+        const userId = localStorage.getItem('userId');
+        if (!userId) {
+            setBoardError('Missing session. Please log in again.');
+            return;
+        }
+        setIsSavingTask(true);
+        setBoardError(null);
+        try {
+            const response = await fetch(`${API_BASE}/task-boards/${projectId}/todos/${taskId}`, {
+                method: 'DELETE',
+                headers: {
+                    'X-User-Id': userId,
+                    'Authorization': 'Bearer ' + (localStorage.getItem('token') || ''),
+                },
+            });
+            if (!response.ok) {
+                const detail = await response.text();
+                throw new Error(detail || 'Unable to delete task');
+            }
+            const payload = await response.json();
+            applyBoardPayload(payload);
+            setIsTaskFormOpen(false);
+            setEditingTaskId(null);
+            setTaskDraft({ title: '', assignee: '', due: '', done: false });
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : 'Unable to delete task';
+            setBoardError(message);
+        } finally {
+            setIsSavingTask(false);
+        }
+    };
+
     useEffect(() => {
         if (!isMemberModalOpen) {
             return;
@@ -629,7 +800,7 @@ const TaskFlowDetail = () => {
                 <Sidebar />
 
                 <div className="flex-1 ml-[var(--sidebar-width)] transition-[margin] duration-200">
-                    <Header title="TaskFlow" />
+                    <Header title={isSystemCard ? `# ${projectId === 'public-group' ? 'public' : 'all-sub-admin'}` : 'TaskFlow'} />
 
                     <main className="page-main p-8">
                     {boardLoading && (
@@ -645,59 +816,157 @@ const TaskFlowDetail = () => {
                     <div className="grid grid-cols-3 gap-6">
                         {/* Main Content - Left Column (2/3) */}
                         <div className="col-span-2 space-y-6">
-                            {/* Project Header */}
-                            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 transition-colors">
-                                <div className="flex items-center justify-between mb-4">
-                                    <div>
-                                        <div className="text-xs font-medium text-primary uppercase tracking-wide mb-2">
-                                            {boardOverview ? `Project • ${overviewTitle}` : 'PROJECT A • SPRINT 4'}
+                            {/* Project / Channel Header */}
+                            {isSystemCard ? (
+                                /* ── Channel gradient banner ── */
+                                <div
+                                    className="relative overflow-hidden rounded-2xl"
+                                    style={{
+                                        background: projectId === 'public-group'
+                                            ? 'linear-gradient(135deg, #6d28d9 0%, #4f46e5 45%, #2563eb 100%)'
+                                            : 'linear-gradient(135deg, #c2410c 0%, #ea580c 45%, #f59e0b 100%)',
+                                        boxShadow: projectId === 'public-group'
+                                            ? '0 8px 40px rgba(109,40,217,0.30)'
+                                            : '0 8px 40px rgba(194,65,12,0.30)',
+                                    }}
+                                >
+                                    {/* Radial light overlay */}
+                                    <div
+                                        className="pointer-events-none absolute inset-0"
+                                        style={{ background: 'radial-gradient(ellipse at 10% 25%, rgba(255,255,255,0.22) 0%, transparent 60%)' }}
+                                    />
+                                    {/* Watermark # */}
+                                    <div
+                                        className="pointer-events-none select-none absolute -right-4 -bottom-6 text-[180px] font-black leading-none"
+                                        style={{ color: 'rgba(255,255,255,0.06)', fontFamily: 'monospace' }}
+                                    >#</div>
+
+                                    <div className="relative z-10 p-7">
+                                        {/* Live badge row */}
+                                        <div className="flex items-center justify-between mb-5">
+                                            <div className="flex items-center gap-2">
+                                                <span className="relative flex h-2.5 w-2.5">
+                                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-60" />
+                                                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white/90" />
+                                                </span>
+                                                <span className="text-white/70 text-[11px] font-bold uppercase tracking-[0.15em]">
+                                                    {projectId === 'public-group' ? 'Public Channel' : 'Admin Channel'} · Live
+                                                </span>
+                                            </div>
+                                            <span className="px-3 py-1 rounded-full bg-white/15 text-white/90 text-xs font-bold">
+                                                {overviewStatus}
+                                            </span>
                                         </div>
-                                        <h1 className="text-2xl font-bold text-text-dark dark:text-gray-100 mb-2">
-                                            {overviewTitle}
-                                        </h1>
-                                        <p className="text-sm text-text-gray dark:text-gray-400 leading-relaxed">
+
+                                        {/* Channel name */}
+                                        <div className="flex items-end gap-1.5 mb-3">
+                                            <span className="text-white/35 text-6xl font-black leading-none" style={{ fontFamily: 'monospace' }}>#</span>
+                                            <h1 className="text-white text-3xl font-black tracking-tight leading-none mb-1">
+                                                {projectId === 'public-group' ? 'public' : 'all-sub-admin'}
+                                            </h1>
+                                        </div>
+
+                                        {/* Description */}
+                                        <p className="text-white/65 text-sm leading-relaxed max-w-xl mb-5">
                                             {overviewDescription}
                                         </p>
-                                            {greetEveryone && (
-                                                <p className="mt-3 text-xs text-text-gray dark:text-gray-500">
-                                                    Public channel connecting {greetEveryone}
-                                                    {subAdminSalute ? ` - Admins: ${subAdminSalute}` : ''} to sync every workspace task.
-                                                </p>
-                                            )}
-                                    </div>
-                                    <span className="px-3 py-1.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-lg text-xs font-medium whitespace-nowrap">
-                                        {overviewStatus}
-                                    </span>
-                                </div>
 
-                                {!hideProgressBars && (
+                                        {/* Footer stats row */}
+                                        <div className="flex items-center gap-5 pt-4 border-t border-white/15">
+                                            <div className="flex items-center gap-1.5">
+                                                <svg className="w-4 h-4 text-white/60" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                                                    <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
+                                                </svg>
+                                                <span className="text-white/70 text-xs font-medium">
+                                                    {groupMembers.length} member{groupMembers.length !== 1 ? 's' : ''}
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center gap-1.5">
+                                                <svg className="w-4 h-4 text-white/60" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                                                    <path d="M9 12l2 2 4-4M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                                </svg>
+                                                <span className="text-white/70 text-xs font-medium">
+                                                    {tasks.length > 0 ? `${completedTasks}/${tasks.length} tasks done` : 'No tasks yet'}
+                                                </span>
+                                            </div>
+                                            {projectId === 'public-group' && (
+                                                <div className="flex items-center gap-1.5">
+                                                    <svg className="w-4 h-4 text-white/60" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                                                        <circle cx="12" cy="12" r="10" /><path d="M2 12h20M12 2a15.3 15.3 0 010 20M12 2a15.3 15.3 0 000 20" />
+                                                    </svg>
+                                                    <span className="text-white/70 text-xs font-medium">Open to all workspace</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                /* ── Regular project header card ── */
+                                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 transition-colors">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div>
+                                            <div className="text-xs font-medium text-primary uppercase tracking-wide mb-2">
+                                                {boardOverview ? `Project • ${overviewTitle}` : 'PROJECT A • SPRINT 4'}
+                                            </div>
+                                            <h1 className="text-2xl font-bold text-text-dark dark:text-gray-100 mb-2">
+                                                {overviewTitle}
+                                            </h1>
+                                            <p className="text-sm text-text-gray dark:text-gray-400 leading-relaxed">
+                                                {overviewDescription}
+                                            </p>
+                                        </div>
+                                        <span className="px-3 py-1.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-lg text-xs font-medium whitespace-nowrap">
+                                            {overviewStatus}
+                                        </span>
+                                    </div>
                                     <div className="mt-6">
                                         <div className="flex items-center justify-between mb-2">
                                             <span className="text-sm font-medium text-text-dark dark:text-gray-200">Overall Progress</span>
                                             <span className="text-sm font-bold text-primary">{overviewProgress}%</span>
                                         </div>
-                                        <div className="w-full h-2.5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
+                                        <div className="w-full h-2.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                                             <div className="h-full bg-primary rounded-full" style={{ width: `${overviewProgress}%` }}></div>
                                         </div>
                                     </div>
-                                )}
-                            </div>
+                                </div>
+                            )}
 
                             {/* To-do Tracker */}
-                            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 transition-colors">
+                            <div className={`rounded-xl border p-6 transition-colors ${
+                                isSystemCard
+                                    ? `bg-white dark:bg-gray-800 border-l-4 ${projectId === 'public-group' ? 'border-l-violet-500 border-gray-200 dark:border-gray-700' : 'border-l-orange-500 border-gray-200 dark:border-gray-700'}`
+                                    : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
+                            }`}>
                                 <div className="flex items-center gap-4 mb-6">
-                                    <div className="w-12 h-12 rounded-2xl bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-primary">
+                                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${
+                                        isSystemCard
+                                            ? projectId === 'public-group'
+                                                ? 'bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400'
+                                                : 'bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400'
+                                            : 'bg-blue-50 dark:bg-blue-900/20 text-primary'
+                                    }`}>
                                         <svg className="w-6 h-6" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
                                             <path d="M9 12l2 2 4-4" />
                                             <path d="M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                                         </svg>
                                     </div>
                                     <div className="flex-1">
-                                        <p className="text-xs font-semibold text-primary uppercase tracking-wide">Sprint Checklist</p>
-                                        <h2 className="text-xl font-bold text-text-dark dark:text-gray-100">To-do Tracker</h2>
-                                        <p className="text-sm text-text-gray dark:text-gray-400">Mark items as you complete them to keep TaskFlow aligned.</p>
+                                        <p className={`text-xs font-semibold uppercase tracking-wide ${
+                                            isSystemCard
+                                                ? projectId === 'public-group' ? 'text-violet-600 dark:text-violet-400' : 'text-orange-600 dark:text-orange-400'
+                                                : 'text-primary'
+                                        }`}>
+                                            {isSystemCard ? 'Channel Tasks' : 'Sprint Checklist'}
+                                        </p>
+                                        <h2 className="text-xl font-bold text-text-dark dark:text-gray-100">
+                                            {isSystemCard ? 'Task Board' : 'To-do Tracker'}
+                                        </h2>
+                                        <p className="text-sm text-text-gray dark:text-gray-400">
+                                            {isSystemCard ? 'Track and coordinate tasks across the channel.' : 'Mark items as you complete them to keep TaskFlow aligned.'}
+                                        </p>
                                     </div>
                                     <div className="flex items-center gap-4">
+                                        {canAddTask && (
                                         <button
                                             type="button"
                                             onClick={() => openTaskForm()}
@@ -706,6 +975,7 @@ const TaskFlowDetail = () => {
                                         >
                                             <span className="text-2xl leading-none">+</span>
                                         </button>
+                                        )}
                                         <div className="text-right">
                                         <div className="text-2xl font-bold text-text-dark dark:text-gray-100">{completedTasks}/{tasks.length}</div>
                                         <div className="text-xs text-text-gray dark:text-gray-400">Tasks done</div>
@@ -713,15 +983,17 @@ const TaskFlowDetail = () => {
                                     </div>
                                 </div>
 
-                                {!hideProgressBars && (
+                                {tasks.length > 0 && (
                                     <div className="mb-5">
                                         <div className="flex items-center justify-between text-xs font-medium text-text-gray dark:text-gray-400 mb-2">
                                             <span>Progress</span>
-                                            <span>{progressPercent}%</span>
+                                            <span className={progressPercent === 100 ? 'text-green-600 dark:text-green-400 font-bold' : ''}>
+                                                {progressPercent === 100 ? '✓ Done!' : `${progressPercent}%`}
+                                            </span>
                                         </div>
-                                        <div className="w-full h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
+                                        <div className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                                             <div
-                                                className="h-full bg-gradient-to-r from-primary to-blue-400 rounded-full transition-all"
+                                                className={`h-full rounded-full transition-all ${progressPercent === 100 ? 'bg-green-500' : 'bg-gradient-to-r from-primary to-blue-400'}`}
                                                 style={{ width: `${progressPercent}%` }}
                                             ></div>
                                         </div>
@@ -749,24 +1021,38 @@ const TaskFlowDetail = () => {
                                             </div>
                                             <div>
                                                 <label className="text-xs font-semibold text-text-gray dark:text-gray-300 uppercase">Assignee</label>
-                                                <input
-                                                    type="text"
-                                                    value={taskDraft.assignee}
-                                                    onChange={(e) => handleTaskDraftChange('assignee', e.target.value)}
-                                                    className="mt-1 w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-text-dark dark:text-gray-100 focus:border-primary focus:outline-none"
-                                                    placeholder="Who is responsible?"
-                                                />
+                                                {isSystemCard ? (
+                                                    <select
+                                                        value={taskDraft.assignee}
+                                                        onChange={(e) => handleTaskDraftChange('assignee', e.target.value)}
+                                                        className="mt-1 w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-text-dark dark:text-gray-100 focus:border-primary focus:outline-none"
+                                                    >
+                                                        <option value="">— Unassigned —</option>
+                                                        {groupMembers.map((member) => (
+                                                            <option key={member.user_id ?? member.name} value={member.name}>
+                                                                {member.name} ({member.role})
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                ) : (
+                                                    <input
+                                                        type="text"
+                                                        value={taskDraft.assignee}
+                                                        onChange={(e) => handleTaskDraftChange('assignee', e.target.value)}
+                                                        className="mt-1 w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-text-dark dark:text-gray-100 focus:border-primary focus:outline-none"
+                                                        placeholder="Who is responsible?"
+                                                    />
+                                                )}
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-4">
                                             <div className="flex-1">
-                                                <label className="text-xs font-semibold text-text-gray dark:text-gray-300 uppercase">Due Date</label>
+                                                <label className="text-xs font-semibold text-text-gray dark:text-gray-300 uppercase">Deadline</label>
                                                 <input
-                                                    type="text"
+                                                    type="date"
                                                     value={taskDraft.due}
                                                     onChange={(e) => handleTaskDraftChange('due', e.target.value)}
                                                     className="mt-1 w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-text-dark dark:text-gray-100 focus:border-primary focus:outline-none"
-                                                    placeholder="e.g., Nov 12"
                                                 />
                                             </div>
                                             <label className="inline-flex items-center gap-2 text-sm font-medium text-text-dark dark:text-gray-100">
@@ -779,7 +1065,20 @@ const TaskFlowDetail = () => {
                                                 Mark as done
                                             </label>
                                         </div>
-                                        <div className="flex items-center justify-end gap-3 pt-2">
+                                        <div className="flex items-center justify-between gap-3 pt-2">
+                                            {editingTaskId ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => void handleDeleteTask(editingTaskId)}
+                                                    disabled={isSavingTask}
+                                                    className="h-10 px-4 rounded-lg bg-red-50 dark:bg-red-900/20 text-danger text-sm font-semibold hover:bg-red-100 disabled:opacity-60"
+                                                >
+                                                    Delete Task
+                                                </button>
+                                            ) : (
+                                                <span />
+                                            )}
+                                            <div className="flex items-center gap-3">
                                             <button
                                                 type="button"
                                                 onClick={handleCancelTaskEdit}
@@ -794,6 +1093,7 @@ const TaskFlowDetail = () => {
                                             >
                                                 {isSavingTask ? 'Saving...' : editingTaskId ? 'Update Task' : 'Add Task'}
                                             </button>
+                                            </div>
                                         </div>
                                     </form>
                                 )}
@@ -802,7 +1102,7 @@ const TaskFlowDetail = () => {
                                     {tasks.map((task) => (
                                         <div
                                             key={task.id}
-                                            className="flex items-center gap-3 p-3 border border-gray-100 dark:border-gray-700 rounded-xl hover:border-primary/30 dark:hover:border-primary/40 transition-colors"
+                                            className="flex items-center gap-3 p-3 border border-gray-200 dark:border-gray-700 rounded-xl hover:border-primary/30 dark:hover:border-primary/40 transition-colors"
                                         >
                                             <input
                                                 type="checkbox"
@@ -811,13 +1111,26 @@ const TaskFlowDetail = () => {
                                                 className="h-5 w-5 rounded-md border-gray-300 dark:border-gray-600 text-primary focus:ring-primary"
                                             />
                                             <div className="flex-1">
-                                                <div className="flex items-center justify-between">
-                                                    <span className={`text-sm font-semibold ${task.done ? 'text-primary' : 'text-text-dark dark:text-gray-200'}`}>
-                                                        {task.title}
-                                                    </span>
+                                                <div className="flex items-center justify-between flex-wrap gap-2">
+                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                        <span className={`text-sm font-semibold ${task.done ? 'text-primary' : 'text-text-dark dark:text-gray-200'}`}>
+                                                            {task.title}
+                                                        </span>
+                                                        {isSystemCard && task.assignee && task.assignee !== 'Unassigned' && (
+                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/30 text-xs font-medium text-primary dark:text-blue-300 border border-blue-200 dark:border-blue-700">
+                                                                <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                                                                    <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+                                                                    <circle cx="12" cy="7" r="4" />
+                                                                </svg>
+                                                                {task.assignee}
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                     <span className="text-xs text-text-gray dark:text-gray-400">Due {task.due}</span>
                                                 </div>
-                                                <p className="text-xs text-text-gray dark:text-gray-400">{task.assignee}</p>
+                                                {!isSystemCard && (
+                                                    <p className="text-xs text-text-gray dark:text-gray-400">{task.assignee}</p>
+                                                )}
                                             </div>
                                             <div className="flex items-center gap-2">
                                                 {task.done && (
@@ -828,6 +1141,7 @@ const TaskFlowDetail = () => {
                                                         Done
                                                     </span>
                                                 )}
+                                                {canAddTask && (
                                                 <button
                                                     type="button"
                                                     onClick={() => openTaskForm(task)}
@@ -835,20 +1149,34 @@ const TaskFlowDetail = () => {
                                                 >
                                                     Edit
                                                 </button>
+                                                )}
                                             </div>
                                         </div>
                                     ))}
                                 </div>
                             </div>
 
-                            {/* Team Discussion */}
-                            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 transition-colors">
+                            {/* Team Discussion / Channel Feed */}
+                            <div className={`rounded-xl border p-6 transition-colors ${
+                                isSystemCard
+                                    ? `bg-white dark:bg-gray-800 border-l-4 ${projectId === 'public-group' ? 'border-l-violet-500 border-gray-200 dark:border-gray-700' : 'border-l-orange-500 border-gray-200 dark:border-gray-700'}`
+                                    : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
+                            }`}>
                                 <div className="flex items-center gap-2 mb-6">
-                                    <svg className="w-5 h-5 text-text-gray dark:text-gray-400" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                                    </svg>
-                                    <h2 className="text-base font-bold text-text-dark dark:text-gray-100">Team Discussion</h2>
-                                    <span className="ml-auto text-xs text-text-gray dark:text-gray-400">{comments.length} Comments</span>
+                                    {isSystemCard ? (
+                                        <span
+                                            className={`text-2xl font-black leading-none ${projectId === 'public-group' ? 'text-violet-500' : 'text-orange-500'}`}
+                                            style={{ fontFamily: 'monospace' }}
+                                        >#</span>
+                                    ) : (
+                                        <svg className="w-5 h-5 text-text-gray dark:text-gray-400" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                        </svg>
+                                    )}
+                                    <h2 className="text-base font-bold text-text-dark dark:text-gray-100">
+                                        {isSystemCard ? 'Channel Feed' : 'Team Discussion'}
+                                    </h2>
+                                    <span className="ml-auto text-xs text-text-gray dark:text-gray-400">{comments.length} {isSystemCard ? 'Messages' : 'Comments'}</span>
                                 </div>
 
                                 <input
@@ -859,7 +1187,7 @@ const TaskFlowDetail = () => {
                                     onChange={handleCommentFileChange}
                                 />
 
-                                <div className="space-y-5">
+                                <div className="space-y-5 max-h-[420px] overflow-y-auto pr-2">
                                     {comments.map((comment) => {
                                         const commentKey = comment.id ?? comment._id ?? `${comment.user_name}-${comment.created_at}`;
                                         const timestamp = comment.created_at ? new Date(comment.created_at).toLocaleString() : 'Just now';
@@ -937,7 +1265,9 @@ const TaskFlowDetail = () => {
                                         );
                                     })}
                                     {comments.length === 0 && (
-                                        <p className="text-sm text-text-gray dark:text-gray-400">No comments yet. Be the first to post an update.</p>
+                                        <p className="text-sm text-text-gray dark:text-gray-400">
+                                            {isSystemCard ? 'No messages yet. Start the conversation.' : 'No comments yet. Be the first to post an update.'}
+                                        </p>
                                     )}
                                 </div>
 
@@ -948,7 +1278,7 @@ const TaskFlowDetail = () => {
                                             value={newComment}
                                             onChange={(e) => setNewComment(e.target.value)}
                                             onKeyDown={handleKeyDown}
-                                            placeholder="Share an update with the team..."
+                                            placeholder={isSystemCard ? `Message #${projectId === 'public-group' ? 'public' : 'all-sub-admin'}...` : 'Share an update with the team...'}
                                             disabled={isPostingComment}
                                             className="w-full pl-4 pr-28 py-3 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 rounded-lg text-sm text-text-dark dark:text-gray-200 placeholder:text-text-gray dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-60"
                                         />
@@ -1103,10 +1433,24 @@ const TaskFlowDetail = () => {
                                 </button>
                             </div>
 
-                            {/* Group Members */}
-                            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 transition-colors">
+                            {/* Group / Channel Members */}
+                            <div className={`rounded-xl border p-6 transition-colors ${
+                                isSystemCard
+                                    ? `bg-white dark:bg-gray-800 border-l-4 ${projectId === 'public-group' ? 'border-l-violet-500 border-gray-200 dark:border-gray-700' : 'border-l-orange-500 border-gray-200 dark:border-gray-700'}`
+                                    : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
+                            }`}>
                                 <div className="flex items-center justify-between mb-6">
-                                    <h3 className="text-base font-bold text-text-dark dark:text-gray-100">Group Members</h3>
+                                    <div className="flex items-center gap-2">
+                                        {isSystemCard && (
+                                            <span
+                                                className={`text-lg font-black leading-none ${projectId === 'public-group' ? 'text-violet-500' : 'text-orange-500'}`}
+                                                style={{ fontFamily: 'monospace' }}
+                                            >#</span>
+                                        )}
+                                        <h3 className="text-base font-bold text-text-dark dark:text-gray-100">
+                                            {isSystemCard ? 'Channel Members' : 'Group Members'}
+                                        </h3>
+                                    </div>
                                     <button
                                         type="button"
                                         onClick={handleAddMemberClick}
@@ -1121,7 +1465,11 @@ const TaskFlowDetail = () => {
                                         <div key={member.user_id ?? index} className="flex items-center justify-between">
                                             <div className="flex items-center gap-3">
                                                 <div className="relative">
-                                                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-purple-400 flex items-center justify-center text-white text-sm font-medium">
+                                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-medium bg-gradient-to-br ${
+                                                        isSystemCard
+                                                            ? projectId === 'public-group' ? 'from-violet-500 to-indigo-500' : 'from-orange-500 to-amber-400'
+                                                            : 'from-blue-400 to-purple-400'
+                                                    }`}>
                                                         {member.avatar}
                                                     </div>
                                                     {member.online && (
@@ -1194,10 +1542,148 @@ const TaskFlowDetail = () => {
                     </main>
                 </div>
             </div>
+            {/* Hidden file input for resource uploads — must live outside any conditional modal */}
+            <input
+                type="file"
+                ref={uploadModalFileInputRef}
+                className="hidden"
+                onChange={handleUploadModalFileSelect}
+            />
+
+            {/* File Analysis Overlay */}
+            {isUploadModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                    <div className="w-full max-w-md rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-2xl overflow-hidden">
+                        {/* Gradient Header */}
+                        <div className="bg-gradient-to-r from-primary to-blue-600 px-6 py-5">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+                                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                                        <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <h3 className="text-lg font-bold text-white">File Quality Check</h3>
+                                    <p className="text-xs text-white/70 truncate">
+                                        {uploadModalFile?.name ?? 'Analyzing file...'}
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={closeUploadModal}
+                                    className="w-8 h-8 rounded-full bg-white/20 text-white hover:bg-white/30 flex items-center justify-center transition-colors flex-shrink-0"
+                                    aria-label="Close"
+                                >
+                                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                                        <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="px-6 py-5 space-y-5">
+                            {/* File info chip */}
+                            {uploadModalFile && (
+                                <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+                                    <svg className="w-8 h-8 text-primary flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                                        <path d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                    </svg>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-semibold text-text-dark dark:text-gray-100 truncate">{uploadModalFile.name}</p>
+                                        <p className="text-xs text-text-gray dark:text-gray-400">
+                                            {(uploadModalFile.size / (1024 * 1024)).toFixed(2)} MB
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Progress bar */}
+                            <div>
+                                <div className="flex items-center justify-between text-xs font-medium mb-2">
+                                    <span className="text-text-gray dark:text-gray-400 flex items-center gap-1.5">
+                                        {analysisDone ? (
+                                            <>
+                                                <svg className="w-3.5 h-3.5 text-green-500" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5" /></svg>
+                                                Analysis complete
+                                            </>
+                                        ) : (
+                                            <>
+                                                <svg className="w-3.5 h-3.5 animate-spin text-primary" viewBox="0 0 24 24" fill="none">
+                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                                                </svg>
+                                                Analyzing quality...
+                                            </>
+                                        )}
+                                    </span>
+                                    <span className={`font-bold ${analysisDone ? 'text-green-600 dark:text-green-400' : 'text-primary'}`}>
+                                        {analysisProgress}%
+                                    </span>
+                                </div>
+                                <div className="w-full h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                    <div
+                                        className={`h-full rounded-full transition-all duration-200 ${analysisDone ? 'bg-green-500' : 'bg-gradient-to-r from-primary to-blue-400'}`}
+                                        style={{ width: `${analysisProgress}%` }}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Criteria results */}
+                            {analysisDone && analysisCriteria.length > 0 && (
+                                <div className="space-y-2">
+                                    <p className="text-xs font-semibold text-text-gray dark:text-gray-400 uppercase tracking-wide">Quality Criteria</p>
+                                    {analysisCriteria.map((criterion, idx) => (
+                                        <div
+                                            key={idx}
+                                            className={`flex items-start gap-3 p-3 rounded-xl border ${criterion.passed ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800' : 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800'}`}
+                                        >
+                                            <span className={`mt-0.5 flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-white text-xs ${criterion.passed ? 'bg-green-500' : 'bg-amber-500'}`}>
+                                                {criterion.passed ? '✓' : '!'}
+                                            </span>
+                                            <div>
+                                                <p className={`text-sm font-semibold ${criterion.passed ? 'text-green-700 dark:text-green-400' : 'text-amber-700 dark:text-amber-400'}`}>
+                                                    {criterion.label}
+                                                </p>
+                                                {!criterion.passed && criterion.hint && (
+                                                    <p className="mt-0.5 text-xs text-amber-600 dark:text-amber-400 leading-relaxed">{criterion.hint}</p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Footer */}
+                        <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-800">
+                            <button
+                                type="button"
+                                onClick={closeUploadModal}
+                                className="h-10 px-4 rounded-lg border border-gray-200 dark:border-gray-700 text-sm font-semibold text-text-gray dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+                            >
+                                Cancel
+                            </button>
+                            <div className="flex items-center gap-3">
+                                {analysisDone && analysisCriteria.some((c) => !c.passed) && (
+                                    <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">Issues found — review before uploading</span>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={() => void handleUploadModalConfirm()}
+                                    disabled={!analysisDone || isUploadingResource}
+                                    className="h-10 px-5 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                >
+                                    {isUploadingResource ? 'Uploading...' : analysisDone ? 'Upload File' : 'Analyzing...'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
             {isMemberModalOpen && (
                 <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
                     <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-gray-900 p-6 shadow-2xl border border-gray-200 dark:border-gray-700">
-                        <div className="flex items-center justify-between pb-4 border-b border-gray-100 dark:border-gray-800">
+                        <div className="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-gray-800">
                             <div>
                                 <h3 className="text-lg font-semibold text-text-dark dark:text-gray-100">{modalTitle}</h3>
                                 <p className="text-xs text-text-gray dark:text-gray-400">Search anyone in the workspace who is not already assigned.</p>
@@ -1275,7 +1761,7 @@ const TaskFlowDetail = () => {
                         onSubmit={handleMemberConfigSubmit}
                         className="w-full max-w-md rounded-2xl bg-white dark:bg-gray-900 p-6 shadow-2xl border border-gray-200 dark:border-gray-700"
                     >
-                        <div className="flex items-center justify-between pb-4 border-b border-gray-100 dark:border-gray-800">
+                        <div className="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-gray-800">
                             <div>
                                 <h3 className="text-lg font-semibold text-text-dark dark:text-gray-100">Configure {configureTarget.name}</h3>
                                 <p className="text-xs text-text-gray dark:text-gray-400">Add context about their role on this board.</p>

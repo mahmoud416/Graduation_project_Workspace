@@ -16,14 +16,14 @@
 
   /* Colors */
   --color-primary: #1d7bf4;
-  --color-background: #f8f9fb;
+  --color-background: #e9ecf4;
   --color-surface: #ffffff;
   --color-text-dark: #1a1a1a;
   --color-text-gray: #6b7280;
   --color-success: #10b981;
   --color-warning: #f59e0b;
   --color-danger: #ef4444;
-  --color-border: #e5e7eb;
+  --color-border: #d1d5db;
 }
 
 /* Base layer - global resets and defaults */
@@ -52,7 +52,7 @@
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    background-color: #f8f9fb;
+    background-color: #e9ecf4;
     color: #1a1a1a;
     line-height: 1.5;
     text-rendering: optimizeLegibility;

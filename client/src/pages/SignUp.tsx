@@ -74,7 +74,7 @@ const SignUp = () => {
 
             {/* Form Container */}
             <div className="flex-1 flex items-center justify-center p-6">
-                <div className="w-full max-w-[460px] bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800 p-10">
+                <div className="w-full max-w-[460px] bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-10">
                     <div className="text-center mb-8">
                         <h1 className="text-2xl font-bold text-text-dark dark:text-white mb-2">Create your account</h1>
                         <p className="text-sm text-text-gray dark:text-gray-400">Start collaborating with your team today</p>

@@ -54,8 +54,8 @@ type ModalShellProps = {
 
 const ModalShell = ({ title, children, onClose }: ModalShellProps) => (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-        <div className="w-full max-w-xl rounded-2xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 px-6 py-4">
+        <div className="w-full max-w-xl rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-800 px-6 py-4">
                 <h2 className="text-xl font-semibold text-text-dark dark:text-white">{title}</h2>
                 <button
                     type="button"
@@ -111,7 +111,7 @@ const ConfigurationPage = () => {
         setError(null);
         try {
             const response = await fetch(`${API_BASE}/users`, {
-                headers: { 'X-User-Id': adminId },
+                headers: { 'X-User-Id': adminId, 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') },
             });
             if (!response.ok) {
                 throw new Error(await response.text());
@@ -204,7 +204,7 @@ const ConfigurationPage = () => {
         try {
             const resp = await fetch(`${API_BASE}/users/${accountId}`, {
                 method: 'DELETE',
-                headers: { 'X-User-Id': adminId },
+                headers: { 'X-User-Id': adminId, 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') },
             });
             if (!resp.ok) {
                 throw new Error(await resp.text());
@@ -241,6 +241,7 @@ const ConfigurationPage = () => {
                 headers: {
                     'Content-Type': 'application/json',
                     'X-User-Id': adminId,
+                    'Authorization': 'Bearer ' + (localStorage.getItem('token') || ''),
                 },
                 body: JSON.stringify({
                     name: selectedAccount.name,
@@ -263,6 +264,7 @@ const ConfigurationPage = () => {
                     headers: {
                         'Content-Type': 'application/json',
                         'X-User-Id': adminId,
+                        'Authorization': 'Bearer ' + (localStorage.getItem('token') || ''),
                     },
                     body: JSON.stringify({
                         user_id: selectedAccount.id,
@@ -289,7 +291,7 @@ const ConfigurationPage = () => {
     };
 
     return (
-        <div className="flex min-h-screen bg-[#f5f6fb] dark:bg-gray-950">
+        <div className="flex min-h-screen bg-gray-50 dark:bg-gray-950">
             <Sidebar />
             <div className="flex-1 ml-[var(--sidebar-width)] transition-[margin] duration-200">
                 <Header title="Configuration" />
@@ -308,7 +310,7 @@ const ConfigurationPage = () => {
                     </div>
 
                     <div className="grid gap-6 lg:grid-cols-3">
-                        <section className="rounded-3xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 p-8 shadow-sm">
+                        <section className="rounded-3xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-8 shadow-sm">
                             <p className="text-xs font-semibold uppercase tracking-wide text-primary mb-2">Step 1</p>
                             <h2 className="text-2xl font-semibold text-text-dark dark:text-white mb-3">Create Account</h2>
                             <p className="text-sm text-text-gray dark:text-gray-400 mb-6">
@@ -323,7 +325,7 @@ const ConfigurationPage = () => {
                             </button>
                         </section>
 
-                        <section className="rounded-3xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 p-8 shadow-sm">
+                        <section className="rounded-3xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-8 shadow-sm">
                             <p className="text-xs font-semibold uppercase tracking-wide text-primary mb-2">Step 2</p>
                             <h2 className="text-2xl font-semibold text-text-dark dark:text-white mb-3">Assign Staff</h2>
                             <p className="text-sm text-text-gray dark:text-gray-400 mb-6">
@@ -338,7 +340,7 @@ const ConfigurationPage = () => {
                             </button>
                         </section>
 
-                        <section className="rounded-3xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 p-8 shadow-sm">
+                        <section className="rounded-3xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-8 shadow-sm">
                             <p className="text-xs font-semibold uppercase tracking-wide text-primary mb-2">Step 3</p>
                             <h2 className="text-2xl font-semibold text-text-dark dark:text-white mb-3">Review Accounts</h2>
                             <p className="text-sm text-text-gray dark:text-gray-400 mb-6">
@@ -354,7 +356,7 @@ const ConfigurationPage = () => {
                         </section>
                     </div>
 
-                    <div id="accounts-list" className="mt-8 rounded-3xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 p-8 shadow-sm">
+                    <div id="accounts-list" className="mt-8 rounded-3xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-8 shadow-sm">
                         <div className="flex items-center justify-between mb-6">
                             <div>
                                 <h3 className="text-lg font-semibold text-text-dark dark:text-white">All Accounts</h3>
@@ -376,7 +378,7 @@ const ConfigurationPage = () => {
                                 No accounts found. Create one to get started.
                             </div>
                         ) : (
-                            <ul className="rounded-2xl border border-gray-100 dark:border-gray-800 divide-y divide-gray-100 dark:divide-gray-800">
+                            <ul className="rounded-2xl border border-gray-200 dark:border-gray-800 divide-y divide-gray-100 dark:divide-gray-800">
                                 {accounts.map((account) => (
                                     <li key={account.id} className="flex items-center justify-between px-4 py-3">
                                         <div>

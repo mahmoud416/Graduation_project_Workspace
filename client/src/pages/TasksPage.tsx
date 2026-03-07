@@ -227,7 +227,7 @@ const TasksPage = () => {
                             {tasks.map((task) => (
                                 <div
                                     key={task.id}
-                                    className="grid grid-cols-12 gap-4 px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-700/40 transition-colors border-b border-gray-100 dark:border-gray-700 last:border-0"
+                                    className="grid grid-cols-12 gap-4 px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-700/40 transition-colors border-b border-gray-200 dark:border-gray-700 last:border-0"
                                 >
                                     <div className="col-span-1 flex items-center">
                                         <input type="checkbox" className="w-4 h-4 border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800" />

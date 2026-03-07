@@ -14,6 +14,8 @@ import SubAdminPortal from './pages/SubAdminPortal';
 import TaskFlowDetail from './pages/TaskFlowDetail';
 import CreateTask from './pages/CreateTask';
 import ConfigurationPage from './pages/ConfigurationPage';
+import StaffProjectsPage from './pages/StaffProjectsPage';
+import ChatbotWidget from './components/ChatbotWidget';
 
 const USER_UPDATE_EVENT = 'workspace:user-update';
 
@@ -77,7 +79,9 @@ function App() {
         <Route path="/create-task" element={<CreateTask />} />
         <Route path="/task-master" element={<TaskMasterDashboard />} />
         <Route path="/configuration" element={<ConfigurationPage />} />
+        <Route path="/my-projects" element={<StaffProjectsPage />} />
       </Routes>
+      {role && <ChatbotWidget />}
     </BrowserRouter>
   );
 }

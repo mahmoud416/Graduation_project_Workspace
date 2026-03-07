@@ -33,6 +33,7 @@ export interface Project {
     subAdminIds?: string[];
     staffIds?: string[];
     isDefaultGroup?: boolean;
+    is_system_card?: boolean;
 }
 
 export interface StatCard {

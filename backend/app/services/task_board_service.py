@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional, Set, TypedDict
 from uuid import uuid4
 
 from bson import ObjectId
+from bson.errors import InvalidId
 from pymongo import ReturnDocument
 
 from app.db.collections import PROJECTS_COLLECTION, TASK_BOARDS_COLLECTION, USERS_COLLECTION
@@ -126,10 +127,10 @@ class TaskBoardService:
         due: str,
         done: bool,
     ) -> Optional[Dict[str, Any]]:
-        """Append a new to-do entry to the board."""
+        """Append a new to-do entry to the board and sync progress."""
         task_id = TaskBoardService._generate_task_id()
         task_doc = TaskBoardModel.default_task_structure(task_id, title, assignee, due, done)
-        return await db[TASK_BOARDS_COLLECTION].find_one_and_update(
+        board = await db[TASK_BOARDS_COLLECTION].find_one_and_update(
             {"project_id": project_id},
             {
                 "$push": {"tasks": task_doc},
@@ -137,6 +138,8 @@ class TaskBoardService:
             },
             return_document=ReturnDocument.AFTER,
         )
+        await TaskBoardService._sync_progress(db, project_id, board)
+        return board
 
     @staticmethod
     async def update_task(
@@ -145,7 +148,7 @@ class TaskBoardService:
         task_id: str,
         updates: Dict[str, Any],
     ) -> Optional[Dict[str, Any]]:
-        """Patch a single to-do entry."""
+        """Patch a single to-do entry and sync progress."""
         task_updates: Dict[str, Any] = {}
         for key, value in updates.items():
             if value is None:
@@ -154,11 +157,31 @@ class TaskBoardService:
         if not task_updates:
             return await TaskBoardService.get_board_by_project(db, project_id)
         task_updates["updated_at"] = datetime.utcnow()
-        return await db[TASK_BOARDS_COLLECTION].find_one_and_update(
+        board = await db[TASK_BOARDS_COLLECTION].find_one_and_update(
             {"project_id": project_id, "tasks.id": task_id},
             {"$set": task_updates},
             return_document=ReturnDocument.AFTER,
         )
+        await TaskBoardService._sync_progress(db, project_id, board)
+        return board
+
+    @staticmethod
+    async def delete_task(
+        db,
+        project_id: str,
+        task_id: str,
+    ) -> Optional[Dict[str, Any]]:
+        """Remove a to-do entry from the board and sync progress."""
+        board = await db[TASK_BOARDS_COLLECTION].find_one_and_update(
+            {"project_id": project_id},
+            {
+                "$pull": {"tasks": {"id": task_id}},
+                "$set": {"updated_at": datetime.utcnow()},
+            },
+            return_document=ReturnDocument.AFTER,
+        )
+        await TaskBoardService._sync_progress(db, project_id, board)
+        return board
 
     @staticmethod
     def serialize(board: Dict[str, Any], current_user: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -180,6 +203,46 @@ class TaskBoardService:
             "created_at": board.get("created_at"),
             "updated_at": board.get("updated_at"),
         }
+
+    # ------------------------------------------------------------------
+    # Progress helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _tasks_progress(tasks: List[Dict[str, Any]]) -> int:
+        """Calculate 0-100 progress from a task list based on done count."""
+        if not tasks:
+            return 0
+        done = sum(1 for t in tasks if t.get("done"))
+        return round(done / len(tasks) * 100)
+
+    @staticmethod
+    async def _sync_progress(db, project_id: str, board: Optional[Dict[str, Any]]) -> None:
+        """Recalculate progress from tasks and persist to both task_board and project."""
+        if not board:
+            return
+        tasks = board.get("tasks", [])
+        progress = TaskBoardService._tasks_progress(tasks)
+        now = datetime.utcnow()
+
+        # Update board overview.progress
+        await db[TASK_BOARDS_COLLECTION].update_one(
+            {"project_id": project_id},
+            {"$set": {"overview.progress": progress, "updated_at": now}},
+        )
+
+        # Sync back to the project card — handle both ObjectId and string _id
+        try:
+            project_filter: Dict[str, Any] = {"_id": ObjectId(project_id)}
+        except (InvalidId, TypeError):
+            project_filter = {"_id": project_id}
+        await db[PROJECTS_COLLECTION].update_one(
+            project_filter,
+            {"$set": {"progress": progress, "updated_at": now}},
+        )
+
+        # Mutate in-memory so the caller's serialize() sees the fresh value
+        board.setdefault("overview", {})["progress"] = progress
 
     # ------------------------------------------------------------------
     # Internal helpers

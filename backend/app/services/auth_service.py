@@ -1,60 +1,41 @@
 """
 Authentication service.
-Handles user registration and login with a simple tokenless flow.
+Handles user registration and login with bcrypt password hashing.
 """
 from datetime import datetime
 from typing import Optional, Dict, Any
 from bson import ObjectId
 
-from app.core.security import verify_password
+from app.core.security import hash_password, verify_password, create_access_token
 from app.models.user import UserModel
 from app.db.collections import USERS_COLLECTION
 
 
 class AuthService:
     """Service for authentication operations."""
-    
+
     @staticmethod
     async def register_user(
         db,
         email: str,
         password: str,
         full_name: str,
-        role: str | None = "staff",
-        admin_id: str | None = None,
-        sub_admin_id: str | None = None,
-        phone: str | None = None,
-        status: str | None = "active"
+        role: str = "staff",
+        admin_id: Optional[str] = None,
+        sub_admin_id: Optional[str] = None,
+        phone: Optional[str] = None,
+        status: str = "active"
     ) -> Dict[str, Any]:
-        """
-        Register a new user.
-        
-        Args:
-            db: Database instance
-            email: User's email address
-            password: Plain text password
-            full_name: User's full name
-            role: Role string (admin / sub_admin / staff)
-            admin_id: Optional admin identifier
-            sub_admin_id: Optional sub-admin identifier
-            phone: Optional phone number
-            status: Account status
-            
-        Returns:
-            Created user document
-            
-        Raises:
-            ValueError: If email already exists
-        """
-        # Check if email already exists
-        existing_user = await db[USERS_COLLECTION].find_one({"email": email.lower()})
-        if existing_user:
+        """Register a new user with bcrypt-hashed password."""
+        existing = await db[USERS_COLLECTION].find_one({"email": email.lower()})
+        if existing:
             raise ValueError("Email already registered")
-        
-        # Create user document (password stored as-is per requirements)
+
+        hashed = hash_password(password)
+
         user_doc = UserModel.create_document(
             email=email,
-            password=password,
+            password=hashed,
             full_name=full_name,
             role=role or "staff",
             admin_id=admin_id,
@@ -62,13 +43,11 @@ class AuthService:
             phone=phone,
             status=status or "active"
         )
-        
-        # Insert into database
+
         result = await db[USERS_COLLECTION].insert_one(user_doc)
         user_doc["_id"] = result.inserted_id
-        
         return user_doc
-    
+
     @staticmethod
     async def authenticate_user(
         db,
@@ -76,41 +55,60 @@ class AuthService:
         password: str
     ) -> Optional[Dict[str, Any]]:
         """
-        Authenticate a user with email and password.
-        
-        Args:
-            db: Database instance
-            email: User's email address
-            password: Plain text password
-            
-        Returns:
-            User document if authentication successful, None otherwise
+        Authenticate a user. Supports both bcrypt hashes and plain-text
+        passwords (for accounts created before the security upgrade).
         """
-        # Find user by email
         user = await db[USERS_COLLECTION].find_one({"email": email.lower()})
         if not user:
             return None
-        
-        # Verify password (plain comparison)
-        if not verify_password(password, user.get("password", "")):
+
+        stored = user.get("password", "")
+
+        # Try bcrypt verification first
+        authenticated = False
+        if stored.startswith("$2b$") or stored.startswith("$2a$"):
+            authenticated = verify_password(password, stored)
+        else:
+            # Legacy plain-text comparison — migrate on successful login
+            if password == stored:
+                authenticated = True
+                # Migrate to bcrypt
+                hashed = hash_password(password)
+                await db[USERS_COLLECTION].update_one(
+                    {"_id": user["_id"]},
+                    {"$set": {"password": hashed}}
+                )
+
+        if not authenticated:
             return None
-        
+
+        # Update last_login
+        await db[USERS_COLLECTION].update_one(
+            {"_id": user["_id"]},
+            {"$set": {"last_login": datetime.utcnow()}}
+        )
         return user
 
     @staticmethod
-    async def update_password(
-        db,
-        user_id: str,
-        new_password: str
-    ) -> bool:
-        """Update a user's password with a plain-text value."""
+    def generate_token(user: Dict[str, Any]) -> str:
+        """Generate a JWT access token for a user."""
+        return create_access_token(
+            user_id=str(user["_id"]),
+            role=user.get("role", "staff"),
+            name=user.get("name", "")
+        )
+
+    @staticmethod
+    async def update_password(db, user_id: str, new_password: str) -> bool:
+        """Update a user's password with bcrypt hashing."""
         try:
             object_id = ObjectId(user_id)
         except Exception:
             return False
 
+        hashed = hash_password(new_password)
         result = await db[USERS_COLLECTION].update_one(
             {"_id": object_id},
-            {"$set": {"password": new_password, "updated_at": datetime.utcnow()}}
+            {"$set": {"password": hashed, "updated_at": datetime.utcnow()}}
         )
         return result.modified_count == 1

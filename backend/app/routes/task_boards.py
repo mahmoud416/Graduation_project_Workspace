@@ -81,6 +81,7 @@ async def add_task_board_todo(
 ):
     project = await _get_project_or_404(db, project_id)
     _ensure_project_visibility(project, current_user)
+    _ensure_task_privileges(project, current_user)
     board = await TaskBoardService.get_board_by_project(db, _stringify_project_id(project))
     if not board:
         board = await TaskBoardService.ensure_board_for_project(db, project)
@@ -108,6 +109,7 @@ async def update_task_board_todo(
 ):
     project = await _get_project_or_404(db, project_id)
     _ensure_project_visibility(project, current_user)
+    _ensure_task_privileges(project, current_user)
     board = await TaskBoardService.get_board_by_project(db, _stringify_project_id(project))
     if not board:
         board = await TaskBoardService.ensure_board_for_project(db, project)
@@ -119,6 +121,22 @@ async def update_task_board_todo(
         "done": payload.done,
     }
     updated = await TaskBoardService.update_task(db, _stringify_project_id(project), task_id, updates)
+    if not updated:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Task entry not found")
+    return TaskBoardService.serialize(updated, current_user)
+
+
+@router.delete("/{project_id}/todos/{task_id}", response_model=TaskBoardResponse)
+async def delete_task_board_todo(
+    project_id: str,
+    task_id: str,
+    current_user=Depends(get_current_user),
+    db=Depends(get_database),
+):
+    project = await _get_project_or_404(db, project_id)
+    _ensure_project_visibility(project, current_user)
+    _ensure_task_privileges(project, current_user)
+    updated = await TaskBoardService.delete_task(db, _stringify_project_id(project), task_id)
     if not updated:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Task entry not found")
     return TaskBoardService.serialize(updated, current_user)
@@ -231,6 +249,11 @@ async def add_task_board_comment(
     if not board:
         board = await TaskBoardService.ensure_board_for_project(db, project)
 
+    # Check if comments are enabled
+    role = current_user.get("role", "staff")
+    if role == "staff" and not project.get("comments_enabled", True):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Comments are disabled for this project")
+
     attachment_payloads: List[StoredUpload] = []
     for upload in _coerce_uploads_to_list(attachments):
         stored = await _persist_upload_file(normalized_id, upload, folder="comments")
@@ -259,6 +282,10 @@ async def upload_task_board_resource(
     board = await TaskBoardService.get_board_by_project(db, normalized_id)
     if not board:
         board = await TaskBoardService.ensure_board_for_project(db, project)
+
+    role = current_user.get("role", "staff")
+    if role == "staff" and not project.get("uploads_enabled", True):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="File uploads are disabled for this project")
 
     stored = await _persist_upload_file(normalized_id, file)
     updated = await TaskBoardService.add_resource_entry(
@@ -491,6 +518,14 @@ def _resolve_storage_path(relative_path: str) -> Path:
     if not str(candidate).startswith(str(uploads_root)):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Invalid resource path")
     return candidate
+
+
+def _ensure_task_privileges(project: dict[str, Any], current_user: dict[str, Any]) -> None:
+    """Only admin and sub_admin can create/edit/delete tasks."""
+    role = (current_user.get("role") or "").lower()
+    if role in {"admin", "sub_admin"}:
+        return
+    raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Only admins and sub-admins can manage tasks")
 
 
 def _safe_delete_relative_path(relative_path: str) -> None:

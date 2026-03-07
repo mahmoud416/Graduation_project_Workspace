@@ -1,54 +1,62 @@
 """
-Authentication dependencies for FastAPI using a simple header-based flow.
-
-Clients must send `X-User-Id` with the MongoDB user id string. No JWT is used.
+JWT-based authentication dependency.
+Clients must send: Authorization: Bearer <token>
 """
 from fastapi import Depends, Header, HTTPException, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from bson import ObjectId
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from app.db.mongodb import get_database
 from app.db.collections import USERS_COLLECTION
+from app.core.security import decode_access_token
+
+
+bearer_scheme = HTTPBearer(auto_error=False)
 
 
 async def get_current_user(
-    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
-    db = Depends(get_database)
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
+    x_user_id: Optional[str] = Header(default=None, alias="X-User-Id"),
+    db=Depends(get_database),
 ) -> Dict[str, Any]:
     """
-    Pull the current user from MongoDB using a plain header value.
+    Resolve the current user from a JWT Bearer token.
+    Falls back to X-User-Id header for backward compatibility during migration.
     """
-    if not x_user_id:
+    user_id: Optional[str] = None
+
+    # --- Primary: JWT Bearer token ---
+    if credentials and credentials.credentials:
+        payload = decode_access_token(credentials.credentials)
+        if payload:
+            user_id = payload.get("sub")
+
+    # --- Fallback: legacy X-User-Id header ---
+    if not user_id and x_user_id:
+        user_id = x_user_id.strip()
+
+    if not user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing X-User-Id header"
+            detail="Authentication required",
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
-    normalized_id = x_user_id.strip()
-    if not normalized_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid user id format"
-        )
+    # Look up user
+    lookup_id: Any = ObjectId(user_id) if ObjectId.is_valid(user_id) else user_id
+    user = await db[USERS_COLLECTION].find_one({"_id": lookup_id})
 
-    user_lookup_id: Any
-    if ObjectId.is_valid(normalized_id):
-        user_lookup_id = ObjectId(normalized_id)
-    else:
-        # Support legacy string-based identifiers from seeded data
-        user_lookup_id = normalized_id
-
-    user = await db[USERS_COLLECTION].find_one({"_id": user_lookup_id})
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found"
+            detail="User not found",
         )
 
-    if not user.get("is_active", True):
+    if not user.get("is_active", True) or user.get("status") == "suspended":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Inactive user account"
+            detail="Account is inactive or suspended",
         )
 
     return user

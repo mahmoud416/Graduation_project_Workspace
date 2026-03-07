@@ -77,6 +77,7 @@ const Header = ({ title }: HeaderProps) => {
     };
 
     const handleLogout = () => {
+        localStorage.removeItem('token');
         localStorage.removeItem('userId');
         localStorage.removeItem('role');
         localStorage.removeItem('fullName');

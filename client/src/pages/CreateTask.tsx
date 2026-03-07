@@ -27,7 +27,7 @@ const CreateTask = ({ onClose, onSuccess }: CreateTaskProps) => {
             if (!userId) return;
             try {
                 const res = await fetch(`${API_BASE}/teams`, {
-                    headers: { 'X-User-Id': userId }
+                    headers: { 'X-User-Id': userId, 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') }
                 });
                 if (res.ok) {
                     const data = await res.json();
@@ -52,7 +52,8 @@ const CreateTask = ({ onClose, onSuccess }: CreateTaskProps) => {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-User-Id': userId
+                    'X-User-Id': userId,
+                    'Authorization': 'Bearer ' + (localStorage.getItem('token') || ''),
                 },
                 body: JSON.stringify({ name: newTeamName })
             });
@@ -97,7 +98,8 @@ const CreateTask = ({ onClose, onSuccess }: CreateTaskProps) => {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-User-Id': userId
+                    'X-User-Id': userId,
+                    'Authorization': 'Bearer ' + (localStorage.getItem('token') || ''),
                 },
                 body: JSON.stringify(payload)
             });

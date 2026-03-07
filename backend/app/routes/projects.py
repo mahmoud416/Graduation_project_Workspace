@@ -11,6 +11,7 @@ from app.schemas.project import (
     ProjectCreate,
     ProjectResponse,
     ProjectStaffUpdate,
+    ProjectTogglesUpdate,
     ProjectUpdate,
 )
 from app.services.project_service import ProjectService
@@ -329,4 +330,34 @@ async def add_staff_to_project(
     if not updated:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
 
+    return await _serialize_single(db, updated)
+
+
+@router.patch("/{project_id}/toggles", response_model=ProjectResponse)
+async def toggle_project_settings(
+    project_id: str,
+    payload: ProjectTogglesUpdate,
+    current_user = Depends(get_current_user),
+    db = Depends(get_database)
+):
+    """Toggle comments_enabled and/or uploads_enabled. Admin only."""
+    _ensure_admin(current_user)
+    project_obj_id = _parse_user_id(project_id, "project_id")
+    if project_obj_id is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid project id")
+
+    project = await ProjectService.get_project(db, project_obj_id)
+    if not project:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+
+    updates = {}
+    if payload.comments_enabled is not None:
+        updates["comments_enabled"] = payload.comments_enabled
+    if payload.uploads_enabled is not None:
+        updates["uploads_enabled"] = payload.uploads_enabled
+
+    if not updates:
+        return await _serialize_single(db, project)
+
+    updated = await ProjectService.update_project(db, project_obj_id, updates)
     return await _serialize_single(db, updated)

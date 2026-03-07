@@ -1,109 +1,101 @@
+import { useEffect, useState } from 'react';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 
+const API_BASE = (import.meta.env.VITE_API_BASE ?? 'http://localhost:8000/api/v1').replace(/\/$/, '');
+
 interface TeamMember {
-    id: string;
+    _id: string;
     name: string;
-    status: 'ONLINE' | 'OFFLINE' | 'AWAY';
-    role: string;
     email: string;
-    workload: number;
-    workloadStatus: 'NEAR CAPACITY' | 'HEALTHY' | 'OVERLOADED' | 'AVAILABLE';
-    avatar: string;
+    role: string;
+    is_active: boolean;
+    phone?: string | null;
+    created_at?: string | null;
 }
 
+const ROLES_ORDER: Record<string, number> = { admin: 0, sub_admin: 1, staff: 2 };
+
+const formatRole = (role: string) =>
+    role.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+
+const getInitials = (name: string) =>
+    name
+        .trim()
+        .split(/\s+/)
+        .slice(0, 2)
+        .map((s) => s[0]?.toUpperCase() ?? '')
+        .join('');
+
+const AVATAR_GRADIENTS = [
+    'from-purple-400 to-pink-400',
+    'from-blue-400 to-cyan-400',
+    'from-green-400 to-teal-400',
+    'from-orange-400 to-red-400',
+    'from-indigo-400 to-violet-400',
+    'from-yellow-400 to-orange-400',
+];
+
+const getAvatarGradient = (id: string) => {
+    const idx = id.charCodeAt(id.length - 1) % AVATAR_GRADIENTS.length;
+    return AVATAR_GRADIENTS[idx];
+};
+
+const ROLE_BADGE: Record<string, string> = {
+    admin: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
+    sub_admin: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+    staff: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
+};
+
+const PAGE_SIZE = 10;
+
 const TeamPage = () => {
+    const [members, setMembers] = useState<TeamMember[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [roleFilter, setRoleFilter] = useState<string>('all');
+    const [page, setPage] = useState(1);
+
+    useEffect(() => {
+        const fetchUsers = async () => {
+            try {
+                setIsLoading(true);
+                setError(null);
+                const token = localStorage.getItem('token');
+                const res = await fetch(`${API_BASE}/users`, {
+                    headers: { Authorization: `Bearer ${token ?? ''}` },
+                });
+                if (!res.ok) throw new Error(`Failed to load team members (${res.status})`);
+                const data: TeamMember[] = await res.json();
+                data.sort((a, b) => (ROLES_ORDER[a.role] ?? 9) - (ROLES_ORDER[b.role] ?? 9));
+                setMembers(data);
+            } catch (err: unknown) {
+                setError(err instanceof Error ? err.message : 'Failed to load team members');
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        void fetchUsers();
+    }, []);
+
+    const filtered = members.filter((m) => {
+        const matchesSearch =
+            m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            m.email.toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesRole = roleFilter === 'all' || m.role === roleFilter;
+        return matchesSearch && matchesRole;
+    });
+
+    const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+    const currentPage = Math.min(page, totalPages);
+    const paginatedMembers = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
     const stats = {
-        totalMembers: 32,
-        avgWorkload: 64,
-        activeTasks: 148,
-        fullCapacity: 5,
-    };
-
-    const members: TeamMember[] = [
-        {
-            id: '1',
-            name: 'Alex Rivera',
-            status: 'ONLINE',
-            role: 'Senior Designer',
-            email: 'alex@company.com',
-            workload: 88,
-            workloadStatus: 'NEAR CAPACITY',
-            avatar: 'AR',
-        },
-        {
-            id: '2',
-            name: 'Jordan Smith',
-            status: 'ONLINE',
-            role: 'Full Stack Dev',
-            email: 'jordan@company.com',
-            workload: 40,
-            workloadStatus: 'HEALTHY',
-            avatar: 'JS',
-        },
-        {
-            id: '3',
-            name: 'Sarah Chen',
-            status: 'ONLINE',
-            role: 'Product Manager',
-            email: 'sarah@company.com',
-            workload: 96,
-            workloadStatus: 'OVERLOADED',
-            avatar: 'SC',
-        },
-        {
-            id: '4',
-            name: 'Taylor Swift',
-            status: 'OFFLINE',
-            role: 'QA Engineer',
-            email: 'taylor@company.com',
-            workload: 20,
-            workloadStatus: 'AVAILABLE',
-            avatar: 'TS',
-        },
-    ];
-
-    const getStatusColor = (status: string) => {
-        switch (status) {
-            case 'ONLINE':
-                return 'bg-success';
-            case 'AWAY':
-                return 'bg-warning';
-            case 'OFFLINE':
-                return 'bg-gray-400';
-            default:
-                return 'bg-gray-400';
-        }
-    };
-
-    const getWorkloadColor = (status: string) => {
-        switch (status) {
-            case 'OVERLOADED':
-                return 'bg-danger';
-            case 'NEAR CAPACITY':
-                return 'bg-warning';
-            case 'HEALTHY':
-                return 'bg-blue-500';
-            case 'AVAILABLE':
-                return 'bg-success';
-            default:
-                return 'bg-gray-300';
-        }
-    };
-
-    const getWorkloadTextColor = (status: string) => {
-        switch (status) {
-            case 'OVERLOADED':
-                return 'text-danger';
-            case 'NEAR CAPACITY':
-                return 'text-warning';
-            case 'HEALTHY':
-                return 'text-blue-600';
-            case 'AVAILABLE':
-                return 'text-success';
-            default:
-                return 'text-text-gray';
-        }
+        total: members.length,
+        admins: members.filter((m) => m.role === 'admin').length,
+        subAdmins: members.filter((m) => m.role === 'sub_admin').length,
+        staff: members.filter((m) => m.role === 'staff').length,
     };
 
     return (
@@ -118,171 +110,248 @@ const TeamPage = () => {
                     <div className="flex items-center justify-between mb-6">
                         <div>
                             <h1 className="text-3xl font-bold text-text-dark dark:text-white mb-1">Team Management</h1>
-                            <p className="text-sm text-text-gray dark:text-gray-400">Review your team's current availability and manage permissions.</p>
-                        </div>
-                        <div className="flex items-center gap-3">
-                            <button className="h-10 px-4 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg text-sm text-text-dark dark:text-gray-200 font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-2">
-                                <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                                    <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                </svg>
-                                Manage Roles
-                            </button>
-                            <button className="h-10 px-4 bg-primary text-white font-medium text-sm rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2">
-                                <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-                                </svg>
-                                Invite Member
-                            </button>
+                            <p className="text-sm text-text-gray dark:text-gray-400">
+                                Review your team's directory and manage member information.
+                            </p>
                         </div>
                     </div>
 
                     {/* Stats Cards */}
                     <div className="grid grid-cols-4 gap-5 mb-6">
-                        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 transition-colors">
-                            <div className="flex items-center gap-2 mb-2">
-                                <svg className="w-4 h-4 text-text-gray dark:text-gray-400" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                                </svg>
-                                <span className="text-xs font-medium text-text-gray dark:text-gray-400 uppercase">Total Members</span>
+                        {[
+                            {
+                                label: 'Total Members',
+                                value: stats.total,
+                                icon: (
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                                    </svg>
+                                ),
+                            },
+                            {
+                                label: 'Admins',
+                                value: stats.admins,
+                                icon: (
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                                    </svg>
+                                ),
+                            },
+                            {
+                                label: 'Sub-Admins',
+                                value: stats.subAdmins,
+                                icon: (
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                    </svg>
+                                ),
+                            },
+                            {
+                                label: 'Staff Members',
+                                value: stats.staff,
+                                icon: (
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                                    </svg>
+                                ),
+                            },
+                        ].map((card) => (
+                            <div
+                                key={card.label}
+                                className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 transition-colors"
+                            >
+                                <div className="flex items-center gap-2 mb-2">
+                                    <span className="text-text-gray dark:text-gray-400">{card.icon}</span>
+                                    <span className="text-xs font-medium text-text-gray dark:text-gray-400 uppercase">
+                                        {card.label}
+                                    </span>
+                                </div>
+                                <div className="text-3xl font-bold text-text-dark dark:text-white">
+                                    {isLoading ? '—' : card.value}
+                                </div>
                             </div>
-                            <div className="text-3xl font-bold text-text-dark dark:text-white">{stats.totalMembers}</div>
+                        ))}
+                    </div>
+
+                    {/* Filters */}
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="relative flex-1 max-w-xs">
+                            <svg
+                                className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-gray dark:text-gray-400"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                                strokeWidth={2}
+                            >
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            </svg>
+                            <input
+                                type="text"
+                                placeholder="Search by name or email…"
+                                value={searchQuery}
+                                onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
+                                className="w-full h-9 pl-9 pr-4 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-800 text-text-dark dark:text-gray-200 placeholder:text-text-gray dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                            />
                         </div>
 
-                        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 transition-colors">
-                            <div className="flex items-center gap-2 mb-2">
-                                <svg className="w-4 h-4 text-text-gray dark:text-gray-400" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                                </svg>
-                                <span className="text-xs font-medium text-text-gray dark:text-gray-400 uppercase">Avg. Workload</span>
-                            </div>
-                            <div className="text-3xl font-bold text-text-dark dark:text-white">{stats.avgWorkload}%</div>
-                        </div>
+                        <select
+                            value={roleFilter}
+                            onChange={(e) => { setRoleFilter(e.target.value); setPage(1); }}
+                            className="h-9 px-3 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-800 text-text-dark dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                        >
+                            <option value="all">All Roles</option>
+                            <option value="admin">Admin</option>
+                            <option value="sub_admin">Sub Admin</option>
+                            <option value="staff">Staff</option>
+                        </select>
 
-                        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 transition-colors">
-                            <div className="flex items-center gap-2 mb-2">
-                                <svg className="w-4 h-4 text-text-gray dark:text-gray-400" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                                </svg>
-                                <span className="text-xs font-medium text-text-gray dark:text-gray-400 uppercase">Active Tasks</span>
-                            </div>
-                            <div className="text-3xl font-bold text-text-dark dark:text-white">{stats.activeTasks}</div>
-                        </div>
-
-                        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 transition-colors">
-                            <div className="flex items-center gap-2 mb-2">
-                                <svg className="w-4 h-4 text-text-gray dark:text-gray-400" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path d="M13 10V3L4 14h7v7l9-11h-7z" />
-                                </svg>
-                                <span className="text-xs font-medium text-text-gray dark:text-gray-400 uppercase">Full Capacity</span>
-                            </div>
-                            <div className="text-3xl font-bold text-text-dark dark:text-white">{stats.fullCapacity}</div>
-                        </div>
+                        <span className="ml-auto text-sm text-text-gray dark:text-gray-400">
+                            {filtered.length} member{filtered.length !== 1 ? 's' : ''}
+                        </span>
                     </div>
 
                     {/* Members Table */}
                     <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden transition-colors">
                         {/* Table Header */}
-                        <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700 text-xs font-semibold text-text-gray dark:text-gray-300 uppercase transition-colors">
-                            <div className="col-span-3">Member</div>
-                            <div className="col-span-2">Role</div>
+                        <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700 text-xs font-semibold text-text-gray dark:text-gray-300 uppercase">
+                            <div className="col-span-4">Member</div>
                             <div className="col-span-3">Email</div>
-                            <div className="col-span-3">Workload Status</div>
-                            <div className="col-span-1">Actions</div>
+                            <div className="col-span-2">Role</div>
+                            <div className="col-span-2">Status</div>
+                            <div className="col-span-1">Phone</div>
                         </div>
+
+                        {/* Loading / Error / Empty States */}
+                        {isLoading && (
+                            <div className="px-6 py-12 text-center text-sm text-text-gray dark:text-gray-400">
+                                Loading team members…
+                            </div>
+                        )}
+
+                        {!isLoading && error && (
+                            <div className="px-6 py-12 text-center text-sm text-danger">
+                                {error}
+                            </div>
+                        )}
+
+                        {!isLoading && !error && filtered.length === 0 && (
+                            <div className="px-6 py-12 text-center text-sm text-text-gray dark:text-gray-400">
+                                No members match your search.
+                            </div>
+                        )}
 
                         {/* Table Rows */}
-                        <div>
-                            {members.map((member) => (
-                                <div
-                                    key={member.id}
-                                    className="grid grid-cols-12 gap-4 px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-700/40 transition-colors border-b border-gray-100 dark:border-gray-700 last:border-0"
-                                >
-                                    <div className="col-span-3 flex items-center gap-3">
-                                        <div className="relative">
-                                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-white font-semibold text-sm">
-                                                {member.avatar}
-                                            </div>
-                                            <div className={`absolute bottom-0 right-0 w-3 h-3 ${getStatusColor(member.status)} rounded-full border-2 border-white dark:border-gray-800`}></div>
+                        {!isLoading && !error && paginatedMembers.map((member) => (
+                            <div
+                                key={member._id}
+                                className="grid grid-cols-12 gap-4 px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-700/40 transition-colors border-b border-gray-200 dark:border-gray-700 last:border-0"
+                            >
+                                {/* Member */}
+                                <div className="col-span-4 flex items-center gap-3 min-w-0">
+                                    <div
+                                        className={`w-10 h-10 rounded-full bg-gradient-to-br ${getAvatarGradient(member._id)} flex items-center justify-center text-white font-semibold text-sm flex-shrink-0`}
+                                    >
+                                        {getInitials(member.name)}
+                                    </div>
+                                    <div className="min-w-0">
+                                        <div className="text-sm font-semibold text-text-dark dark:text-gray-100 truncate">
+                                            {member.name}
                                         </div>
-                                        <div>
-                                            <div className="text-sm font-semibold text-text-dark dark:text-gray-100">{member.name}</div>
-                                            <div className={`text-xs ${member.status === 'ONLINE' ? 'text-success' : 'text-text-gray dark:text-gray-400'}`}>
-                                                ● {member.status}
-                                            </div>
+                                        <div className="text-xs text-text-gray dark:text-gray-400 truncate">
+                                            ID: {member._id.slice(-6)}
                                         </div>
-                                    </div>
-
-                                    <div className="col-span-2 flex items-center">
-                                        <span className="text-sm text-text-dark dark:text-gray-200">{member.role}</span>
-                                    </div>
-
-                                    <div className="col-span-3 flex items-center">
-                                        <span className="text-sm text-text-gray dark:text-gray-400">{member.email}</span>
-                                    </div>
-
-                                    <div className="col-span-3 flex items-center">
-                                        <div className="flex-1">
-                                            <div className="flex items-center justify-between mb-1">
-                                                <span className={`text-xs font-bold uppercase ${getWorkloadTextColor(member.workloadStatus)}`}>
-                                                    {member.workloadStatus}
-                                                </span>
-                                                <span className="text-xs font-semibold text-text-dark dark:text-gray-100">{member.workload}%</span>
-                                            </div>
-                                            <div className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                                                <div
-                                                    className={`h-full ${getWorkloadColor(member.workloadStatus)} transition-all`}
-                                                    style={{ width: `${member.workload}%` }}
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="col-span-1 flex items-center gap-2">
-                                        <button className="w-8 h-8 flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors">
-                                            <svg className="w-4 h-4 text-text-gray dark:text-gray-400" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                            </svg>
-                                        </button>
-                                        <button className="w-8 h-8 flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors">
-                                            <svg className="w-4 h-4 text-text-gray dark:text-gray-400" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                            </svg>
-                                        </button>
                                     </div>
                                 </div>
-                            ))}
-                        </div>
 
-                        {/* Footer Pagination */}
-                        <div className="px-6 py-3 bg-gray-50 dark:bg-gray-700/50 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between text-sm text-text-gray dark:text-gray-300 transition-colors">
-                            <span>Showing 1-4 of 32 members</span>
-                            <div className="flex items-center gap-1">
-                                <button className="w-8 h-8 flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors">
-                                    <svg className="w-4 h-4 text-text-gray dark:text-gray-400" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path d="M15 19l-7-7 7-7" />
-                                    </svg>
-                                </button>
-                                <button className="w-8 h-8 flex items-center justify-center bg-primary text-white rounded font-medium text-sm">
-                                    1
-                                </button>
-                                <button className="w-8 h-8 flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors">
-                                    2
-                                </button>
-                                <button className="w-8 h-8 flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors">
-                                    3
-                                </button>
-                                <span className="px-2">...</span>
-                                <button className="w-8 h-8 flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors">
-                                    8
-                                </button>
-                                <button className="w-8 h-8 flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors">
-                                    <svg className="w-4 h-4 text-text-gray dark:text-gray-400" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path d="M9 5l7 7-7 7" />
-                                    </svg>
-                                </button>
+                                {/* Email */}
+                                <div className="col-span-3 flex items-center min-w-0">
+                                    <span className="text-sm text-text-gray dark:text-gray-400 truncate">{member.email}</span>
+                                </div>
+
+                                {/* Role */}
+                                <div className="col-span-2 flex items-center">
+                                    <span
+                                        className={`px-2.5 py-1 rounded-full text-xs font-semibold ${ROLE_BADGE[member.role] ?? ROLE_BADGE.staff}`}
+                                    >
+                                        {formatRole(member.role)}
+                                    </span>
+                                </div>
+
+                                {/* Status */}
+                                <div className="col-span-2 flex items-center gap-2">
+                                    <div
+                                        className={`w-2 h-2 rounded-full flex-shrink-0 ${member.is_active ? 'bg-success' : 'bg-gray-400'}`}
+                                    />
+                                    <span
+                                        className={`text-xs font-medium ${member.is_active ? 'text-success' : 'text-text-gray dark:text-gray-400'}`}
+                                    >
+                                        {member.is_active ? 'Active' : 'Inactive'}
+                                    </span>
+                                </div>
+
+                                {/* Phone */}
+                                <div className="col-span-1 flex items-center">
+                                    <span className="text-xs text-text-gray dark:text-gray-400 truncate">
+                                        {member.phone ?? '—'}
+                                    </span>
+                                </div>
                             </div>
-                        </div>
+                        ))}
+
+                        {/* Pagination Footer */}
+                        {!isLoading && !error && filtered.length > 0 && (
+                            <div className="px-6 py-3 bg-gray-50 dark:bg-gray-700/50 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between text-sm text-text-gray dark:text-gray-300 transition-colors">
+                                <span>
+                                    Showing {((currentPage - 1) * PAGE_SIZE) + 1}–{Math.min(currentPage * PAGE_SIZE, filtered.length)} of {filtered.length} members
+                                </span>
+                                <div className="flex items-center gap-1">
+                                    <button
+                                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                                        disabled={currentPage === 1}
+                                        className="w-8 h-8 flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors disabled:opacity-40"
+                                    >
+                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                                        </svg>
+                                    </button>
+
+                                    {Array.from({ length: totalPages }, (_, i) => i + 1)
+                                        .filter((p) => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+                                        .reduce<(number | 'ellipsis')[]>((acc, p, idx, arr) => {
+                                            if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push('ellipsis');
+                                            acc.push(p);
+                                            return acc;
+                                        }, [])
+                                        .map((p, idx) =>
+                                            p === 'ellipsis' ? (
+                                                <span key={`ellipsis-${idx}`} className="px-1 text-text-gray dark:text-gray-400">…</span>
+                                            ) : (
+                                                <button
+                                                    key={p}
+                                                    onClick={() => setPage(p as number)}
+                                                    className={`w-8 h-8 flex items-center justify-center rounded font-medium text-sm transition-colors ${
+                                                        currentPage === p
+                                                            ? 'bg-primary text-white'
+                                                            : 'hover:bg-gray-200 dark:hover:bg-gray-700'
+                                                    }`}
+                                                >
+                                                    {p}
+                                                </button>
+                                            )
+                                        )}
+
+                                    <button
+                                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                                        disabled={currentPage === totalPages}
+                                        className="w-8 h-8 flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors disabled:opacity-40"
+                                    >
+                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </main>
             </div>

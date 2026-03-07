@@ -17,19 +17,9 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 async def register(
     user_data: UserCreate,
-    db = Depends(get_database)
+    db=Depends(get_database)
 ):
-    """
-    Register a new user account.
-    
-    - **email**: Valid email address (unique)
-    - **password**: Simple password (plain text stored)
-    - **full_name**: User's full name
-    - **role**: admin / sub_admin / staff for dashboard redirect
-    - **admin_id / sub_admin_id / phone / status**: Optional metadata from existing records
-    
-    Returns the created user data.
-    """
+    """Register a new user account."""
     try:
         user = await AuthService.register_user(
             db,
@@ -44,70 +34,55 @@ async def register(
         )
 
         await TaskBoardService.ensure_public_membership_for_user(db, user)
-        
-        # Convert ObjectId to string for response
-        user["_id"] = str(user["_id"])
-        
-        # Return simple dict without validation
+
+        token = AuthService.generate_token(user)
+
         return {
-            "_id": user["_id"],
+            "_id":   str(user["_id"]),
             "email": user.get("email"),
-            "name": user.get("name"),
-            "role": user.get("role")
+            "name":  user.get("name"),
+            "role":  user.get("role"),
+            "token": token,
         }
-        
+
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post("/login")
 async def login(
     credentials: UserLogin,
-    db = Depends(get_database)
+    db=Depends(get_database)
 ):
-    """
-    Login with email and password.
-    
-    Returns the user data on successful authentication.
-    """
+    """Login with email and password. Returns JWT token."""
     user = await AuthService.authenticate_user(
         db,
         email=credentials.email,
         password=credentials.password
     )
-    
+
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password"
         )
 
-    # Convert ObjectId to string for response
-    user["_id"] = str(user["_id"])
-    
-    # Return simple dict without validation
+    token = AuthService.generate_token(user)
+
     return {
-        "_id": user["_id"],
+        "_id":   str(user["_id"]),
         "email": user.get("email"),
-        "name": user.get("name"),
-        "role": user.get("role"),
-        "password": user.get("password")
+        "name":  user.get("name"),
+        "role":  user.get("role"),
+        "token": token,
     }
 
 
 @router.get("/me", response_model=UserResponse)
 async def get_current_user_profile(
-    current_user = Depends(get_current_user)
+    current_user=Depends(get_current_user)
 ):
-    """
-    Get current authenticated user's profile.
-    
-    Requires valid JWT token in Authorization header.
-    """
-    # Convert ObjectId to string for response
+    """Get current authenticated user's profile."""
     current_user["_id"] = str(current_user["_id"])
     return current_user
 
@@ -115,9 +90,10 @@ async def get_current_user_profile(
 @router.post("/change-password")
 async def change_password(
     payload: PasswordUpdateRequest,
-    db = Depends(get_database)
+    current_user=Depends(get_current_user),
+    db=Depends(get_database)
 ):
-    """Update a user's password using their identifier."""
+    """Update a user's password."""
     updated = await AuthService.update_password(
         db,
         user_id=payload.user_id,

@@ -77,7 +77,7 @@ const CreateProjectModal = ({ onClose, onSuccess }: CreateProjectModalProps) => 
                 return;
             }
 
-            const headers = { 'X-User-Id': userId };
+            const headers = { 'X-User-Id': userId, 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') };
             try {
                 const [subResponse, staffResponse] = await Promise.all([
                     fetch(`${API_BASE}/users?role=sub_admin`, { headers }),
@@ -139,6 +139,7 @@ const CreateProjectModal = ({ onClose, onSuccess }: CreateProjectModalProps) => 
                 headers: {
                     'Content-Type': 'application/json',
                     'X-User-Id': userId,
+                    'Authorization': 'Bearer ' + (localStorage.getItem('token') || ''),
                 },
                 body: JSON.stringify(payload),
             });
@@ -171,8 +172,8 @@ const CreateProjectModal = ({ onClose, onSuccess }: CreateProjectModalProps) => 
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
-            <div className="w-full max-w-3xl rounded-3xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 shadow-2xl">
-                <div className="flex items-center justify-between px-8 py-5 border-b border-gray-100 dark:border-gray-800">
+            <div className="w-full max-w-3xl rounded-3xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-2xl">
+                <div className="flex items-center justify-between px-8 py-5 border-b border-gray-200 dark:border-gray-800">
                     <div>
                         <p className="text-xs uppercase tracking-wide text-text-gray">New Initiative</p>
                         <h2 className="text-2xl font-semibold text-text-dark dark:text-white">Create Project</h2>
