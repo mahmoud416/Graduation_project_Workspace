@@ -66,6 +66,28 @@ The API will be available at: `http://localhost:8000`
 
 API Documentation (Swagger UI): `http://localhost:8000/docs`
 
+### 5. Seed Quality Control Examples (optional)
+
+Populate the `quality_standards` and `quality_datasets` collections with curated Bubblein landing-page examples plus a workspace accessibility baseline:
+
+```bash
+cd backend
+python -m scripts.seed_quality_examples
+```
+
+The script connects to the MongoDB configured in `.env`, uploads two demo standards, and stores two reusable datasets. Related artifact files live under `backend/uploads/qc_datasets/bubblein/` in case you want to inspect or extend them.
+
+### 6. Load Demo AI Signals (optional)
+
+Need the QC dashboard to show live graphs without running the AI pipeline? Seed completed analyses plus checklist activity:
+
+```bash
+cd backend
+python -m scripts.seed_quality_demo_results
+```
+
+This inserts three Bubblein evaluations into `quality_analyses` and several TODO audit events so `GET /api/v1/qc/reports/overview` returns non-empty score trends, project averages, and checklist health.
+
 ## 📁 Project Structure
 
 ```

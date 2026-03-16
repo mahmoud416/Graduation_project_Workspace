@@ -3,7 +3,7 @@ Security helpers: bcrypt password hashing and JWT token management.
 Uses bcrypt directly (no passlib) to avoid passlib/bcrypt version conflicts.
 """
 from datetime import datetime, timedelta
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 import bcrypt
 from jose import jwt, JWTError
@@ -29,7 +29,12 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         return False
 
 
-def create_access_token(user_id: str, role: str, name: str) -> str:
+def create_access_token(
+    user_id: str,
+    role: str,
+    name: str,
+    roles: Optional[List[str]] = None,
+) -> str:
     """
     Create a signed JWT access token.
 
@@ -46,6 +51,7 @@ def create_access_token(user_id: str, role: str, name: str) -> str:
         "sub": user_id,
         "role": role,
         "name": name,
+        "roles": roles or [role],
         "exp": expire,
         "iat": datetime.utcnow(),
     }

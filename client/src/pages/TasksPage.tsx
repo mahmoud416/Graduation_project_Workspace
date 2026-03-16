@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 import { useNavigate } from 'react-router-dom';
-
-const API_BASE = (import.meta.env.VITE_API_BASE ?? 'http://localhost:8000/api/v1').replace(/\/$/, '');
+import AiAnalysisModal from '../components/AiAnalysisModal';
+import { qualityApi } from '../services/qualityApi';
+import type { QualityAnalysisResult } from '../types';
 
 interface TaskItem {
     id: string;
@@ -14,10 +15,15 @@ interface TaskItem {
     priority: 'LOW' | 'MED' | 'HIGH';
     dueDate: string;
     overdue?: boolean;
+    projectId?: string;
 }
 
 const TasksPage = () => {
     const navigate = useNavigate();
+    const [analysisTask, setAnalysisTask] = useState<TaskItem | null>(null);
+    const [analysisResult, setAnalysisResult] = useState<QualityAnalysisResult | null>(null);
+    const [analysisLoading, setAnalysisLoading] = useState(false);
+    const [analysisError, setAnalysisError] = useState<string | null>(null);
     const completionStats = {
         completed: 24,
         inProgress: 9,
@@ -35,6 +41,7 @@ const TasksPage = () => {
             status: 'In Progress',
             priority: 'HIGH',
             dueDate: 'Oct 24, 2023',
+            projectId: 'public-group',
         },
         {
             id: '2',
@@ -44,6 +51,7 @@ const TasksPage = () => {
             status: 'To Do',
             priority: 'MED',
             dueDate: 'Oct 28, 2023',
+            projectId: 'all-sub-admin',
         },
         {
             id: '3',
@@ -53,6 +61,7 @@ const TasksPage = () => {
             status: 'Done',
             priority: 'LOW',
             dueDate: 'Oct 15, 2023',
+            projectId: 'public-group',
         },
         {
             id: '4',
@@ -63,6 +72,7 @@ const TasksPage = () => {
             priority: 'HIGH',
             dueDate: 'Overdue',
             overdue: true,
+            projectId: 'public-group',
         },
         {
             id: '5',
@@ -72,6 +82,7 @@ const TasksPage = () => {
             status: 'In Progress',
             priority: 'MED',
             dueDate: 'Nov 02, 2023',
+            projectId: 'public-group',
         },
     ];
 
@@ -111,6 +122,35 @@ const TasksPage = () => {
             'from-green-400 to-teal-400',
         ];
         return colors[index % colors.length];
+    };
+
+    const handleAnalyzeTask = async (task: TaskItem) => {
+        setAnalysisTask(task);
+        setAnalysisResult(null);
+        setAnalysisError(null);
+        setAnalysisLoading(true);
+        try {
+            const payload = {
+                task_title: task.name,
+                task_description: `${task.category} | Priority ${task.priority} | Status ${task.status}`,
+                task_id: task.id,
+                project_id: task.projectId,
+            };
+            const response = await qualityApi.analyzeTask(payload);
+            setAnalysisResult(response);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Unable to run AI analysis';
+            setAnalysisError(message);
+        } finally {
+            setAnalysisLoading(false);
+        }
+    };
+
+    const closeAnalysisModal = () => {
+        setAnalysisTask(null);
+        setAnalysisResult(null);
+        setAnalysisError(null);
+        setAnalysisLoading(false);
     };
 
     return (
@@ -267,14 +307,22 @@ const TasksPage = () => {
                                         </span>
                                     </div>
 
-                                    <div className="col-span-1 flex items-center justify-between">
+                                    <div className="col-span-1 flex items-center justify-between gap-2">
                                         <span className={`text-sm font-semibold ${getPriorityColor(task.priority)} flex items-center gap-1`}>
                                             <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                                                 <path d="M10 3L8 7H3l4 4-1 5 4-2 4 2-1-5 4-4h-5l-2-4z" />
                                             </svg>
                                             {task.priority}
                                         </span>
-
+                                        <button
+                                            className="text-xs font-semibold text-primary border border-primary/30 rounded-lg px-2 py-1 hover:bg-primary/10"
+                                            onClick={(event) => {
+                                                event.stopPropagation();
+                                                handleAnalyzeTask(task);
+                                            }}
+                                        >
+                                            Analyze with AI
+                                        </button>
                                     </div>
                                 </div>
                             ))}
@@ -302,6 +350,14 @@ const TasksPage = () => {
                     </div>
                 </main>
             </div>
+            <AiAnalysisModal
+                isOpen={Boolean(analysisTask)}
+                taskTitle={analysisTask?.name}
+                onClose={closeAnalysisModal}
+                loading={analysisLoading}
+                result={analysisResult}
+                error={analysisError}
+            />
         </div>
     );
 };

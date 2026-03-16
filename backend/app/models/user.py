@@ -3,7 +3,7 @@ User model for MongoDB.
 Represents user accounts with authentication credentials.
 """
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
 
 class UserModel:
@@ -18,14 +18,25 @@ class UserModel:
         admin_id: Optional[str] = None,
         sub_admin_id: Optional[str] = None,
         phone: Optional[str] = None,
-        status: str = "active"
+        status: str = "active",
+        roles: Optional[List[str]] = None
     ) -> dict:
         """Create a new user document. Password must already be hashed."""
+        normalized_role = (role or "staff").strip().lower()
+        role_list = roles or [normalized_role]
+        deduped_roles = []
+        for r in role_list:
+            if not r:
+                continue
+            normalized = r.strip().lower()
+            if normalized not in deduped_roles:
+                deduped_roles.append(normalized)
         return {
             "email":        email.lower(),
             "password":     password,  # Must be bcrypt hash
             "name":         full_name,
-            "role":         role or "staff",
+            "role":         normalized_role,
+            "roles":        deduped_roles or [normalized_role],
             "admin_id":     admin_id,
             "sub_admin_id": sub_admin_id,
             "phone":        phone,

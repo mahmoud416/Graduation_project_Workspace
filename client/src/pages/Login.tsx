@@ -37,10 +37,12 @@ const Login = () => {
             }
             window.dispatchEvent(new Event('workspace:user-update'));
 
-            if (data.role === 'admin') {
-                navigate('/dashboard', { replace: true });
-            } else if (data.role === 'sub_admin') {
+            if (data.role === 'sub_admin') {
                 navigate('/subadmin', { replace: true });
+            } else if (data.role === 'quality_control' || data.role === 'quality_manager') {
+                navigate('/quality-control', { replace: true });
+            } else if (data.role === 'admin') {
+                navigate('/dashboard', { replace: true });
             } else {
                 navigate('/dashboard', { replace: true });
             }

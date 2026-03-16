@@ -59,4 +59,20 @@ async def get_current_user(
             detail="Account is inactive or suspended",
         )
 
+    # Ensure roles array exists for downstream RBAC logic
+    if not user.get("roles"):
+        primary_role = (user.get("role") or "staff").strip().lower()
+        user["roles"] = [primary_role]
+    else:
+        normalized_roles = []
+        for role in user.get("roles", []):
+            if not role:
+                continue
+            normalized = role.strip().lower()
+            if normalized not in normalized_roles:
+                normalized_roles.append(normalized)
+        user["roles"] = normalized_roles or [(user.get("role") or "staff").strip().lower()]
+
+    user["role"] = (user.get("role") or "staff").strip().lower()
+
     return user

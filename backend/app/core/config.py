@@ -25,6 +25,12 @@ class Settings(BaseSettings):
     APP_VERSION: str = "2.0.0"
     DEBUG: bool = False
 
+    # AI / Quality Model Configuration
+    OPENAI_API_KEY: str = ""
+    QUALITY_DATASETS_DIR: str = "uploads/quality_datasets"
+    QUALITY_MAX_DATASET_SIZE_MB: int = 200
+    QUALITY_TRAINING_TIMEOUT_SECONDS: int = 600
+
     # CORS Configuration
     ALLOWED_ORIGINS: str = "http://localhost:3000,http://localhost:8000,http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173"
 

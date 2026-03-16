@@ -14,6 +14,15 @@ FILES_COLLECTION            = "files"
 FILE_UPLOAD_RULES_COLLECTION = "file_upload_rules"
 NOTIFICATIONS_COLLECTION    = "notifications"
 EVENTS_COLLECTION           = "events"
+QUALITY_DATASETS_COLLECTION = "quality_datasets"
+QUALITY_RULES_COLLECTION    = "quality_rules"
+QUALITY_TRAINING_RUNS_COLLECTION = "quality_training_runs"
+QUALITY_EVALUATIONS_COLLECTION   = "quality_evaluations"
+AI_MODEL_STATE_COLLECTION   = "quality_model_state"
+QUALITY_STANDARDS_COLLECTION = "quality_standards"
+QUALITY_ANALYSES_COLLECTION  = "quality_analyses"
+TODO_AUDIT_COLLECTION        = "todo_audit"
+QC_REPORTS_CACHE_COLLECTION  = "qc_reports_cache"
 
 
 async def _safe_create_index(collection, keys, **kwargs):
@@ -118,5 +127,42 @@ async def create_indexes(db):
     # events
     await _safe_create_index(db[EVENTS_COLLECTION], [("date", 1)])
     await _safe_create_index(db[EVENTS_COLLECTION], "created_by")
+
+    # quality datasets & training artifacts
+    await _safe_create_index(db[QUALITY_DATASETS_COLLECTION], [("name", 1), ("version", -1)])
+    await _safe_create_index(db[QUALITY_DATASETS_COLLECTION], "uploaded_by")
+    await _safe_create_index(db[QUALITY_RULES_COLLECTION], [("owner_id", 1), ("is_active", 1)])
+    await _safe_create_index(db[QUALITY_RULES_COLLECTION], "category")
+    await _safe_create_index(db[QUALITY_TRAINING_RUNS_COLLECTION], "dataset_id")
+    await _safe_create_index(db[QUALITY_TRAINING_RUNS_COLLECTION], "status")
+    await _safe_create_index(db[QUALITY_EVALUATIONS_COLLECTION], "task_id")
+    await _safe_create_index(db[QUALITY_EVALUATIONS_COLLECTION], "created_at")
+    await _safe_create_index(db[AI_MODEL_STATE_COLLECTION], "version")
+
+    # quality control standards and analyses
+    await _safe_create_index(
+        db[QUALITY_STANDARDS_COLLECTION],
+        [("scope.level", 1), ("scope.ids", 1), ("status", 1)]
+    )
+    await _safe_create_index(db[QUALITY_STANDARDS_COLLECTION], "created_by")
+    await _safe_create_index(db[QUALITY_STANDARDS_COLLECTION], "type")
+
+    await _safe_create_index(
+        db[QUALITY_ANALYSES_COLLECTION],
+        [("project_id", 1), ("created_at", -1)]
+    )
+    await _safe_create_index(db[QUALITY_ANALYSES_COLLECTION], "task_id")
+    await _safe_create_index(db[QUALITY_ANALYSES_COLLECTION], "triggered_by")
+
+    await _safe_create_index(
+        db[TODO_AUDIT_COLLECTION],
+        [("project_id", 1), ("timestamp", -1)]
+    )
+    await _safe_create_index(db[TODO_AUDIT_COLLECTION], "task_id")
+
+    await _safe_create_index(
+        db[QC_REPORTS_CACHE_COLLECTION],
+        [("project_id", 1), ("date", -1)]
+    )
 
     print("✓ Database indexes created")

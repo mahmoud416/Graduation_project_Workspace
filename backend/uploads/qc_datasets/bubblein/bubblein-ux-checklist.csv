@@ -1,0 +1,7 @@
+section,checkpoint,expected_signal,severity
+hero,Primary CTA visible without scroll,Button sits within first 640px on desktop,critical
+hero,Accessibility contrast,Primary CTA contrast ratio >=4.5:1,major
+proof,Logos row integrity,At least 4 customer logos rendered without clipping,major
+proof,Quantified metric,One metric referencing "Bubblein" case study,major
+handoff,Annotated layers,Figma export includes layer naming convention,minor
+handoff,Asset package,ZIP archive includes SVG + Lottie + copy deck,minor

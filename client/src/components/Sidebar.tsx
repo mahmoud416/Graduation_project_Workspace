@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useEffect, useMemo, useState } from 'react';
-import type { FocusEvent } from 'react';
+import type { FocusEvent, ReactElement } from 'react';
 
 const COLLAPSED_WIDTH = 88;
 const EXPANDED_WIDTH = 240;
@@ -12,7 +12,7 @@ const formatRoleLabel = (value: string | null) => {
         .replace(/\b\w/g, (char) => char.toUpperCase());
 };
 
-const Icons: Record<string, JSX.Element> = {
+const Icons: Record<string, ReactElement> = {
     dashboard: (
         <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
@@ -69,6 +69,17 @@ const Icons: Record<string, JSX.Element> = {
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
         </svg>
     ),
+    quality: (
+        <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m4 2a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+    ),
+    insights: (
+        <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 19h16M4 13l4-4 4 4 6-6" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M8 9V5m8 6V5" />
+        </svg>
+    ),
 };
 
 interface MenuItem {
@@ -106,8 +117,18 @@ const Sidebar = () => {
                 { iconKey: 'calendar', label: 'Calendar', path: '/calendar' },
                 { iconKey: 'team', label: 'Team', path: '/team' },
                 { iconKey: 'reports', label: 'Reports', path: '/reports' },
+                { iconKey: 'quality', label: 'Quality Lab', path: '/quality-control' },
                 { iconKey: 'settings', label: 'Settings', path: '/settings' },
                 { iconKey: 'configuration', label: 'Configuration', path: '/configuration' },
+            ];
+        }
+
+        if (role === 'quality_manager' || role === 'quality_control') {
+            return [
+                { iconKey: 'quality', label: 'Quality Lab', path: '/quality-control' },
+                { iconKey: 'insights', label: 'Quality Insights', path: '/quality-insights' },
+                { iconKey: 'reports', label: 'Reports', path: '/reports' },
+                { iconKey: 'settings', label: 'Settings', path: '/settings' },
             ];
         }
 

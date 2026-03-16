@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type MouseEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 import type { Project } from '../types';
@@ -13,26 +13,33 @@ const STATUS_OPTIONS: Array<{ value: Project['status']; label: string }> = [
     { value: 'COMPLETED', label: 'Completed' },
 ];
 
+type RawMemberEntry = {
+    _id?: string;
+    id?: string;
+    name?: string;
+    initials?: string;
+};
+
 const mapProjectResponse = (proj: any): Project => {
-    const subAdminEntries = Array.isArray(proj.sub_admins) ? proj.sub_admins : [];
-    const staffEntries = Array.isArray(proj.staff) ? proj.staff : [];
+    const subAdminEntries = (Array.isArray(proj.sub_admins) ? proj.sub_admins : []) as RawMemberEntry[];
+    const staffEntries = (Array.isArray(proj.staff) ? proj.staff : []) as RawMemberEntry[];
     const subAdminNames = subAdminEntries
-        .map((entry) => entry?.name)
+        .map((entry: RawMemberEntry) => entry?.name)
         .filter((name): name is string => Boolean(name));
     if (!subAdminNames.length && proj.sub_admin?.name) {
         subAdminNames.push(proj.sub_admin.name);
     }
 
     const subAdminIds = subAdminEntries
-        .map((entry) => entry?._id || entry?.id)
+        .map((entry: RawMemberEntry) => entry?._id || entry?.id)
         .filter((identifier): identifier is string => typeof identifier === 'string');
     const staffIds = staffEntries
-        .map((entry) => entry?._id || entry?.id)
+        .map((entry: RawMemberEntry) => entry?._id || entry?.id)
         .filter((identifier): identifier is string => typeof identifier === 'string');
 
-    const staffInitials = Array.isArray(proj.staff_initials) ? proj.staff_initials : [];
+    const staffInitials = Array.isArray(proj.staff_initials) ? (proj.staff_initials as string[]) : [];
     const subInitials = subAdminEntries
-        .map((entry) => entry?.initials)
+        .map((entry: RawMemberEntry) => entry?.initials)
         .filter((initial): initial is string => Boolean(initial));
     const combinedInitials = [...subInitials, ...staffInitials].filter(Boolean);
     const updatedStamp = proj.updated_at || new Date().toISOString();
@@ -438,7 +445,6 @@ const Projects = () => {
         setIsCreateProjectOpen(true);
     };
 
-    const activeCount = sortedProjects.length;
     const emptyStateMessage = canManageProjects
         ? 'No project cards yet. Click Create New Project to get started.'
         : 'No cards are assigned to your account yet. Contact the admin to be added.';
@@ -455,7 +461,10 @@ const Projects = () => {
                         <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
                             <div>
                                 <p className="text-xs font-semibold tracking-wide text-text-gray uppercase">Projects</p>
-                                <h1 className="text-3xl font-semibold text-text-dark dark:text-white">Active Initiatives</h1>
+                                <h1 className="text-3xl font-semibold text-text-dark dark:text-white flex items-baseline gap-3">
+                                    Active Initiatives
+                                    <span className="text-sm font-medium text-text-gray dark:text-gray-400">{sortedProjects.length}</span>
+                                </h1>
                             </div>
                             <div className="flex items-center gap-2">
                                 <button

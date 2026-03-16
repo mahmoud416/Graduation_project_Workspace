@@ -24,7 +24,8 @@ class AuthService:
         admin_id: Optional[str] = None,
         sub_admin_id: Optional[str] = None,
         phone: Optional[str] = None,
-        status: str = "active"
+        status: str = "active",
+        roles: Optional[list[str]] = None,
     ) -> Dict[str, Any]:
         """Register a new user with bcrypt-hashed password."""
         existing = await db[USERS_COLLECTION].find_one({"email": email.lower()})
@@ -41,7 +42,8 @@ class AuthService:
             admin_id=admin_id,
             sub_admin_id=sub_admin_id,
             phone=phone,
-            status=status or "active"
+            status=status or "active",
+            roles=roles,
         )
 
         result = await db[USERS_COLLECTION].insert_one(user_doc)
@@ -92,10 +94,12 @@ class AuthService:
     @staticmethod
     def generate_token(user: Dict[str, Any]) -> str:
         """Generate a JWT access token for a user."""
+        roles = user.get("roles") or [user.get("role", "staff")]
         return create_access_token(
             user_id=str(user["_id"]),
             role=user.get("role", "staff"),
-            name=user.get("name", "")
+            name=user.get("name", ""),
+            roles=roles,
         )
 
     @staticmethod

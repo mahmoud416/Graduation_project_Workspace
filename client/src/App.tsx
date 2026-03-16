@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactElement } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import SignUp from './pages/SignUp';
 import Login from './pages/Login';
@@ -15,6 +15,8 @@ import TaskFlowDetail from './pages/TaskFlowDetail';
 import CreateTask from './pages/CreateTask';
 import ConfigurationPage from './pages/ConfigurationPage';
 import StaffProjectsPage from './pages/StaffProjectsPage';
+import QCDashboard from './pages/QCDashboard';
+import QualityInsights from './pages/QualityInsights';
 import ChatbotWidget from './components/ChatbotWidget';
 
 const USER_UPDATE_EVENT = 'workspace:user-update';
@@ -39,23 +41,40 @@ function App() {
     };
   }, []);
 
-  const restrictForStaff = (page: JSX.Element) => {
+  const restrictForStaff = (page: ReactElement) => {
     if (role === 'staff') {
       return <Navigate to="/dashboard" replace />;
     }
     return page;
   };
 
-  const restrictForSubAdminOnly = (page: JSX.Element) => {
+  const restrictForSubAdminOnly = (page: ReactElement) => {
     if (role !== 'sub_admin') {
       return <Navigate to="/dashboard" replace />;
     }
     return page;
   };
 
-  const redirectSubAdminDashboard = (page: JSX.Element) => {
+  const restrictToQualityControl = (page: ReactElement) => {
+    if (!role) {
+      return <Navigate to="/login" replace />;
+    }
+    if (role === 'quality_control' || role === 'quality_manager' || role === 'admin') {
+      return page;
+    }
+    return <Navigate to="/dashboard" replace />;
+  };
+
+  const redirectSubAdminDashboard = (page: ReactElement) => {
     if (role === 'sub_admin') {
       return <Navigate to="/subadmin" replace />;
+    }
+    return page;
+  };
+
+  const redirectQualityDashboard = (page: ReactElement) => {
+    if (role === 'quality_control' || role === 'quality_manager') {
+      return <Navigate to="/quality-control" replace />;
     }
     return page;
   };
@@ -66,7 +85,10 @@ function App() {
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/signup" element={<SignUp />} />
         <Route path="/login" element={<Login />} />
-        <Route path="/dashboard" element={redirectSubAdminDashboard(<Dashboard />)} />
+        <Route
+          path="/dashboard"
+          element={redirectQualityDashboard(redirectSubAdminDashboard(<Dashboard />))}
+        />
         <Route path="/projects" element={restrictForStaff(<Projects />)} />
         <Route path="/tasks" element={restrictForStaff(<TasksPage />)} />
         <Route path="/calendar" element={<CalendarPage />} />
@@ -80,6 +102,10 @@ function App() {
         <Route path="/task-master" element={<TaskMasterDashboard />} />
         <Route path="/configuration" element={<ConfigurationPage />} />
         <Route path="/my-projects" element={<StaffProjectsPage />} />
+        <Route path="/quality-manager" element={restrictToQualityControl(<QCDashboard />)} />
+        <Route path="/quality-control" element={restrictToQualityControl(<QCDashboard />)} />
+        <Route path="/qc/dashboard" element={restrictToQualityControl(<QCDashboard />)} />
+        <Route path="/quality-insights" element={restrictToQualityControl(<QualityInsights />)} />
       </Routes>
       {role && <ChatbotWidget />}
     </BrowserRouter>

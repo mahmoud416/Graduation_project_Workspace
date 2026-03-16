@@ -4,16 +4,18 @@ import { useTheme } from '../contexts/useTheme';
 
 interface HeaderProps {
     title: string;
+    subtitle?: string;
 }
 
 const USER_UPDATE_EVENT = 'workspace:user-update';
 
-const Header = ({ title }: HeaderProps) => {
+const Header = ({ title, subtitle }: HeaderProps) => {
     const { setTheme, isDark } = useTheme();
     const navigate = useNavigate();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [fullName, setFullName] = useState(() => (typeof window !== 'undefined' ? localStorage.getItem('fullName') ?? '' : ''));
     const [email, setEmail] = useState(() => (typeof window !== 'undefined' ? localStorage.getItem('email') ?? '' : ''));
+    const [role, setRole] = useState<string | null>(() => (typeof window !== 'undefined' ? localStorage.getItem('role') : null));
     const profileButtonRef = useRef<HTMLButtonElement | null>(null);
     const menuRef = useRef<HTMLDivElement | null>(null);
 
@@ -27,6 +29,7 @@ const Header = ({ title }: HeaderProps) => {
         const syncUser = () => {
             setFullName(localStorage.getItem('fullName') ?? '');
             setEmail(localStorage.getItem('email') ?? '');
+            setRole(localStorage.getItem('role') ?? null);
         };
 
         window.addEventListener('storage', syncUser);
@@ -71,32 +74,45 @@ const Header = ({ title }: HeaderProps) => {
         return fullName.trim().split(/\s+/)[0];
     }, [fullName]);
 
+    const isQualityRole = role === 'quality_control' || role === 'quality_manager';
+
     const handleProfileNavigation = () => {
         setIsMenuOpen(false);
         navigate('/settings', { state: { tab: 'profile' } });
     };
 
     const handleLogout = () => {
-        localStorage.removeItem('token');
-        localStorage.removeItem('userId');
-        localStorage.removeItem('role');
-        localStorage.removeItem('fullName');
-        localStorage.removeItem('email');
-        localStorage.removeItem('jobTitle');
-        localStorage.removeItem('phone');
-        localStorage.removeItem('bio');
+        try {
+            localStorage.removeItem('token');
+            localStorage.removeItem('userId');
+            localStorage.removeItem('role');
+            localStorage.removeItem('fullName');
+            localStorage.removeItem('email');
+            localStorage.removeItem('jobTitle');
+            localStorage.removeItem('phone');
+            localStorage.removeItem('bio');
+            sessionStorage.clear();
+        } catch (error) {
+            console.error('Failed to clear storage on logout', error);
+        }
+
         window.dispatchEvent(new Event(USER_UPDATE_EVENT));
         setIsMenuOpen(false);
-        navigate('/login', { replace: true });
+
+        const loginUrl = `${window.location.origin}/login`;
+        window.location.replace(loginUrl);
     };
 
     return (
         <header
-            className="h-16 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 fixed top-0 right-0 z-10 transition-[left] duration-200"
+            className="h-16 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 fixed top-0 right-0 z-50 transition-[left] duration-200"
             style={{ left: 'var(--sidebar-width)' }}
         >
             <div className="h-full px-8 flex items-center justify-between">
-                <h1 className="text-sm font-medium text-text-dark dark:text-gray-100">{title}</h1>
+                <div>
+                    <h1 className="text-sm font-semibold text-text-dark dark:text-gray-100">{title}</h1>
+                    {subtitle && <p className="text-xs text-text-gray dark:text-gray-400">{subtitle}</p>}
+                </div>
 
                 <div className="flex items-center gap-4">
                     <button
@@ -118,38 +134,40 @@ const Header = ({ title }: HeaderProps) => {
                         )}
                     </button>
 
-                    {/* Search */}
-                    <div className="relative">
-                        <input
-                            type="text"
-                            placeholder="Search projects..."
-                            className="w-[280px] h-9 pl-9 pr-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-text-dark dark:text-gray-200 placeholder:text-text-gray dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                        />
-                        <svg
-                            className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-gray dark:text-gray-400"
-                            fill="none"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth="2"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                        >
-                            <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                        </svg>
-                    </div>
+                    {!isQualityRole && (
+                        <>
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    placeholder="Search projects..."
+                                    className="w-[280px] h-9 pl-9 pr-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-text-dark dark:text-gray-200 placeholder:text-text-gray dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                                />
+                                <svg
+                                    className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-gray dark:text-gray-400"
+                                    fill="none"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth="2"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                >
+                                    <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                </svg>
+                            </div>
 
-                    {/* Icons */}
-                    <button className="w-9 h-9 flex items-center justify-center hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition-colors">
-                        <svg className="w-5 h-5 text-text-gray dark:text-gray-400" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                            <path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                        </svg>
-                    </button>
+                            <button className="w-9 h-9 flex items-center justify-center hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition-colors">
+                                <svg className="w-5 h-5 text-text-gray dark:text-gray-400" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                                </svg>
+                            </button>
 
-                    <button className="w-9 h-9 flex items-center justify-center hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition-colors">
-                        <svg className="w-5 h-5 text-text-gray dark:text-gray-400" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                            <path d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-                        </svg>
-                    </button>
+                            <button className="w-9 h-9 flex items-center justify-center hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition-colors">
+                                <svg className="w-5 h-5 text-text-gray dark:text-gray-400" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                                </svg>
+                            </button>
+                        </>
+                    )}
 
                     {/* Profile */}
                     <div className="relative">
@@ -168,7 +186,7 @@ const Header = ({ title }: HeaderProps) => {
                         {isMenuOpen && (
                             <div
                                 ref={menuRef}
-                                className="absolute right-0 mt-3 w-72 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-xl overflow-hidden"
+                                className="absolute right-0 mt-3 w-72 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-xl overflow-hidden z-50"
                                 role="menu"
                                 aria-label="Account options"
                             >

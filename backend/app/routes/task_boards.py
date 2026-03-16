@@ -22,6 +22,7 @@ from app.schemas.task_board import (
     TaskBoardUpdate,
 )
 from app.services.task_board_service import TaskBoardService, StoredUpload
+from app.services.todo_audit_service import TodoAuditService
 
 router = APIRouter(prefix="/task-boards", tags=["Task Boards"])
 
@@ -110,7 +111,8 @@ async def update_task_board_todo(
     project = await _get_project_or_404(db, project_id)
     _ensure_project_visibility(project, current_user)
     _ensure_task_privileges(project, current_user)
-    board = await TaskBoardService.get_board_by_project(db, _stringify_project_id(project))
+    normalized_id = _stringify_project_id(project)
+    board = await TaskBoardService.get_board_by_project(db, normalized_id)
     if not board:
         board = await TaskBoardService.ensure_board_for_project(db, project)
 
@@ -120,9 +122,20 @@ async def update_task_board_todo(
         "due": payload.due,
         "done": payload.done,
     }
-    updated = await TaskBoardService.update_task(db, _stringify_project_id(project), task_id, updates)
+    updated = await TaskBoardService.update_task(db, normalized_id, task_id, updates)
     if not updated:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Task entry not found")
+
+    if payload.done is not None:
+        action = "checked" if payload.done else "unchecked"
+        await TodoAuditService.log_event(
+            db,
+            todo_id=task_id,
+            task_id=task_id,
+            project_id=normalized_id,
+            user_id=current_user.get("_id"),
+            action=action,
+        )
     return TaskBoardService.serialize(updated, current_user)
 
 

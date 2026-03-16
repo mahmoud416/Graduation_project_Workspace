@@ -4,12 +4,52 @@ Enforces permissions based on user roles within teams.
 """
 from fastapi import Depends, HTTPException, status
 from bson import ObjectId
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Set
 
 from app.dependencies.auth import get_current_user
 from app.db.mongodb import get_database
 from app.db.collections import MEMBERSHIPS_COLLECTION, TASKS_COLLECTION
 from app.models.membership import Role
+
+
+QC_ROLE = "quality_control"
+LEGACY_QM_ROLE = "quality_manager"
+
+
+def _normalize_role(value: Optional[str]) -> str:
+    return (value or "").strip().lower()
+
+
+def _collect_roles(user: Dict[str, Any]) -> Set[str]:
+    roles: Set[str] = set()
+    primary = _normalize_role(user.get("role"))
+    if primary:
+        roles.add(primary)
+    for r in user.get("roles", []):
+        normalized = _normalize_role(r)
+        if normalized:
+            roles.add(normalized)
+    return roles
+
+
+def ensure_roles(user: Dict[str, Any], allowed_roles: List[str]) -> None:
+    """Ensure the user has at least one of the allowed roles."""
+    normalized_allowed = {_normalize_role(role) for role in allowed_roles if role}
+    user_roles = _collect_roles(user)
+    if user_roles.intersection(normalized_allowed):
+        return
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Insufficient role for this action",
+    )
+
+
+async def require_quality_control_user(
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Dependency that ensures the caller is a QC user or admin."""
+    ensure_roles(current_user, [QC_ROLE, LEGACY_QM_ROLE, "admin"])
+    return current_user
 
 
 async def get_user_membership(
