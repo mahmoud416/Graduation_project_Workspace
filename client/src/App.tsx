@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactElement } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import SignUp from './pages/SignUp';
 import Login from './pages/Login';
@@ -39,21 +39,21 @@ function App() {
     };
   }, []);
 
-  const restrictForStaff = (page: JSX.Element) => {
+  const restrictForStaff = (page: ReactElement) => {
     if (role === 'staff') {
       return <Navigate to="/dashboard" replace />;
     }
     return page;
   };
 
-  const restrictForSubAdminOnly = (page: JSX.Element) => {
+  const restrictForSubAdminOnly = (page: ReactElement) => {
     if (role !== 'sub_admin') {
       return <Navigate to="/dashboard" replace />;
     }
     return page;
   };
 
-  const redirectSubAdminDashboard = (page: JSX.Element) => {
+  const redirectSubAdminDashboard = (page: ReactElement) => {
     if (role === 'sub_admin') {
       return <Navigate to="/subadmin" replace />;
     }

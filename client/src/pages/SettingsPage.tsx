@@ -1,6 +1,6 @@
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
-import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react';
+import { type ChangeEvent, type FormEvent, useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useTheme } from '../contexts/useTheme';
 import type { Theme } from '../contexts/ThemeContextDefinition';

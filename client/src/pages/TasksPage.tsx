@@ -1,9 +1,6 @@
-import { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 import { useNavigate } from 'react-router-dom';
-
-const API_BASE = (import.meta.env.VITE_API_BASE ?? 'http://localhost:8000/api/v1').replace(/\/$/, '');
 
 interface TaskItem {
     id: string;

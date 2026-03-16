@@ -121,14 +121,12 @@ const TaskFlowDetail = () => {
     const [isUploadingResource, setIsUploadingResource] = useState(false);
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
     const [uploadRules, setUploadRules] = useState<UploadRules | null>(null);
-    const [isLoadingRules, setIsLoadingRules] = useState(false);
     const [uploadModalFile, setUploadModalFile] = useState<File | null>(null);
     const [analysisProgress, setAnalysisProgress] = useState(0);
     const [analysisDone, setAnalysisDone] = useState(false);
     const [analysisCriteria, setAnalysisCriteria] = useState<Array<{ label: string; passed: boolean; hint: string }>>([]);
     const completedTasks = tasks.filter((task) => task.done).length;
     const progressPercent = tasks.length ? Math.round((completedTasks / tasks.length) * 100) : 0;
-    const hideProgressBars = projectId === 'public-group' || projectId === 'all-sub-admin';
     const buildDownloadUrl = useCallback((resource: TaskBoardResource) => (
         resource.download_url ? `${API_BASE}${resource.download_url}` : undefined
     ), []);
@@ -192,11 +190,6 @@ const TaskFlowDetail = () => {
         }
     }, [projectId, memberSearch]);
 
-    const greetEveryone = groupMembers.map((member) => member.name).join(', ');
-    const subAdminSalute = groupMembers
-        .filter((member) => member.role && member.role.toLowerCase().includes('sub'))
-        .map((member) => member.name)
-        .join(', ');
     const overviewTitle = boardOverview?.title ?? 'Develop Responsive Dashboard Layout';
     const overviewDescription = boardOverview?.description ?? 'Implementation of the main dashboard grid system using Tailwind CSS. Needs to be mobile-friendly and support both light and dark modes according to the provided sketch designs.';
     const overviewStatus = boardOverview?.status_badge ?? 'IN PROGRESS';
@@ -353,7 +346,6 @@ const TaskFlowDetail = () => {
     const fetchUploadRules = useCallback(async () => {
         if (!projectId) return;
         const userId = localStorage.getItem('userId');
-        setIsLoadingRules(true);
         try {
             const response = await fetch(`${API_BASE}/projects/${projectId}/upload-rules`, {
                 headers: {
@@ -369,8 +361,6 @@ const TaskFlowDetail = () => {
             }
         } catch {
             setUploadRules(null);
-        } finally {
-            setIsLoadingRules(false);
         }
     }, [projectId]);
 

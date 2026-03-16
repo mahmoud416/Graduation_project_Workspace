@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type MouseEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 import type { Project } from '../types';
@@ -13,9 +13,16 @@ const STATUS_OPTIONS: Array<{ value: Project['status']; label: string }> = [
     { value: 'COMPLETED', label: 'Completed' },
 ];
 
+interface RawMemberEntry {
+    _id?: string;
+    id?: string;
+    name?: string;
+    initials?: string;
+}
+
 const mapProjectResponse = (proj: any): Project => {
-    const subAdminEntries = Array.isArray(proj.sub_admins) ? proj.sub_admins : [];
-    const staffEntries = Array.isArray(proj.staff) ? proj.staff : [];
+    const subAdminEntries: RawMemberEntry[] = Array.isArray(proj.sub_admins) ? proj.sub_admins : [];
+    const staffEntries: RawMemberEntry[] = Array.isArray(proj.staff) ? proj.staff : [];
     const subAdminNames = subAdminEntries
         .map((entry) => entry?.name)
         .filter((name): name is string => Boolean(name));
@@ -438,7 +445,6 @@ const Projects = () => {
         setIsCreateProjectOpen(true);
     };
 
-    const activeCount = sortedProjects.length;
     const emptyStateMessage = canManageProjects
         ? 'No project cards yet. Click Create New Project to get started.'
         : 'No cards are assigned to your account yet. Contact the admin to be added.';
