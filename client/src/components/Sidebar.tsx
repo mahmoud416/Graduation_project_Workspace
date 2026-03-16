@@ -59,6 +59,31 @@ const Icons: Record<string, JSX.Element> = {
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
         </svg>
     ),
+    qcDashboard: (
+        <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+        </svg>
+    ),
+    qcStandards: (
+        <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
+        </svg>
+    ),
+    qcReports: (
+        <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+        </svg>
+    ),
+    qcRoadmap: (
+        <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+        </svg>
+    ),
+    qmDashboard: (
+        <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+        </svg>
+    ),
     portal: (
         <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
@@ -120,6 +145,28 @@ const Sidebar = () => {
                 { iconKey: 'team', label: 'Team', path: '/team' },
                 { iconKey: 'reports', label: 'Reports', path: '/reports' },
                 { iconKey: 'settings', label: 'Settings', path: '/settings' },
+            ];
+        }
+
+        if (role === 'quality_control') {
+            return [
+                { iconKey: 'qcDashboard', label: 'QC Dashboard', path: '/qc' },
+                { iconKey: 'qcStandards', label: 'Standards',    path: '/qc/standards' },
+                { iconKey: 'qcReports',   label: 'Reports',      path: '/qc/reports' },
+                { iconKey: 'qcRoadmap',   label: 'Roadmap AI',   path: '/qc/roadmap' },
+                { iconKey: 'calendar',    label: 'Calendar',     path: '/calendar' },
+                { iconKey: 'settings',    label: 'Settings',     path: '/settings' },
+            ];
+        }
+
+        if (role === 'quality_manager') {
+            return [
+                { iconKey: 'qmDashboard', label: 'AI Model',       path: '/qm' },
+                { iconKey: 'qcDashboard', label: 'QC Dashboard',   path: '/qc' },
+                { iconKey: 'qcStandards', label: 'Standards',      path: '/qc/standards' },
+                { iconKey: 'qcReports',   label: 'Reports',        path: '/qc/reports' },
+                { iconKey: 'qcRoadmap',   label: 'Roadmap AI',     path: '/qc/roadmap' },
+                { iconKey: 'settings',    label: 'Settings',       path: '/settings' },
             ];
         }
 

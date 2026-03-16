@@ -15,6 +15,11 @@ import TaskFlowDetail from './pages/TaskFlowDetail';
 import CreateTask from './pages/CreateTask';
 import ConfigurationPage from './pages/ConfigurationPage';
 import StaffProjectsPage from './pages/StaffProjectsPage';
+import QCDashboard from './pages/QCDashboard';
+import QCStandards from './pages/QCStandards';
+import QCReports from './pages/QCReports';
+import QCRoadmap from './pages/QCRoadmap';
+import QualityManagerDashboard from './pages/QualityManagerDashboard';
 import ChatbotWidget from './components/ChatbotWidget';
 
 const USER_UPDATE_EVENT = 'workspace:user-update';
@@ -57,6 +62,26 @@ function App() {
     if (role === 'sub_admin') {
       return <Navigate to="/subadmin" replace />;
     }
+    if (role === 'quality_control') {
+      return <Navigate to="/qc" replace />;
+    }
+    if (role === 'quality_manager') {
+      return <Navigate to="/qm" replace />;
+    }
+    return page;
+  };
+
+  const requireQC = (page: JSX.Element) => {
+    if (role !== 'quality_control' && role !== 'admin' && role !== 'quality_manager') {
+      return <Navigate to={role ? '/dashboard' : '/login'} replace />;
+    }
+    return page;
+  };
+
+  const requireQM = (page: JSX.Element) => {
+    if (role !== 'quality_manager' && role !== 'admin') {
+      return <Navigate to={role ? '/dashboard' : '/login'} replace />;
+    }
     return page;
   };
 
@@ -80,6 +105,13 @@ function App() {
         <Route path="/task-master" element={<TaskMasterDashboard />} />
         <Route path="/configuration" element={<ConfigurationPage />} />
         <Route path="/my-projects" element={<StaffProjectsPage />} />
+        {/* Quality Control Routes */}
+        <Route path="/qc" element={requireQC(<QCDashboard />)} />
+        <Route path="/qc/standards" element={requireQC(<QCStandards />)} />
+        <Route path="/qc/reports" element={requireQC(<QCReports />)} />
+        <Route path="/qc/roadmap" element={requireQC(<QCRoadmap />)} />
+        {/* Quality Manager Routes */}
+        <Route path="/qm" element={requireQM(<QualityManagerDashboard />)} />
       </Routes>
       {role && <ChatbotWidget />}
     </BrowserRouter>

@@ -22,6 +22,7 @@ from app.schemas.task_board import (
     TaskBoardUpdate,
 )
 from app.services.task_board_service import TaskBoardService, StoredUpload
+from app.services.qc_service import QCService
 
 router = APIRouter(prefix="/task-boards", tags=["Task Boards"])
 
@@ -123,6 +124,30 @@ async def update_task_board_todo(
     updated = await TaskBoardService.update_task(db, _stringify_project_id(project), task_id, updates)
     if not updated:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Task entry not found")
+
+    # QC: Track todo completion for AI analytics (fire-and-forget — never fails the request)
+    if payload.done is not None:
+        try:
+            # Look up actual todo title from board tasks
+            todo_title = payload.title or task_id
+            if not payload.title and board:
+                for t in board.get("tasks", []):
+                    if t.get("id") == task_id:
+                        todo_title = t.get("title", task_id)
+                        break
+            await QCService.track_todo(
+                db,
+                user_id=str(current_user["_id"]),
+                user_name=current_user.get("name", ""),
+                task_id=task_id,
+                project_id=_stringify_project_id(project),
+                todo_id=task_id,
+                todo_title=todo_title,
+                action="checked" if payload.done else "unchecked",
+            )
+        except Exception:
+            pass  # analytics failure must never break the user-facing operation
+
     return TaskBoardService.serialize(updated, current_user)
 
 

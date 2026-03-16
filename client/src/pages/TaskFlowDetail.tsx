@@ -3,6 +3,7 @@ import type { FormEvent, ChangeEvent, KeyboardEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
+import AIAnalysisModal from '../components/AIAnalysisModal';
 
 const API_BASE = (import.meta.env.VITE_API_BASE ?? 'http://localhost:8000/api/v1').replace(/\/$/, '');
 
@@ -126,6 +127,7 @@ const TaskFlowDetail = () => {
     const [analysisProgress, setAnalysisProgress] = useState(0);
     const [analysisDone, setAnalysisDone] = useState(false);
     const [analysisCriteria, setAnalysisCriteria] = useState<Array<{ label: string; passed: boolean; hint: string }>>([]);
+    const [showAIAnalysis, setShowAIAnalysis] = useState(false);
     const completedTasks = tasks.filter((task) => task.done).length;
     const progressPercent = tasks.length ? Math.round((completedTasks / tasks.length) * 100) : 0;
     const hideProgressBars = projectId === 'public-group' || projectId === 'all-sub-admin';
@@ -615,11 +617,26 @@ const TaskFlowDetail = () => {
         const targetTask = tasks.find((task) => task.id === taskId);
         if (!projectId || !targetTask) return;
 
+        // 1. Toggle the todo done state (existing behaviour)
         await sendTaskBoardRequest(
             `${API_BASE}/task-boards/${projectId}/todos/${taskId}`,
             'PATCH',
             { done: !targetTask.done }
         );
+
+        // 2. Track the action in QC analytics (fire-and-forget, never blocks UI)
+        const tok = localStorage.getItem('token') || '';
+        fetch(`${API_BASE}/qc/todo-tracking`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${tok}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                task_id:    taskId,
+                project_id: projectId,
+                todo_id:    taskId,
+                todo_title: targetTask.title,
+                action:     targetTask.done ? 'unchecked' : 'checked',
+            }),
+        }).catch(() => { /* tracking is best-effort, never break the UI */ });
     };
 
     const toggleMemberMenu = (member: MemberProfile) => {
@@ -1421,16 +1438,28 @@ const TaskFlowDetail = () => {
                                     </button>
                                 </div>
 
-                                <button
-                                    onClick={handleUploadClick}
-                                    disabled={isUploadingResource}
-                                    className={`w-full py-3 rounded-lg text-sm font-medium flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20 transition-colors ${isUploadingResource ? 'bg-blue-300 cursor-not-allowed' : 'bg-primary hover:bg-blue-600 text-white'}`}
-                                >
-                                    <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                                    </svg>
-                                    {isUploadingResource ? 'Uploading...' : 'Upload Documents'}
-                                </button>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button
+                                        onClick={handleUploadClick}
+                                        disabled={isUploadingResource}
+                                        className={`py-3 rounded-lg text-sm font-medium flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20 transition-colors ${isUploadingResource ? 'bg-blue-300 cursor-not-allowed' : 'bg-primary hover:bg-blue-600 text-white'}`}
+                                    >
+                                        <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                        </svg>
+                                        {isUploadingResource ? 'Uploading...' : 'Upload'}
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowAIAnalysis(true)}
+                                        className="py-3 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-opacity hover:opacity-90 text-white"
+                                        style={{ background: 'linear-gradient(135deg, #2563eb, #7c3aed)' }}
+                                    >
+                                        <span>🤖</span>
+                                        <span>Analyze</span>
+                                    </button>
+                                </div>
                             </div>
 
                             {/* Group / Channel Members */}
@@ -1808,6 +1837,16 @@ const TaskFlowDetail = () => {
                         </div>
                     </form>
                 </div>
+            )}
+            {/* AI Quality Analysis Modal */}
+            {showAIAnalysis && (
+                <AIAnalysisModal
+                    taskId={`board_${projectId}`}
+                    projectId={projectId}
+                    taskTitle={overviewTitle}
+                    taskDescription={overviewDescription}
+                    onClose={() => setShowAIAnalysis(false)}
+                />
             )}
         </>
     );

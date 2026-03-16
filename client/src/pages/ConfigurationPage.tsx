@@ -11,7 +11,7 @@ type CreateModalState = {
     email: string;
     password: string;
     phone: string;
-    role: 'admin' | 'sub_admin' | 'staff';
+    role: 'admin' | 'sub_admin' | 'staff' | 'quality_control' | 'quality_manager';
     subAdminId?: string;
 };
 
@@ -314,7 +314,7 @@ const ConfigurationPage = () => {
                             <p className="text-xs font-semibold uppercase tracking-wide text-primary mb-2">Step 1</p>
                             <h2 className="text-2xl font-semibold text-text-dark dark:text-white mb-3">Create Account</h2>
                             <p className="text-sm text-text-gray dark:text-gray-400 mb-6">
-                                Choose the required role (admin / sub admin / staff) and create the account instantly.
+                                Choose the required role (admin, sub admin, staff, quality control, or quality manager) and create the account instantly.
                             </p>
                             <button
                                 type="button"
@@ -476,6 +476,8 @@ const ConfigurationPage = () => {
                                     <option value="admin">Admin</option>
                                     <option value="sub_admin">Sub Admin</option>
                                     <option value="staff">Staff</option>
+                                    <option value="quality_control">Quality Control</option>
+                                    <option value="quality_manager">Quality Manager</option>
                                 </select>
                             </div>
                             {createForm.role === 'staff' && (
@@ -582,6 +584,8 @@ const ConfigurationPage = () => {
                                         <option value="admin">Admin</option>
                                         <option value="sub_admin">Sub Admin</option>
                                         <option value="staff">Staff</option>
+                                        <option value="quality_control">Quality Control</option>
+                                    <option value="quality_manager">Quality Manager</option>
                                     </select>
                                 </div>
                                 <div>

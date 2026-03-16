@@ -41,6 +41,8 @@ const Login = () => {
                 navigate('/dashboard', { replace: true });
             } else if (data.role === 'sub_admin') {
                 navigate('/subadmin', { replace: true });
+            } else if (data.role === 'quality_control') {
+                navigate('/qc', { replace: true });
             } else {
                 navigate('/dashboard', { replace: true });
             }
