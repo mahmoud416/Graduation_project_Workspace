@@ -165,6 +165,25 @@ async def can_manage_user(
     )
 
 
+async def require_it_role(
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """
+    Gate that allows only users with the 'it' system role.
+
+    The IT role is a system-wide oversight layer that sits above all other roles.
+    It has cross-team read access and can manage user accounts globally.
+    All IT-layer routes must declare this as a dependency instead of performing
+    ad-hoc role checks inside the handler.
+    """
+    if current_user.get("role") != "it":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="IT privileges required for this action"
+        )
+    return current_user
+
+
 async def filter_visible_tasks(
     team_id: str,
     current_user: Dict[str, Any] = Depends(get_current_user),

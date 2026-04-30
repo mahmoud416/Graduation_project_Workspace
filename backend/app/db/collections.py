@@ -44,6 +44,8 @@ async def create_indexes(db):
     # users
     await _safe_create_index(db[USERS_COLLECTION], "email", unique=True)
     await _safe_create_index(db[USERS_COLLECTION], [("role", 1)])
+    # Supports IT-layer queries that sort or filter by login timestamp across all users.
+    await _safe_create_index(db[USERS_COLLECTION], [("login_history.timestamp", -1)])
 
     # memberships — compound unique per project
     await _safe_create_index(

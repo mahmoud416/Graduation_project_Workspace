@@ -82,10 +82,21 @@ class AuthService:
         if not authenticated:
             return None
 
-        # Update last_login
+        now = datetime.utcnow()
         await db[USERS_COLLECTION].update_one(
             {"_id": user["_id"]},
-            {"$set": {"last_login": datetime.utcnow()}}
+            {
+                "$set": {"last_login": now},
+                # Append a new login entry and keep only the 50 most recent ones.
+                # $slice: -50 discards the oldest entries from the front of the array,
+                # so the document size stays bounded regardless of login frequency.
+                "$push": {
+                    "login_history": {
+                        "$each":  [{"timestamp": now}],
+                        "$slice": -50,
+                    }
+                },
+            }
         )
         return user
 

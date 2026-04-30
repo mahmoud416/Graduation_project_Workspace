@@ -3,7 +3,13 @@ Pydantic schemas for User-related API requests and responses.
 """
 from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
+
+
+class LoginEntry(BaseModel):
+    """A single login event stored in the user's login_history array."""
+    timestamp: datetime
+    ip: Optional[str] = None
 
 
 class UserCreate(BaseModel):
@@ -51,6 +57,9 @@ class UserResponse(BaseModel):
     phone: Optional[str] = None
     status: Optional[str] = None
     created_at: Optional[datetime] = None
+    last_login: Optional[datetime] = None
+    # Populated only in IT-layer responses — omitted (empty list) for all other roles.
+    login_history: List[LoginEntry] = []
     is_active: Optional[bool] = None
     password: Optional[str] = None
 

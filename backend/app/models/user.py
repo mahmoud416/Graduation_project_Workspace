@@ -22,15 +22,19 @@ class UserModel:
     ) -> dict:
         """Create a new user document. Password must already be hashed."""
         return {
-            "email":        email.lower(),
-            "password":     password,  # Must be bcrypt hash
-            "name":         full_name,
-            "role":         role or "staff",
-            "admin_id":     admin_id,
-            "sub_admin_id": sub_admin_id,
-            "phone":        phone,
-            "status":       status or "active",
-            "created_at":   datetime.utcnow(),
-            "last_login":   None,
-            "is_active":    True,
+            "email":         email.lower(),
+            "password":      password,  # Must be bcrypt hash
+            "name":          full_name,
+            "role":          role or "staff",
+            "admin_id":      admin_id,
+            "sub_admin_id":  sub_admin_id,
+            "phone":         phone,
+            "status":        status or "active",
+            "created_at":    datetime.utcnow(),
+            "last_login":    None,
+            # Ordered list of login timestamps for the IT oversight layer.
+            # Capped at 50 entries via $slice in AuthService — oldest entries
+            # are dropped automatically, so the array never grows unbounded.
+            "login_history": [],
+            "is_active":     True,
         }
