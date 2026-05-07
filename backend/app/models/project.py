@@ -17,13 +17,13 @@ class ProjectStatus(str, Enum):
 class ProjectType(str, Enum):
     """
     Card types:
-      public       — workspace-wide channel (all registered users)
-      all_subadmin — sub-admin coordination channel
-      custom       — regular project card created by admin
+      public          — workspace-wide channel (all registered users)
+      all_sub_manager — sub-manager coordination channel
+      custom          — regular project card created by admin
     """
-    PUBLIC       = "public"
-    ALL_SUBADMIN = "all_subadmin"
-    CUSTOM       = "custom"
+    PUBLIC          = "public"
+    ALL_SUBMANAGER  = "all_sub_manager"
+    CUSTOM          = "custom"
 
 
 class ProjectModel:
@@ -37,7 +37,7 @@ class ProjectModel:
         card_type: ProjectType = ProjectType.CUSTOM,
         status: ProjectStatus = ProjectStatus.ACTIVE,
         progress: int = 0,
-        sub_admin_ids: Optional[List[Any]] = None,
+        sub_manager_ids: Optional[List[Any]] = None,
         staff_ids: Optional[List[Any]] = None,
         team_id: Optional[Any] = None,
         comments_enabled: bool = True,
@@ -45,7 +45,7 @@ class ProjectModel:
     ) -> dict:
         """Create a new project document for insertion into MongoDB."""
         now = datetime.utcnow()
-        is_system = card_type in (ProjectType.PUBLIC, ProjectType.ALL_SUBADMIN)
+        is_system = card_type in (ProjectType.PUBLIC, ProjectType.ALL_SUBMANAGER)
         return {
             "title":            title,
             "description":      description,
@@ -53,7 +53,7 @@ class ProjectModel:
             "status":           status.value,
             "progress":         progress,
             "owner_id":         owner_id,
-            "sub_admin_ids":    sub_admin_ids or [],
+            "sub_manager_ids":  sub_manager_ids or [],
             "staff_ids":        staff_ids or [],
             "comments_enabled": comments_enabled,
             "uploads_enabled":  uploads_enabled,

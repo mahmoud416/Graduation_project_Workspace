@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m py_compile app/models/user.py app/schemas/user.py app/services/auth_service.py app/dependencies/rbac.py app/routes/it.py app/db/collections.py main.py)",
+      "Bash(npm run *)",
+      "Bash(npx tsc *)",
+      "Bash(./node_modules/.bin/tsc --noEmit)",
+      "Bash(node_modules/.bin/tsc --noEmit)",
+      "Bash(npm install *)",
+      "Bash(python -c ' *)",
+      "Bash(python -c \"from app.routes import it; print\\('OK —', len\\(it.router.routes\\), 'routes'\\)\")",
+      "Bash(uvicorn main:app --host 0.0.0.0 --port 8000 --reload)",
+      "Read(//tmp/**)",
+      "Bash(curl -s http://localhost:8000/health)",
+      "Bash(curl -s http://localhost:8000/api/v1/it/users -H \"Authorization: Bearer test\")"
+    ]
+  }
+}

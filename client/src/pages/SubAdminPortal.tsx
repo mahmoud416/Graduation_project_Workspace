@@ -12,13 +12,13 @@ const authHeaders = () => ({
 });
 
 const mapProject = (proj: any): Project & { is_system_card?: boolean } => {
-    const subAdminEntries = Array.isArray(proj.sub_admins) ? proj.sub_admins : [];
+    const subManagerEntries = Array.isArray(proj.sub_admins) ? proj.sub_admins : [];
     const staffEntries = Array.isArray(proj.staff) ? proj.staff : [];
-    const subAdminNames = subAdminEntries.map((e: any) => e?.name).filter(Boolean);
-    const subAdminIds = subAdminEntries.map((e: any) => e?._id || e?.id).filter((v: any) => typeof v === 'string');
+    const subManagerNames = subManagerEntries.map((e: any) => e?.name).filter(Boolean);
+    const subManagerIds = subManagerEntries.map((e: any) => e?._id || e?.id).filter((v: any) => typeof v === 'string');
     const staffIds = staffEntries.map((e: any) => e?._id || e?.id).filter((v: any) => typeof v === 'string');
     const staffInitials: string[] = Array.isArray(proj.staff_initials) ? proj.staff_initials : [];
-    const subInitials = subAdminEntries.map((e: any) => e?.initials).filter(Boolean);
+    const subInitials = subManagerEntries.map((e: any) => e?.initials).filter(Boolean);
     const combinedInitials = [...subInitials, ...staffInitials].filter(Boolean);
     return {
         id: proj._id,
@@ -29,9 +29,9 @@ const mapProject = (proj: any): Project & { is_system_card?: boolean } => {
         team: (combinedInitials.length ? combinedInitials : ['TM']).slice(0, 4),
         updatedAt: proj.updated_at || new Date().toISOString(),
         updatedAtRaw: proj.updated_at || new Date().toISOString(),
-        subAdminName: subAdminNames[0],
-        subAdminNames,
-        subAdminIds,
+        subManagerName: subManagerNames[0],
+        subManagerNames: subManagerNames,
+        subManagerIds: subManagerIds,
         staffIds,
         isDefaultGroup: proj._id === 'public-group' || proj._id === 'all-sub-admin',
         is_system_card: proj.is_system_card ?? (proj._id === 'public-group' || proj._id === 'all-sub-admin'),
@@ -66,7 +66,7 @@ const SubAdminPortal = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    const userName = localStorage.getItem('userName') || localStorage.getItem('name') || 'Sub Admin';
+    const userName = localStorage.getItem('userName') || localStorage.getItem('name') || 'Sub Manager';
     const today = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
     const fetchProjects = useCallback(async () => {
@@ -94,7 +94,7 @@ const SubAdminPortal = () => {
     const avgProgress = myProjects.length
         ? Math.round(myProjects.reduce((s, p) => s + p.progress, 0) / myProjects.length)
         : 0;
-    const totalMembers = myProjects.reduce((s, p) => s + (p.staffIds?.length ?? 0) + (p.subAdminIds?.length ?? 0), 0);
+    const totalMembers = myProjects.reduce((s, p) => s + (p.staffIds?.length ?? 0) + (p.subManagerIds?.length ?? 0), 0);
 
     const stats = [
         {
@@ -172,7 +172,7 @@ const SubAdminPortal = () => {
                             <div>
                                 <p className="text-white/65 text-xs font-semibold uppercase tracking-widest mb-1">{today}</p>
                                 <h1 className="text-2xl font-black text-white mb-1">Welcome back, {userName}</h1>
-                                <p className="text-white/70 text-sm">Sub-Admin · Manage your projects and coordinate your team</p>
+                                <p className="text-white/70 text-sm">Sub-Manager · Manage your projects and coordinate your team</p>
                             </div>
                             <button
                                 type="button"
@@ -255,13 +255,13 @@ const SubAdminPortal = () => {
                                             <div className="flex items-end gap-1.5 mb-2">
                                                 <span className="text-white/35 text-5xl font-black leading-none" style={{ fontFamily: 'monospace' }}>#</span>
                                                 <h3 className="text-white text-xl font-black tracking-tight leading-none mb-1">
-                                                    {project.id === 'public-group' ? 'public' : 'all-sub-admin'}
+                                                    {project.id === 'public-group' ? 'public' : 'all-sub-manager'}
                                                 </h3>
                                             </div>
                                             <p className="text-white/60 text-xs leading-relaxed line-clamp-2 mb-auto">{project.description}</p>
                                             <div className="flex items-center justify-between mt-4 pt-3 border-t border-white/15">
                                                 <span className="text-white/65 text-xs">
-                                                    {project.id === 'public-group' ? 'All workspace members' : 'Sub-admins only'}
+                                                    {project.id === 'public-group' ? 'All workspace members' : 'Sub-managers only'}
                                                 </span>
                                                 <div className="flex items-center gap-1.5 bg-white/15 hover:bg-white/25 transition-colors rounded-full px-3 py-1">
                                                     <span className="text-white text-xs font-bold">Open</span>
@@ -304,7 +304,7 @@ const SubAdminPortal = () => {
                             </div>
                         ) : myProjects.length === 0 ? (
                             <div className="rounded-2xl border border-dashed border-gray-300 dark:border-gray-700 p-10 text-center text-sm text-text-gray dark:text-gray-400">
-                                No projects assigned yet. Ask your admin to assign you as sub-admin to a project.
+                                No projects assigned yet. Ask your admin to assign you as sub-manager to a project.
                             </div>
                         ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
@@ -360,7 +360,7 @@ const SubAdminPortal = () => {
                                                         <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
                                                             <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" />
                                                         </svg>
-                                                        {(project.staffIds?.length ?? 0) + (project.subAdminIds?.length ?? 0)} members
+                                                        {(project.staffIds?.length ?? 0) + (project.subManagerIds?.length ?? 0)} members
                                                     </span>
                                                 </div>
                                             </div>

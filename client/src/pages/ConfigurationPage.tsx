@@ -11,8 +11,8 @@ type CreateModalState = {
     email: string;
     password: string;
     phone: string;
-    role: 'admin' | 'sub_admin' | 'staff';
-    subAdminId?: string;
+    role: 'admin' | 'sub_manager' | 'staff';
+    subManagerId?: string;
 };
 
 type AccountEntry = {
@@ -43,7 +43,7 @@ const initialCreateForm: CreateModalState = {
     password: '',
     phone: '',
     role: 'staff',
-    subAdminId: ''
+    subManagerId: ''
 };
 
 type ModalShellProps = {
@@ -139,7 +139,7 @@ const ConfigurationPage = () => {
         fetchAccounts();
     }, [fetchAccounts]);
 
-    const subAdminOptions = useMemo(() => accounts.filter((account) => account.role === 'sub_admin'), [accounts]);
+    const subManagerOptions = useMemo(() => accounts.filter((account) => account.role === 'sub_manager'), [accounts]);
 
     const registerUser = async (payload: Record<string, string | undefined>) => {
         const response = await fetch(`${API_BASE}/auth/register`, {
@@ -177,8 +177,8 @@ const ConfigurationPage = () => {
                 status: 'active'
             };
 
-            if (createForm.role === 'staff' && createForm.subAdminId) {
-                payload.sub_admin_id = createForm.subAdminId;
+            if (createForm.role === 'staff' && createForm.subManagerId) {
+                payload.sub_manager_id = createForm.subManagerId;
             }
 
             await registerUser(payload);
@@ -314,7 +314,7 @@ const ConfigurationPage = () => {
                             <p className="text-xs font-semibold uppercase tracking-wide text-primary mb-2">Step 1</p>
                             <h2 className="text-2xl font-semibold text-text-dark dark:text-white mb-3">Create Account</h2>
                             <p className="text-sm text-text-gray dark:text-gray-400 mb-6">
-                                Choose the required role (admin / sub admin / staff) and create the account instantly.
+                                Choose the required role (admin / sub manager / staff) and create the account instantly.
                             </p>
                             <button
                                 type="button"
@@ -329,7 +329,7 @@ const ConfigurationPage = () => {
                             <p className="text-xs font-semibold uppercase tracking-wide text-primary mb-2">Step 2</p>
                             <h2 className="text-2xl font-semibold text-text-dark dark:text-white mb-3">Assign Staff</h2>
                             <p className="text-sm text-text-gray dark:text-gray-400 mb-6">
-                                Link staff to a sub admin right during creation or when editing later.
+                                Link staff to a sub manager right during creation or when editing later.
                             </p>
                             <button
                                 type="button"
@@ -474,20 +474,20 @@ const ConfigurationPage = () => {
                                     className="mt-1 w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-text-dark dark:text-gray-100 focus:border-primary focus:outline-none"
                                 >
                                     <option value="admin">Admin</option>
-                                    <option value="sub_admin">Sub Admin</option>
+                                    <option value="sub_manager">Sub Manager</option>
                                     <option value="staff">Staff</option>
                                 </select>
                             </div>
                             {createForm.role === 'staff' && (
                                 <div>
-                                    <label className="text-xs font-semibold text-text-gray dark:text-gray-300 uppercase">Assign to Sub Admin</label>
+                                    <label className="text-xs font-semibold text-text-gray dark:text-gray-300 uppercase">Assign to Sub Manager</label>
                                     <select
-                                        value={createForm.subAdminId}
-                                        onChange={(e) => setCreateForm({ ...createForm, subAdminId: e.target.value })}
+                                        value={createForm.subManagerId}
+                                        onChange={(e) => setCreateForm({ ...createForm, subManagerId: e.target.value })}
                                         className="mt-1 w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-text-dark dark:text-gray-100 focus:border-primary focus:outline-none"
                                     >
                                         <option value="">Unassigned</option>
-                                        {subAdminOptions.map((sub) => (
+                                        {subManagerOptions.map((sub) => (
                                             <option key={sub.id} value={sub.id}>{sub.name}</option>
                                         ))}
                                     </select>
@@ -580,7 +580,7 @@ const ConfigurationPage = () => {
                                         className="mt-1 w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-text-dark dark:text-gray-100 focus:border-primary focus:outline-none"
                                     >
                                         <option value="admin">Admin</option>
-                                        <option value="sub_admin">Sub Admin</option>
+                                        <option value="sub_manager">Sub Manager</option>
                                         <option value="staff">Staff</option>
                                     </select>
                                 </div>

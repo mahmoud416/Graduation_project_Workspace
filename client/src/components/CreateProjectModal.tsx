@@ -58,9 +58,9 @@ const CreateProjectModal = ({ onClose, onSuccess }: CreateProjectModalProps) => 
     const [description, setDescription] = useState('');
     const [status, setStatus] = useState('ACTIVE');
     const [progress, setProgress] = useState(0);
-    const [subAdmins, setSubAdmins] = useState<DirectoryUser[]>([]);
+    const [subManagers, setSubManagers] = useState<DirectoryUser[]>([]);
     const [staffDirectory, setStaffDirectory] = useState<DirectoryUser[]>([]);
-    const [selectedSubAdmins, setSelectedSubAdmins] = useState<string[]>([]);
+    const [selectedSubManagers, setSelectedSubManagers] = useState<string[]>([]);
     const [selectedStaff, setSelectedStaff] = useState<string[]>([]);
     const [directoryLoading, setDirectoryLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -80,7 +80,7 @@ const CreateProjectModal = ({ onClose, onSuccess }: CreateProjectModalProps) => 
             const headers = { 'X-User-Id': userId, 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') };
             try {
                 const [subResponse, staffResponse] = await Promise.all([
-                    fetch(`${API_BASE}/users?role=sub_admin`, { headers }),
+                    fetch(`${API_BASE}/users?role=sub_manager`, { headers }),
                     fetch(`${API_BASE}/users?role=staff`, { headers }),
                 ]);
 
@@ -89,7 +89,7 @@ const CreateProjectModal = ({ onClose, onSuccess }: CreateProjectModalProps) => 
                 }
 
                 const [subData, staffData] = await Promise.all([subResponse.json(), staffResponse.json()]);
-                setSubAdmins(subData.map(normalizeDirectoryEntry));
+                setSubManagers(subData.map(normalizeDirectoryEntry));
                 setStaffDirectory(staffData.map(normalizeDirectoryEntry));
             } catch (err: unknown) {
                 const message = err instanceof Error ? err.message : 'Unable to load directory data';
@@ -108,8 +108,8 @@ const CreateProjectModal = ({ onClose, onSuccess }: CreateProjectModalProps) => 
         );
     };
 
-    const toggleSubAdminSelection = (id: string) => {
-        setSelectedSubAdmins((prev) =>
+    const toggleSubManagerSelection = (id: string) => {
+        setSelectedSubManagers((prev) =>
             prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
         );
     };
@@ -130,7 +130,7 @@ const CreateProjectModal = ({ onClose, onSuccess }: CreateProjectModalProps) => 
                 description,
                 status,
                 progress,
-                sub_admin_ids: selectedSubAdmins.map((id) => id.trim()),
+                sub_manager_ids: selectedSubManagers.map((id) => id.trim()),
                 staff_ids: selectedStaff.map((id) => id.trim()),
             };
 
@@ -157,7 +157,7 @@ const CreateProjectModal = ({ onClose, onSuccess }: CreateProjectModalProps) => 
 
             setProjectName('');
             setDescription('');
-            setSelectedSubAdmins([]);
+            setSelectedSubManagers([]);
             setSelectedStaff([]);
             setStatus('ACTIVE');
             setProgress(0);
@@ -255,26 +255,26 @@ const CreateProjectModal = ({ onClose, onSuccess }: CreateProjectModalProps) => 
                         <div className="space-y-1.5">
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <p className="text-xs font-semibold uppercase text-text-gray">Assigned Sub Admins</p>
-                                    <p className="text-xs text-text-gray">Select sub admins who will co-manage</p>
+                                    <p className="text-xs font-semibold uppercase text-text-gray">Assigned Sub Managers</p>
+                                    <p className="text-xs text-text-gray">Select sub managers who will co-manage</p>
                                 </div>
-                                <span className="text-xs font-semibold text-text-gray">{selectedSubAdmins.length} selected</span>
+                                <span className="text-xs font-semibold text-text-gray">{selectedSubManagers.length} selected</span>
                             </div>
                             <div className="max-h-40 overflow-y-auto rounded-2xl border border-dashed border-gray-200 dark:border-gray-700 p-4 space-y-2">
                                 {directoryLoading ? (
                                     <p className="text-sm text-text-gray">Loading directory...</p>
-                                ) : subAdmins.length === 0 ? (
-                                    <p className="text-sm text-text-gray">No sub admins available.</p>
+                                ) : subManagers.length === 0 ? (
+                                    <p className="text-sm text-text-gray">No sub managers available.</p>
                                 ) : (
-                                    subAdmins.map((member) => (
+                                    subManagers.map((member) => (
                                         <label
                                             key={member.id}
                                             className="flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer"
                                         >
                                             <input
                                                 type="checkbox"
-                                                checked={selectedSubAdmins.includes(member.id)}
-                                                onChange={() => toggleSubAdminSelection(member.id)}
+                                                checked={selectedSubManagers.includes(member.id)}
+                                                onChange={() => toggleSubManagerSelection(member.id)}
                                             />
                                             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-indigo-500 text-white text-xs font-semibold flex items-center justify-center">
                                                 {member.initials}

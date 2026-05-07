@@ -2,6 +2,7 @@
 JWT-based authentication dependency.
 Clients must send: Authorization: Bearer <token>
 """
+from datetime import datetime
 from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from bson import ObjectId
@@ -58,5 +59,14 @@ async def get_current_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account is inactive or suspended",
         )
+
+    # Update last_seen on every authenticated request so the IT portal
+    # can determine whether a user is currently active in the system.
+    # Fire-and-forget via update_one — we don't await the result to avoid
+    # adding latency to every endpoint.
+    await db[USERS_COLLECTION].update_one(
+        {"_id": user["_id"]},
+        {"$set": {"last_seen": datetime.utcnow()}}
+    )
 
     return user

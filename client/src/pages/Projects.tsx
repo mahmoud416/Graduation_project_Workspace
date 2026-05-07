@@ -14,16 +14,16 @@ const STATUS_OPTIONS: Array<{ value: Project['status']; label: string }> = [
 ];
 
 const mapProjectResponse = (proj: any): Project => {
-    const subAdminEntries = Array.isArray(proj.sub_admins) ? proj.sub_admins : [];
+    const subManagerEntries = Array.isArray(proj.sub_admins) ? proj.sub_admins : [];
     const staffEntries = Array.isArray(proj.staff) ? proj.staff : [];
-    const subAdminNames = subAdminEntries
+    const subManagerNames = subManagerEntries
         .map((entry) => entry?.name)
         .filter((name): name is string => Boolean(name));
-    if (!subAdminNames.length && proj.sub_admin?.name) {
-        subAdminNames.push(proj.sub_admin.name);
+    if (!subManagerNames.length && proj.sub_manager?.name) {
+        subManagerNames.push(proj.sub_manager.name);
     }
 
-    const subAdminIds = subAdminEntries
+    const subManagerIds = subManagerEntries
         .map((entry) => entry?._id || entry?.id)
         .filter((identifier): identifier is string => typeof identifier === 'string');
     const staffIds = staffEntries
@@ -31,7 +31,7 @@ const mapProjectResponse = (proj: any): Project => {
         .filter((identifier): identifier is string => typeof identifier === 'string');
 
     const staffInitials = Array.isArray(proj.staff_initials) ? proj.staff_initials : [];
-    const subInitials = subAdminEntries
+    const subInitials = subManagerEntries
         .map((entry) => entry?.initials)
         .filter((initial): initial is string => Boolean(initial));
     const combinedInitials = [...subInitials, ...staffInitials].filter(Boolean);
@@ -47,9 +47,9 @@ const mapProjectResponse = (proj: any): Project => {
         team: (combinedInitials.length ? combinedInitials : ['TM']).slice(0, 5),
         updatedAt: updatedStamp,
         updatedAtRaw: updatedStamp,
-        subAdminName: subAdminNames[0],
-        subAdminNames,
-        subAdminIds,
+        subManagerName: subManagerNames[0],
+        subManagerNames: subManagerNames,
+        subManagerIds: subManagerIds,
         staffIds,
         isDefaultGroup: proj._id === 'public-group' || proj._id === 'all-sub-admin',
         is_system_card: proj.is_system_card ?? (proj._id === 'public-group' || proj._id === 'all-sub-admin'),
@@ -66,9 +66,9 @@ const GROUPED_PROJECTS: Project[] = [
         team: ['PUB', 'ALL'],
         updatedAt: new Date().toISOString(),
         updatedAtRaw: new Date().toISOString(),
-        subAdminName: 'All Users',
-        subAdminNames: ['All Users'],
-        subAdminIds: [],
+        subManagerName: 'All Users',
+        subManagerNames: ['All Users'],
+        subManagerIds: [],
         staffIds: [],
         isDefaultGroup: true,
     },
@@ -81,9 +81,9 @@ const GROUPED_PROJECTS: Project[] = [
         team: ['SUB', 'ADM'],
         updatedAt: new Date().toISOString(),
         updatedAtRaw: new Date().toISOString(),
-        subAdminName: 'Sub Admin Leads',
-        subAdminNames: ['Sub Admin Leads'],
-        subAdminIds: [],
+        subManagerName: 'Sub Manager Leads',
+        subManagerNames: ['Sub Manager Leads'],
+        subManagerIds: [],
         staffIds: [],
         isDefaultGroup: true,
     }
@@ -177,7 +177,7 @@ const Projects = () => {
     const visibleProjects = useMemo(() => {
         let scoped = projects;
         if (role && role !== 'admin') {
-            if (role === 'sub_admin') {
+            if (role === 'sub_manager') {
                 scoped = scoped.filter((project) => {
                     if (project.id === 'public-group' || project.id === 'all-sub-admin' || project.isDefaultGroup) {
                         return true;
@@ -185,7 +185,7 @@ const Projects = () => {
                     if (!userId) {
                         return false;
                     }
-                    return project.subAdminIds?.includes(userId) ?? false;
+                    return project.subManagerIds?.includes(userId) ?? false;
                 });
             } else {
                 scoped = scoped.filter((project) => {
@@ -523,7 +523,7 @@ const Projects = () => {
                             <div className="flex flex-wrap items-center justify-between gap-4 mb-6 rounded-2xl border border-dashed border-primary/30 bg-blue-50/60 dark:bg-blue-900/20 px-5 py-4">
                                 <div>
                                     <p className="text-sm font-semibold text-primary">Admin access enabled</p>
-                                    <p className="text-xs text-text-gray dark:text-gray-300">Create projects and assign sub-admin leads directly from this workspace.</p>
+                                    <p className="text-xs text-text-gray dark:text-gray-300">Create projects and assign sub-manager leads directly from this workspace.</p>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <button
@@ -670,7 +670,7 @@ const Projects = () => {
                                                                             <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
                                                                         </svg>
                                                                         <span className="text-white/60 text-xs">
-                                                                            {isPublicCard ? 'All workspace members' : 'Sub-admins only'}
+                                                                            {isPublicCard ? 'All workspace members' : 'Sub-managers only'}
                                                                         </span>
                                                                     </div>
                                                                     <div className="flex items-center gap-1.5 bg-white/15 hover:bg-white/25 transition-colors rounded-full px-3 py-1">
@@ -716,7 +716,7 @@ const Projects = () => {
                                             </div>
                                             <div className={`grid gap-5 ${viewMode === 'grid' ? 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3' : 'grid-cols-1'}`}>
                                                 {regularProjects.map((project) => {
-                                                    const leadLabel = getLeadLabel(project.subAdminNames);
+                                                    const leadLabel = getLeadLabel(project.subManagerNames);
                                                     const badgeClass = getStatusColor(project.status);
                                                     const showMenu = canManageProjects;
                                                     const canDeleteCard = canManageProjects;

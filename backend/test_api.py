@@ -81,37 +81,37 @@ def main():
         
         print_section("3. USER & MEMBERSHIP TESTS")
         
-        # Register Sub-Admin
-        print("Creating Sub-Admin User...")
-        subadmin_data = {
-            "email": "subadmin@test.com",
-            "password": "subadmin12",
-            "full_name": "Sub-Admin User"
+        # Register Sub-Manager
+        print("Creating Sub-Manager User...")
+        sub_manager_data = {
+            "email": "sub_manager@test.com",
+            "password": "submanager12",
+            "full_name": "Sub-Manager User"
         }
-        response = requests.post(f"{BASE_URL}/auth/register", json=subadmin_data)
-        print_result("Register Sub-Admin", response)
-        subadmin_id = response.json()["_id"]
-        
-        # Login as Sub-Admin
+        response = requests.post(f"{BASE_URL}/auth/register", json=sub_manager_data)
+        print_result("Register Sub-Manager", response)
+        sub_manager_id = response.json()["_id"]
+
+        # Login as Sub-Manager
         response = requests.post(f"{BASE_URL}/auth/login", json={
-            "email": "subadmin@test.com",
-            "password": "subadmin12"
+            "email": "sub_manager@test.com",
+            "password": "submanager12"
         })
-        subadmin_token = response.json()["access_token"]
-        subadmin_headers = {"Authorization": f"Bearer {subadmin_token}"}
-        
-        # Add Sub-Admin to Team
-        print("Adding Sub-Admin to team...")
+        sub_manager_token = response.json()["access_token"]
+        sub_manager_headers = {"Authorization": f"Bearer {sub_manager_token}"}
+
+        # Add Sub-Manager to Team
+        print("Adding Sub-Manager to team...")
         membership_data = {
-            "user_id": subadmin_id,
-            "role": "subadmin"
+            "user_id": sub_manager_id,
+            "role": "sub_manager"
         }
         response = requests.post(
             f"{BASE_URL}/teams/{team_id}/members",
             json=membership_data,
             headers=admin_headers
         )
-        print_result("Add Sub-Admin to Team", response)
+        print_result("Add Sub-Manager to Team", response)
         
         # Register Member
         print("Creating Member User...")
@@ -132,12 +132,12 @@ def main():
         member_token = response.json()["access_token"]
         member_headers = {"Authorization": f"Bearer {member_token}"}
         
-        # Add Member to Team (managed by Sub-Admin)
-        print("Adding Member to team (managed by Sub-Admin)...")
+        # Add Member to Team (managed by Sub-Manager)
+        print("Adding Member to team (managed by Sub-Manager)...")
         membership_data = {
             "user_id": member_id,
             "role": "member",
-            "managed_by": subadmin_id
+            "managed_by": sub_manager_id
         }
         response = requests.post(
             f"{BASE_URL}/teams/{team_id}/members",
@@ -167,34 +167,34 @@ def main():
         print_result("Create Task for Member", response)
         task1_id = response.json()["_id"]
         
-        # Admin creates task for sub-admin
-        print("Admin creating task for sub-admin...")
+        # Admin creates task for sub-manager
+        print("Admin creating task for sub-manager...")
         task_data = {
-            "title": "Task 2 - Assigned to Sub-Admin",
-            "description": "This task is assigned to sub-admin",
+            "title": "Task 2 - Assigned to Sub-Manager",
+            "description": "This task is assigned to sub-manager",
             "team_id": team_id,
-            "assigned_to": subadmin_id,
+            "assigned_to": sub_manager_id,
             "status": "todo",
             "priority": "medium"
         }
         response = requests.post(f"{BASE_URL}/tasks", json=task_data, headers=admin_headers)
-        print_result("Create Task for Sub-Admin", response)
-        
+        print_result("Create Task for Sub-Manager", response)
+
         print_section("5. RBAC VISIBILITY TESTS")
-        
+
         # Admin lists tasks (should see all)
         print("Admin listing tasks (should see ALL tasks)...")
         response = requests.get(f"{BASE_URL}/tasks?team_id={team_id}", headers=admin_headers)
         print_result("Admin View Tasks", response)
         if response.status_code == 200:
             print(f"   Admin can see {len(response.json())} tasks")
-        
-        # Sub-Admin lists tasks (should see managed member's tasks only)
-        print("Sub-Admin listing tasks (should see managed member's tasks)...")
-        response = requests.get(f"{BASE_URL}/tasks?team_id={team_id}", headers=subadmin_headers)
-        print_result("Sub-Admin View Tasks", response)
+
+        # Sub-Manager lists tasks (should see managed member's tasks only)
+        print("Sub-Manager listing tasks (should see managed member's tasks)...")
+        response = requests.get(f"{BASE_URL}/tasks?team_id={team_id}", headers=sub_manager_headers)
+        print_result("Sub-Manager View Tasks", response)
         if response.status_code == 200:
-            print(f"   Sub-Admin can see {len(response.json())} tasks")
+            print(f"   Sub-Manager can see {len(response.json())} tasks")
         
         # Member lists tasks (should see only their own)
         print("Member listing tasks (should see ONLY own tasks)...")

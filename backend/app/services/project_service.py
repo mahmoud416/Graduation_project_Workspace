@@ -25,7 +25,7 @@ class ProjectService:
         owner_id: Any,
         status: ProjectStatus,
         progress: int,
-        sub_admin_ids: List[Any],
+        sub_manager_ids: List[Any],
         staff_ids: List[Any],
         team_id: Optional[Any] = None
     ) -> Dict[str, Any]:
@@ -36,7 +36,7 @@ class ProjectService:
             owner_id=owner_id,
             status=status,
             progress=progress,
-            sub_admin_ids=sub_admin_ids,
+            sub_manager_ids=sub_manager_ids,
             staff_ids=staff_ids,
             team_id=team_id
         )
@@ -60,23 +60,23 @@ class ProjectService:
                 "status": ProjectStatus.ACTIVE.value,
                 "progress": 100,
                 "owner_id": owner_id,
-                "sub_admin_ids": [],
+                "sub_manager_ids": [],
                 "staff_ids": [],
                 "team_id": None,
                 "created_at": now,
             },
             {
                 "_id": "all-sub-admin",
-                "title": "All_SubAdmin",
-                "description": "Dedicated group holding every sub-admin for oversight and control.",
-                "type": "all_subadmin",
+                "title": "All_SubManager",
+                "description": "Dedicated group holding every sub-manager for oversight and control.",
+                "type": "all_sub_manager",
                 "is_system_card": True,
                 "comments_enabled": True,
                 "uploads_enabled": True,
                 "status": ProjectStatus.ACTIVE.value,
                 "progress": 100,
                 "owner_id": owner_id,
-                "sub_admin_ids": [],
+                "sub_manager_ids": [],
                 "staff_ids": [],
                 "team_id": None,
                 "created_at": now,
@@ -147,9 +147,9 @@ class ProjectService:
 
         user_ids: Set[Any] = set()
         for project in projects:
-            sub_ids = project.get("sub_admin_ids") or []
-            if not sub_ids and project.get("sub_admin_id"):
-                sub_ids = [project["sub_admin_id"]]
+            sub_ids = project.get("sub_manager_ids") or []
+            if not sub_ids and project.get("sub_manager_id"):
+                sub_ids = [project["sub_manager_id"]]
             for sub_id in sub_ids:
                 user_ids.add(sub_id)
             for staff_id in project.get("staff_ids", []):
@@ -192,26 +192,26 @@ class ProjectService:
             "updated_at": project.get("updated_at")
         }
 
-        # Sub-Admin profile
-        sub_admin_entries: List[Dict[str, Any]] = []
-        sub_ids = project.get("sub_admin_ids") or []
-        if not sub_ids and project.get("sub_admin_id"):
-            sub_ids = [project["sub_admin_id"]]
+        # Sub-Manager profile
+        sub_manager_entries: List[Dict[str, Any]] = []
+        sub_ids = project.get("sub_manager_ids") or []
+        if not sub_ids and project.get("sub_manager_id"):
+            sub_ids = [project["sub_manager_id"]]
 
-        for sub_admin_id in sub_ids:
-            user = user_map.get(sub_admin_id)
+        for sub_manager_id in sub_ids:
+            user = user_map.get(sub_manager_id)
             if not user:
                 continue
             person_initials = initials_from(user.get("name") or user.get("full_name"), user.get("email"))
-            sub_admin_entries.append({
+            sub_manager_entries.append({
                 "_id": str(user["_id"]),
-                "name": user.get("name") or user.get("full_name", "Sub Admin"),
+                "name": user.get("name") or user.get("full_name", "Sub Manager"),
                 "email": user.get("email", ""),
                 "initials": person_initials
             })
 
-        response["sub_admins"] = sub_admin_entries
-        response["sub_admin"] = sub_admin_entries[0] if sub_admin_entries else None
+        response["sub_managers"] = sub_manager_entries
+        response["sub_manager"] = sub_manager_entries[0] if sub_manager_entries else None
 
         staff_entries: List[Dict[str, Any]] = []
         staff_initials: List[str] = []

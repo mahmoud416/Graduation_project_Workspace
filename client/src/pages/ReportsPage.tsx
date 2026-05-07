@@ -137,7 +137,7 @@ const ReportsPage = () => {
         return { total, active, completed, onHold, avgProg };
     }, [customProjects]);
 
-    const subAdmins   = members.filter(m => m.role === 'sub_admin').length;
+    const subManagers  = members.filter(m => m.role === 'sub_manager').length;
     const staffCount  = members.filter(m => m.role === 'staff').length;
     const totalMembers = members.length;
 
@@ -345,7 +345,7 @@ const ReportsPage = () => {
                                             <div className="space-y-3">
                                                 {[
                                                     { label: 'Total Members', value: totalMembers, color: 'text-text-dark dark:text-white' },
-                                                    { label: 'Sub-Admins',    value: subAdmins,    color: 'text-blue-600 dark:text-blue-400' },
+                                                    { label: 'Sub-Managers',  value: subManagers,  color: 'text-blue-600 dark:text-blue-400' },
                                                     { label: 'Staff',         value: staffCount,   color: 'text-gray-600 dark:text-gray-400' },
                                                 ].map(row => (
                                                     <div key={row.label} className="flex items-center justify-between py-1 border-b border-gray-200 dark:border-gray-700 last:border-0">

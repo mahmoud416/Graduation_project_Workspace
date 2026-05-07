@@ -385,7 +385,7 @@ async def delete_task_board_comment(
 
     role = (current_user.get("role") or "").lower()
     user_id = str(current_user.get("_id"))
-    if role not in {"admin", "sub_admin"} and comment.get("user_id") != user_id:
+    if role not in {"admin", "sub_manager"} and comment.get("user_id") != user_id:
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="You can only remove your own comment")
 
     attachments = comment.get("attachments", []) or []
@@ -436,8 +436,8 @@ def _ensure_project_visibility(project: dict[str, Any], current_user: dict[str, 
     if role == "admin":
         return
 
-    if role == "sub_admin":
-        if user_id in (project.get("sub_admin_ids") or []) or project.get("owner_id") == user_id:
+    if role == "sub_manager":
+        if user_id in (project.get("sub_manager_ids") or []) or project.get("owner_id") == user_id:
             return
 
     if user_id in (project.get("staff_ids") or []):
@@ -470,8 +470,8 @@ def _ensure_member_privileges(project: dict[str, Any], current_user: dict[str, A
     role = current_user.get("role")
     if role == "admin":
         return
-    if role == "sub_admin":
-        allowed_ids = project.get("sub_admin_ids") or []
+    if role == "sub_manager":
+        allowed_ids = project.get("sub_manager_ids") or []
         if current_user.get("_id") == project.get("owner_id") or current_user.get("_id") in allowed_ids:
             return
     raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Only admins or assigned sub-admins can manage members")
@@ -479,7 +479,7 @@ def _ensure_member_privileges(project: dict[str, Any], current_user: dict[str, A
 
 def _ensure_resource_access(resource: dict[str, Any], current_user: dict[str, Any]) -> None:
     role = (current_user.get("role") or "").lower()
-    if role in {"admin", "sub_admin"}:
+    if role in {"admin", "sub_manager"}:
         return
     viewer_id = str(current_user.get("_id"))
     if resource.get("uploaded_by") == viewer_id:
@@ -521,9 +521,9 @@ def _resolve_storage_path(relative_path: str) -> Path:
 
 
 def _ensure_task_privileges(project: dict[str, Any], current_user: dict[str, Any]) -> None:
-    """Only admin and sub_admin can create/edit/delete tasks."""
+    """Only admin and sub_manager can create/edit/delete tasks."""
     role = (current_user.get("role") or "").lower()
-    if role in {"admin", "sub_admin"}:
+    if role in {"admin", "sub_manager"}:
         return
     raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Only admins and sub-admins can manage tasks")
 

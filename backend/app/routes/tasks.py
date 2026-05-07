@@ -82,7 +82,7 @@ async def list_tasks(
     
     Task visibility based on role:
     - **Admin**: All tasks in the team
-    - **Sub-Admin**: Tasks of users they manage
+    - **Sub-Manager**: Tasks of users they manage
     - **Member**: Only their own tasks
     
     Query parameters:
@@ -229,7 +229,7 @@ async def assign_task(
     """
     Reassign a task to a different user.
     
-    Requires: Admin or Sub-Admin managing the current/new assignee.
+    Requires: Admin or Sub-Manager managing the current/new assignee.
     """
     try:
         task_obj_id = ObjectId(task_id)
@@ -249,14 +249,14 @@ async def assign_task(
             detail="Task not found"
         )
     
-    # Only Admin or managing Sub-Admin can reassign
+    # Only Admin or managing Sub-Manager can reassign
     team_id_str = str(task["team_id"])
     membership = await require_team_member(team_id_str, current_user, db)
     
-    if membership["role"] not in [Role.ADMIN, Role.SUBADMIN]:
+    if membership["role"] not in [Role.ADMIN, Role.SUBMANAGER]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only Admin or Sub-Admin can reassign tasks"
+            detail="Only Admin or Sub-Manager can reassign tasks"
         )
     
     try:

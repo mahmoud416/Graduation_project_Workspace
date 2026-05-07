@@ -135,9 +135,9 @@ const TaskFlowDetail = () => {
     const currentUserId = typeof window !== 'undefined' ? localStorage.getItem('userId') : null;
     const currentUserRole = typeof window !== 'undefined' ? localStorage.getItem('role') : null;
     const normalizedUserRole = (currentUserRole ?? '').toLowerCase();
-    const canModerateComments = normalizedUserRole === 'admin' || normalizedUserRole === 'sub_admin';
+    const canModerateComments = normalizedUserRole === 'admin' || normalizedUserRole === 'sub_manager';
     const isSystemCard = projectId === 'public-group' || projectId === 'all-sub-admin';
-    const canAddTask = normalizedUserRole === 'admin' || normalizedUserRole === 'sub_admin';
+    const canAddTask = normalizedUserRole === 'admin' || normalizedUserRole === 'sub_manager';
     const canDeleteComment = (comment: BoardComment) => {
         if (canModerateComments) {
             return true;
@@ -193,7 +193,7 @@ const TaskFlowDetail = () => {
     }, [projectId, memberSearch]);
 
     const greetEveryone = groupMembers.map((member) => member.name).join(', ');
-    const subAdminSalute = groupMembers
+    const subManagerSalute = groupMembers
         .filter((member) => member.role && member.role.toLowerCase().includes('sub'))
         .map((member) => member.name)
         .join(', ');

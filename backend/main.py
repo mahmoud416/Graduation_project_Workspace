@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 from app.core.config import settings
 from app.db.mongodb import connect_to_mongo, close_mongo_connection, get_database
 from app.db.collections import create_indexes
-from app.routes import auth, teams, memberships, tasks, projects, users, task_boards, ws, notifications, upload_rules, events, it
+from app.routes import auth, teams, memberships, tasks, projects, users, task_boards, ws, notifications, upload_rules, events, it, my_teams
 
 
 @asynccontextmanager
@@ -61,6 +61,7 @@ app.include_router(notifications.router, prefix="/api/v1")
 app.include_router(upload_rules.router, prefix="/api/v1")
 app.include_router(events.router, prefix="/api/v1")
 app.include_router(it.router, prefix="/api/v1")
+app.include_router(my_teams.router, prefix="/api/v1")
 
 
 @app.get("/")

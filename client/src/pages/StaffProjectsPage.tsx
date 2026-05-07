@@ -12,13 +12,13 @@ const authHeaders = () => ({
 });
 
 const mapProject = (proj: any): Project & { is_system_card?: boolean } => {
-    const subAdminEntries = Array.isArray(proj.sub_admins) ? proj.sub_admins : [];
-    const staffEntries    = Array.isArray(proj.staff)      ? proj.staff      : [];
-    const subAdminNames   = subAdminEntries.map((e: any) => e?.name).filter(Boolean);
-    const subAdminIds     = subAdminEntries.map((e: any) => e?._id || e?.id).filter((v: any) => typeof v === 'string');
-    const staffIds        = staffEntries.map((e: any)    => e?._id || e?.id).filter((v: any) => typeof v === 'string');
+    const subManagerEntries = Array.isArray(proj.sub_admins) ? proj.sub_admins : [];
+    const staffEntries      = Array.isArray(proj.staff)      ? proj.staff      : [];
+    const subManagerNames   = subManagerEntries.map((e: any) => e?.name).filter(Boolean);
+    const subManagerIds     = subManagerEntries.map((e: any) => e?._id || e?.id).filter((v: any) => typeof v === 'string');
+    const staffIds          = staffEntries.map((e: any)    => e?._id || e?.id).filter((v: any) => typeof v === 'string');
     const staffInitials: string[] = Array.isArray(proj.staff_initials) ? proj.staff_initials : [];
-    const subInitials     = subAdminEntries.map((e: any) => e?.initials).filter(Boolean);
+    const subInitials       = subManagerEntries.map((e: any) => e?.initials).filter(Boolean);
     const combinedInitials = [...subInitials, ...staffInitials].filter(Boolean);
     return {
         id: proj._id,
@@ -29,9 +29,9 @@ const mapProject = (proj: any): Project & { is_system_card?: boolean } => {
         team: (combinedInitials.length ? combinedInitials : ['TM']).slice(0, 4),
         updatedAt: proj.updated_at || new Date().toISOString(),
         updatedAtRaw: proj.updated_at || new Date().toISOString(),
-        subAdminName: subAdminNames[0],
-        subAdminNames,
-        subAdminIds,
+        subManagerName: subManagerNames[0],
+        subManagerNames: subManagerNames,
+        subManagerIds: subManagerIds,
         staffIds,
         isDefaultGroup: proj._id === 'public-group' || proj._id === 'all-sub-admin',
         is_system_card: proj.is_system_card ?? (proj._id === 'public-group' || proj._id === 'all-sub-admin'),
@@ -220,14 +220,14 @@ const StaffProjectsPage = () => {
                     ) : displayed.length === 0 ? (
                         <div className="rounded-2xl border border-dashed border-gray-300 dark:border-gray-700 p-12 text-center text-sm text-text-gray dark:text-gray-400">
                             {filter === 'ALL'
-                                ? 'No projects assigned to you yet. Ask your admin or sub-admin to add you to a project.'
+                                ? 'No projects assigned to you yet. Ask your admin or sub-manager to add you to a project.'
                                 : `No ${filter.toLowerCase()} projects.`}
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                             {displayed.map((project, pIdx) => {
                                 const cfg = statusConfig[project.status] ?? statusConfig.ACTIVE;
-                                const memberCount = (project.staffIds?.length ?? 0) + (project.subAdminIds?.length ?? 0);
+                                const memberCount = (project.staffIds?.length ?? 0) + (project.subManagerIds?.length ?? 0);
                                 return (
                                     <div
                                         key={project.id}

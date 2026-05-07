@@ -11,13 +11,13 @@ class MembershipCreate(BaseModel):
     """Schema for adding a member to a team."""
     user_id: str = Field(..., description="User ID to add to the team")
     role: Role = Field(default=Role.MEMBER, description="Role for the new member")
-    managed_by: Optional[str] = Field(None, description="Sub-Admin managing this member (for members only)")
+    managed_by: Optional[str] = Field(None, description="Sub-Manager managing this member (for members only)")
 
 
 class MembershipUpdate(BaseModel):
     """Schema for updating a member's role."""
     role: Role = Field(..., description="New role for the member")
-    managed_by: Optional[str] = Field(None, description="Sub-Admin managing this member")
+    managed_by: Optional[str] = Field(None, description="Sub-Manager managing this member")
 
 
 class MembershipResponse(BaseModel):

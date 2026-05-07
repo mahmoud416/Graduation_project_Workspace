@@ -28,11 +28,11 @@ class MembershipService:
             user_id: User ObjectId to add
             team_id: Team ObjectId
             role: Member's role in the team
-            managed_by: Optional Sub-Admin managing this member
-            
+            managed_by: Optional Sub-Manager managing this member
+
         Returns:
             Created membership document
-            
+
         Raises:
             ValueError: If user is already a member or user doesn't exist
         """
@@ -107,22 +107,22 @@ class MembershipService:
     async def get_managed_members(
         db,
         team_id: ObjectId,
-        subadmin_id: ObjectId
+        sub_manager_id: ObjectId
     ) -> List[Dict[str, Any]]:
         """
-        Get all members managed by a specific Sub-Admin.
-        
+        Get all members managed by a specific Sub-Manager.
+
         Args:
             db: Database instance
             team_id: Team ObjectId
-            subadmin_id: Sub-Admin User ObjectId
-            
+            sub_manager_id: Sub-Manager User ObjectId
+
         Returns:
             List of membership documents
         """
         return await db[MEMBERSHIPS_COLLECTION].find({
             "team_id": team_id,
-            "managed_by": subadmin_id
+            "managed_by": sub_manager_id
         }).to_list(length=None)
     
     @staticmethod
@@ -141,7 +141,7 @@ class MembershipService:
             user_id: User ObjectId
             team_id: Team ObjectId
             new_role: New role for the member
-            managed_by: Optional new managing Sub-Admin
+            managed_by: Optional new managing Sub-Manager
             
         Returns:
             Updated membership document or None if not found

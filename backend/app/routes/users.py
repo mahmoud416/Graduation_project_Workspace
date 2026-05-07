@@ -23,7 +23,7 @@ def _serialize_user(user_doc) -> UserResponse:
         name=user_doc.get("name") or user_doc.get("full_name", ""),
         role=user_doc.get("role", "staff"),
         admin_id=user_doc.get("admin_id"),
-        sub_admin_id=user_doc.get("sub_admin_id"),
+        sub_manager_id=user_doc.get("sub_manager_id"),
         phone=user_doc.get("phone"),
         status=user_doc.get("status"),
         created_at=user_doc.get("created_at"),
@@ -34,7 +34,7 @@ def _serialize_user(user_doc) -> UserResponse:
 
 @router.get("", response_model=List[UserResponse])
 async def list_users(
-    role: Optional[str] = Query(default=None, description="Filter by role: admin, sub_admin, staff"),
+    role: Optional[str] = Query(default=None, description="Filter by role: admin, sub_manager, staff"),
     current_user = Depends(get_current_user),
     db = Depends(get_database)
 ):
@@ -86,8 +86,8 @@ async def update_user(
         update_fields["status"] = payload.status
     if payload.admin_id is not None:
         update_fields["admin_id"] = payload.admin_id or None
-    if payload.sub_admin_id is not None:
-        update_fields["sub_admin_id"] = payload.sub_admin_id or None
+    if payload.sub_manager_id is not None:
+        update_fields["sub_manager_id"] = payload.sub_manager_id or None
 
     if not update_fields:
         raise HTTPException(

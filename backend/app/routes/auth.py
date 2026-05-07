@@ -28,7 +28,7 @@ async def register(
             full_name=user_data.full_name,
             role=user_data.role or "staff",
             admin_id=user_data.admin_id,
-            sub_admin_id=user_data.sub_admin_id,
+            sub_manager_id=user_data.sub_manager_id,
             phone=user_data.phone,
             status=user_data.status or "active"
         )

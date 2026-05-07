@@ -30,7 +30,7 @@ async def add_member(
     Requires: Admin role in the team.
     
     - Admin can add members with any role
-    - If adding a Member with a Sub-Admin manager, specify `managed_by`
+    - If adding a Member with a Sub-Manager manager, specify `managed_by`
     """
     try:
         team_obj_id = ObjectId(team_id)
@@ -158,7 +158,7 @@ async def remove_member(
     
     Requires:
     - Admin: Can remove anyone
-    - Sub-Admin: Can remove members they manage
+    - Sub-Manager: Can remove members they manage
     """
     try:
         team_obj_id = ObjectId(team_id)

@@ -35,7 +35,7 @@ def create_access_token(user_id: str, role: str, name: str) -> str:
 
     Args:
         user_id: MongoDB _id as string
-        role:    admin | sub_admin | staff
+        role:    admin | sub_manager | staff
         name:    Display name
 
     Returns:

@@ -22,7 +22,7 @@ class AuthService:
         full_name: str,
         role: str = "staff",
         admin_id: Optional[str] = None,
-        sub_admin_id: Optional[str] = None,
+        sub_manager_id: Optional[str] = None,
         phone: Optional[str] = None,
         status: str = "active"
     ) -> Dict[str, Any]:
@@ -39,7 +39,7 @@ class AuthService:
             full_name=full_name,
             role=role or "staff",
             admin_id=admin_id,
-            sub_admin_id=sub_admin_id,
+            sub_manager_id=sub_manager_id,
             phone=phone,
             status=status or "active"
         )

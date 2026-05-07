@@ -16,13 +16,13 @@ const authHeaders = () => ({
 });
 
 const mapProject = (proj: any): Project & { is_system_card?: boolean } => {
-    const subAdminEntries = Array.isArray(proj.sub_admins) ? proj.sub_admins : [];
+    const subManagerEntries = Array.isArray(proj.sub_admins) ? proj.sub_admins : [];
     const staffInitials = Array.isArray(proj.staff_initials) ? proj.staff_initials : [];
-    const subInitials = subAdminEntries.map((e: any) => e?.initials).filter(Boolean);
+    const subInitials = subManagerEntries.map((e: any) => e?.initials).filter(Boolean);
     const combinedInitials = [...subInitials, ...staffInitials].filter(Boolean);
     const updatedStamp = proj.updated_at || new Date().toISOString();
-    const subAdminNames = subAdminEntries.map((e: any) => e?.name).filter(Boolean) as string[];
-    const subAdminIds = subAdminEntries.map((e: any) => e?._id || e?.id).filter((v: any): v is string => typeof v === 'string');
+    const subManagerNames = subManagerEntries.map((e: any) => e?.name).filter(Boolean) as string[];
+    const subManagerIds = subManagerEntries.map((e: any) => e?._id || e?.id).filter((v: any): v is string => typeof v === 'string');
     const staffIds = (Array.isArray(proj.staff) ? proj.staff : []).map((e: any) => e?._id || e?.id).filter((v: any): v is string => typeof v === 'string');
     return {
         id: proj._id,
@@ -33,9 +33,9 @@ const mapProject = (proj: any): Project & { is_system_card?: boolean } => {
         team: (combinedInitials.length ? combinedInitials : ['TM']).slice(0, 5),
         updatedAt: updatedStamp,
         updatedAtRaw: updatedStamp,
-        subAdminName: subAdminNames[0],
-        subAdminNames,
-        subAdminIds,
+        subManagerName: subManagerNames[0],
+        subManagerNames: subManagerNames,
+        subManagerIds: subManagerIds,
         staffIds,
         isDefaultGroup: proj._id === 'public-group' || proj._id === 'all-sub-admin',
         is_system_card: proj.is_system_card ?? (proj._id === 'public-group' || proj._id === 'all-sub-admin'),
@@ -81,10 +81,10 @@ const relativeTime = (iso: string) => {
 // ─── Staff Dashboard ─────────────────────────────────────────────────────────
 
 const STAFF_SAMPLE_PROJECTS: Project[] = [
-    { id: 'social-assets', title: 'Social Media Assets', description: 'Standard templates and brand assets for multi-channel distribution.', status: 'ACTIVE', progress: 82, team: ['ED', 'JN', 'SK'], updatedAt: new Date(Date.now() - 35 * 60 * 1000).toISOString(), updatedAtRaw: new Date(Date.now() - 35 * 60 * 1000).toISOString(), subAdminName: 'Emily Davis', subAdminNames: [], subAdminIds: [], staffIds: [] },
-    { id: 'q4-campaign',    title: 'Q4 Marketing Campaign',  description: 'Developing cross-channel strategies for year-end growth.',              status: 'ACTIVE',  progress: 65,  team: ['AN', 'SV', 'VL'], updatedAt: new Date(Date.now() - 2 * 3600 * 1000).toISOString(), updatedAtRaw: new Date(Date.now() - 2 * 3600 * 1000).toISOString(), subAdminName: 'Alex Morgan', subAdminNames: [], subAdminIds: [], staffIds: [] },
-    { id: 'customer-portal', title: 'Customer Portal Update', description: 'Improving self-service tools for enterprise clients.',                  status: 'ACTIVE',  progress: 45,  team: ['NB', 'OC', 'WR'], updatedAt: new Date(Date.now() - 5 * 3600 * 1000).toISOString(), updatedAtRaw: new Date(Date.now() - 5 * 3600 * 1000).toISOString(), subAdminName: 'Nora Blake', subAdminNames: [], subAdminIds: [], staffIds: [] },
-    { id: 'annual-audit',   title: 'Annual Audit 2023',       description: 'Year-end financial and compliance review.',                             status: 'COMPLETED', progress: 100, team: ['FK', 'DZ'],        updatedAt: new Date('2023-10-20').toISOString(),                  updatedAtRaw: new Date('2023-10-20').toISOString(),                  subAdminName: 'Finance Pod',  subAdminNames: [], subAdminIds: [], staffIds: [] },
+    { id: 'social-assets', title: 'Social Media Assets', description: 'Standard templates and brand assets for multi-channel distribution.', status: 'ACTIVE', progress: 82, team: ['ED', 'JN', 'SK'], updatedAt: new Date(Date.now() - 35 * 60 * 1000).toISOString(), updatedAtRaw: new Date(Date.now() - 35 * 60 * 1000).toISOString(), subManagerName: 'Emily Davis', subManagerNames: [], subManagerIds: [], staffIds: [] },
+    { id: 'q4-campaign',    title: 'Q4 Marketing Campaign',  description: 'Developing cross-channel strategies for year-end growth.',              status: 'ACTIVE',  progress: 65,  team: ['AN', 'SV', 'VL'], updatedAt: new Date(Date.now() - 2 * 3600 * 1000).toISOString(), updatedAtRaw: new Date(Date.now() - 2 * 3600 * 1000).toISOString(), subManagerName: 'Alex Morgan', subManagerNames: [], subManagerIds: [], staffIds: [] },
+    { id: 'customer-portal', title: 'Customer Portal Update', description: 'Improving self-service tools for enterprise clients.',                  status: 'ACTIVE',  progress: 45,  team: ['NB', 'OC', 'WR'], updatedAt: new Date(Date.now() - 5 * 3600 * 1000).toISOString(), updatedAtRaw: new Date(Date.now() - 5 * 3600 * 1000).toISOString(), subManagerName: 'Nora Blake', subManagerNames: [], subManagerIds: [], staffIds: [] },
+    { id: 'annual-audit',   title: 'Annual Audit 2023',       description: 'Year-end financial and compliance review.',                             status: 'COMPLETED', progress: 100, team: ['FK', 'DZ'],        updatedAt: new Date('2023-10-20').toISOString(),                  updatedAtRaw: new Date('2023-10-20').toISOString(),                  subManagerName: 'Finance Pod',  subManagerNames: [], subManagerIds: [], staffIds: [] },
 ];
 
 const StaffProjectAssignments = () => {
@@ -376,7 +376,7 @@ const AdminDashboard = () => {
         totalCustom ? Math.round(customProjects.reduce((s, p) => s + p.progress, 0) / totalCustom) : 0,
     [customProjects, totalCustom]);
 
-    const subAdmins = useMemo(() => users.filter(u => u.role === 'sub_admin'), [users]);
+    const subManagers = useMemo(() => users.filter(u => u.role === 'sub_manager'), [users]);
     const staffMembers = useMemo(() => users.filter(u => u.role === 'staff'), [users]);
     const totalMembers = useMemo(() => users.filter(u => u.role !== 'admin').length, [users]);
 
@@ -438,7 +438,7 @@ const AdminDashboard = () => {
                         </div>
                     </div>
                     <div className="text-3xl font-bold text-text-dark dark:text-white">{loading ? '—' : totalMembers}</div>
-                    <p className="text-xs text-text-gray dark:text-gray-400 mt-1">{subAdmins.length} sub-admins · {staffMembers.length} staff</p>
+                    <p className="text-xs text-text-gray dark:text-gray-400 mt-1">{subManagers.length} sub-managers · {staffMembers.length} staff</p>
                 </div>
 
                 {/* Active Projects */}
@@ -523,7 +523,7 @@ const AdminDashboard = () => {
                         </p>
                         <div className="flex items-center justify-between text-xs text-text-gray dark:text-gray-400">
                             <span className="font-medium text-purple-600 group-hover:underline">Open board →</span>
-                            <span>{subAdmins.length} sub-admins access</span>
+                            <span>{subManagers.length} sub-managers access</span>
                         </div>
                     </div>
                 </div>
@@ -562,8 +562,8 @@ const AdminDashboard = () => {
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {recentProjects.map(project => {
-                                const leadLabel = project.subAdminNames?.length
-                                    ? (project.subAdminNames.length === 1 ? `Lead · ${project.subAdminNames[0]}` : `Leads · ${project.subAdminNames.slice(0, 2).join(', ')}${project.subAdminNames.length > 2 ? ` +${project.subAdminNames.length - 2}` : ''}`)
+                                const leadLabel = project.subManagerNames?.length
+                                    ? (project.subManagerNames.length === 1 ? `Lead · ${project.subManagerNames[0]}` : `Leads · ${project.subManagerNames.slice(0, 2).join(', ')}${project.subManagerNames.length > 2 ? ` +${project.subManagerNames.length - 2}` : ''}`)
                                     : null;
                                 return (
                                     <div
@@ -656,11 +656,11 @@ const AdminDashboard = () => {
                             <div className="space-y-3">
                                 {[...Array(3)].map((_, i) => <div key={i} className="h-10 bg-gray-100 dark:bg-gray-700 rounded-lg animate-pulse" />)}
                             </div>
-                        ) : subAdmins.length === 0 ? (
-                            <p className="text-xs text-text-gray dark:text-gray-400">No sub-admins created yet.</p>
+                        ) : subManagers.length === 0 ? (
+                            <p className="text-xs text-text-gray dark:text-gray-400">No sub-managers created yet.</p>
                         ) : (
                             <div className="space-y-2.5 max-h-52 overflow-y-auto pr-1">
-                                {subAdmins.map((u, i) => (
+                                {subManagers.map((u, i) => (
                                     <div key={u._id} className="flex items-center gap-3">
                                         <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${getAvatarColor(i)} flex items-center justify-center text-white text-xs font-semibold flex-shrink-0`}>
                                             {(u.name || u.email || 'SA').slice(0, 2).toUpperCase()}
@@ -738,8 +738,8 @@ const AdminDashboard = () => {
                                         </td>
                                         <td className="py-3 pr-4 text-text-gray dark:text-gray-400 truncate max-w-[200px]">{u.email}</td>
                                         <td className="py-3">
-                                            <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase ${u.role === 'sub_admin' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>
-                                                {u.role === 'sub_admin' ? 'Sub-Admin' : 'Staff'}
+                                            <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase ${u.role === 'sub_manager' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>
+                                                {u.role === 'sub_manager' ? 'Sub-Manager' : 'Staff'}
                                             </span>
                                         </td>
                                     </tr>

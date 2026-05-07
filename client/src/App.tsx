@@ -15,7 +15,9 @@ import TaskFlowDetail from './pages/TaskFlowDetail';
 import CreateTask from './pages/CreateTask';
 import ConfigurationPage from './pages/ConfigurationPage';
 import StaffProjectsPage from './pages/StaffProjectsPage';
+import MyTeamsPage from './pages/MyTeamsPage';
 import ITPortal from './pages/ITPortal';
+import AdminPortal from './pages/AdminPortal';
 import ChatbotWidget from './components/ChatbotWidget';
 
 const USER_UPDATE_EVENT = 'workspace:user-update';
@@ -47,19 +49,22 @@ function App() {
     return page;
   };
 
-  const restrictForSubAdminOnly = (page: JSX.Element) => {
-    if (role !== 'sub_admin') {
+  const restrictForSubManagerOnly = (page: JSX.Element) => {
+    if (role !== 'sub_manager') {
       return <Navigate to="/dashboard" replace />;
     }
     return page;
   };
 
-  const redirectSubAdminDashboard = (page: JSX.Element) => {
-    if (role === 'sub_admin') {
-      return <Navigate to="/subadmin" replace />;
+  const redirectSubManagerDashboard = (page: JSX.Element) => {
+    if (role === 'sub_manager') {
+      return <Navigate to="/sub-manager" replace />;
     }
     if (role === 'it') {
       return <Navigate to="/it-portal" replace />;
+    }
+    if (role === 'admin') {
+      return <Navigate to="/admin-portal" replace />;
     }
     return page;
   };
@@ -70,21 +75,23 @@ function App() {
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/signup" element={<SignUp />} />
         <Route path="/login" element={<Login />} />
-        <Route path="/dashboard" element={redirectSubAdminDashboard(<Dashboard />)} />
+        <Route path="/dashboard" element={redirectSubManagerDashboard(<Dashboard />)} />
         <Route path="/projects" element={restrictForStaff(<Projects />)} />
         <Route path="/tasks" element={restrictForStaff(<TasksPage />)} />
         <Route path="/calendar" element={<CalendarPage />} />
         <Route path="/team" element={restrictForStaff(<TeamPage />)} />
         <Route path="/reports" element={restrictForStaff(<ReportsPage />)} />
         <Route path="/settings" element={<SettingsPage />} />
-        <Route path="/taskmaster" element={restrictForSubAdminOnly(<TaskMasterDashboard />)} />
-        <Route path="/subadmin" element={<SubAdminPortal />} />
+        <Route path="/taskmaster" element={restrictForSubManagerOnly(<TaskMasterDashboard />)} />
+        <Route path="/sub-manager" element={<SubAdminPortal />} />
         <Route path="/taskflow" element={<TaskFlowDetail />} />
         <Route path="/create-task" element={<CreateTask />} />
         <Route path="/task-master" element={<TaskMasterDashboard />} />
         <Route path="/configuration" element={<ConfigurationPage />} />
         <Route path="/my-projects" element={<StaffProjectsPage />} />
+        <Route path="/my-teams" element={<MyTeamsPage />} />
         <Route path="/it-portal" element={<ITPortal />} />
+        <Route path="/admin-portal" element={<AdminPortal />} />
       </Routes>
       {role && <ChatbotWidget />}
     </BrowserRouter>

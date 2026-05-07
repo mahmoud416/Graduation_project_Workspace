@@ -14,7 +14,7 @@ interface TeamMember {
     created_at?: string | null;
 }
 
-const ROLES_ORDER: Record<string, number> = { admin: 0, sub_admin: 1, staff: 2 };
+const ROLES_ORDER: Record<string, number> = { admin: 0, sub_manager: 1, staff: 2 };
 
 const formatRole = (role: string) =>
     role.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
@@ -43,7 +43,7 @@ const getAvatarGradient = (id: string) => {
 
 const ROLE_BADGE: Record<string, string> = {
     admin: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
-    sub_admin: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+    sub_manager: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
     staff: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
 };
 
@@ -94,7 +94,7 @@ const TeamPage = () => {
     const stats = {
         total: members.length,
         admins: members.filter((m) => m.role === 'admin').length,
-        subAdmins: members.filter((m) => m.role === 'sub_admin').length,
+        subManagers: members.filter((m) => m.role === 'sub_manager').length,
         staff: members.filter((m) => m.role === 'staff').length,
     };
 
@@ -138,8 +138,8 @@ const TeamPage = () => {
                                 ),
                             },
                             {
-                                label: 'Sub-Admins',
-                                value: stats.subAdmins,
+                                label: 'Sub-Managers',
+                                value: stats.subManagers,
                                 icon: (
                                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
@@ -201,7 +201,7 @@ const TeamPage = () => {
                         >
                             <option value="all">All Roles</option>
                             <option value="admin">Admin</option>
-                            <option value="sub_admin">Sub Admin</option>
+                            <option value="sub_manager">Sub Manager</option>
                             <option value="staff">Staff</option>
                         </select>
 

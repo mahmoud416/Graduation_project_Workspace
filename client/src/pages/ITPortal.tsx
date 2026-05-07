@@ -23,8 +23,31 @@ interface UserRow {
     status: string;
     created_at?: string;
     last_login?: string;
+    last_seen?: string;
     login_history: LoginEntry[];
-}
+}   
+
+// A user is considered online if their last_seen is within the last 5 minutes.
+const getPresence = (last_seen?: string): 'online' | 'away' | 'offline' => {
+    if (!last_seen) return 'offline';
+    const diff = Date.now() - new Date(last_seen).getTime();
+    const minutes = diff / 60000;
+    if (minutes < 5)  return 'online';
+    if (minutes < 30) return 'away';
+    return 'offline';
+};
+
+const presenceBadge: Record<string, string> = {
+    online:  'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300',
+    away:    'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300',
+    offline: 'bg-gray-100 dark:bg-gray-700/40 text-gray-500 dark:text-gray-400',
+};
+
+const presenceDot: Record<string, string> = {
+    online:  'bg-emerald-500',
+    away:    'bg-amber-400',
+    offline: 'bg-gray-400',
+};
 
 interface TaskRow {
     _id: string;
@@ -43,13 +66,13 @@ interface CommentRow {
     project_id?: string;
 }
 
-const ROLES = ['staff', 'sub_admin', 'admin', 'it'] as const;
+const ROLES = ['staff', 'sub_manager', 'admin', 'it'] as const;
 
 const roleBadge = (role: string) => {
     const map: Record<string, string> = {
         it:        'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300',
         admin:     'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300',
-        sub_admin: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300',
+        sub_manager: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300',
         staff:     'bg-gray-100 dark:bg-gray-700/40 text-gray-600 dark:text-gray-300',
     };
     return map[role] ?? map.staff;
@@ -190,12 +213,14 @@ export default function ITPortal() {
     ];
 
     return (
-        <div className="flex h-screen bg-gray-50 dark:bg-gray-900 overflow-hidden">
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
             <Sidebar />
-            <div className="flex-1 flex flex-col overflow-hidden">
-                <Header title="IT Portal" userName={userName} />
+            <Header title="IT Portal" />
 
-                <main className="flex-1 overflow-y-auto p-6">
+            <main
+                className="overflow-y-auto p-6"
+                style={{ marginLeft: 'var(--sidebar-width)', paddingTop: 'calc(4rem + 1.5rem)' }}
+            >
 
                     {/* Tabs */}
                     <div className="flex gap-1 mb-6 border-b border-gray-200 dark:border-gray-700">
@@ -228,7 +253,7 @@ export default function ITPortal() {
 
                     {/* ── Users tab ── */}
                     {tab === 'users' && !loading && (
-                        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden">
+                        <div className="w-full bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-x-auto">
                             <table className="w-full text-sm">
                                 <thead className="bg-gray-50 dark:bg-gray-700/50 text-gray-500 dark:text-gray-400 uppercase text-xs">
                                     <tr>
@@ -273,9 +298,15 @@ export default function ITPortal() {
                                                 )}
                                             </td>
                                             <td className="px-4 py-3">
-                                                <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${statusBadge(u.status)}`}>
-                                                    {u.status}
-                                                </span>
+                                                {(() => {
+                                                    const p = getPresence(u.last_seen);
+                                                    return (
+                                                        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${presenceBadge[p]}`}>
+                                                            <span className={`w-1.5 h-1.5 rounded-full ${presenceDot[p]}`} />
+                                                            {p}
+                                                        </span>
+                                                    );
+                                                })()}
                                             </td>
                                             <td className="px-4 py-3 text-gray-500 dark:text-gray-400 whitespace-nowrap">{fmt(u.last_login)}</td>
                                             <td className="px-4 py-3">
@@ -308,7 +339,7 @@ export default function ITPortal() {
 
                     {/* ── Tasks tab ── */}
                     {tab === 'tasks' && !loading && (
-                        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden">
+                        <div className="w-full bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-x-auto">
                             <table className="w-full text-sm">
                                 <thead className="bg-gray-50 dark:bg-gray-700/50 text-gray-500 dark:text-gray-400 uppercase text-xs">
                                     <tr>
@@ -409,7 +440,6 @@ export default function ITPortal() {
                         </div>
                     )}
                 </main>
-            </div>
 
             {/* ── Login History Drawer ── */}
             {drawerUser && (

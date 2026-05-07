@@ -47,11 +47,16 @@ async def create_indexes(db):
     # Supports IT-layer queries that sort or filter by login timestamp across all users.
     await _safe_create_index(db[USERS_COLLECTION], [("login_history.timestamp", -1)])
 
-    # memberships — compound unique per project
+    # memberships — compound unique per project.
+    # partialFilterExpression ensures only documents where project_id is a
+    # real ObjectId are covered by this index, so membership rows that have
+    # project_id: null (system/default groups) are excluded and cannot trigger
+    # a DuplicateKeyError during index build.
     await _safe_create_index(
         db[MEMBERSHIPS_COLLECTION],
         [("user_id", 1), ("project_id", 1)],
-        unique=True
+        unique=True,
+        partialFilterExpression={"project_id": {"$type": "objectId"}},
     )
     await _safe_create_index(db[MEMBERSHIPS_COLLECTION], "project_id")
     await _safe_create_index(db[MEMBERSHIPS_COLLECTION], "managed_by")
@@ -75,7 +80,7 @@ async def create_indexes(db):
 
     # projects
     await _safe_create_index(db[PROJECTS_COLLECTION], "owner_id")
-    await _safe_create_index(db[PROJECTS_COLLECTION], "sub_admin_ids")
+    await _safe_create_index(db[PROJECTS_COLLECTION], "sub_manager_ids")
     await _safe_create_index(db[PROJECTS_COLLECTION], "staff_ids")
     await _safe_create_index(db[PROJECTS_COLLECTION], "type")
 

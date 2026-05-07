@@ -28,9 +28,9 @@ export interface Project {
     team: string[];
     updatedAt: string;
     updatedAtRaw?: string;
-    subAdminName?: string;
-    subAdminNames?: string[];
-    subAdminIds?: string[];
+    subManagerName?: string;
+    subManagerNames?: string[];
+    subManagerIds?: string[];
     staffIds?: string[];
     isDefaultGroup?: boolean;
     is_system_card?: boolean;

@@ -16,7 +16,7 @@ class UserModel:
         full_name: str,
         role: str = "staff",
         admin_id: Optional[str] = None,
-        sub_admin_id: Optional[str] = None,
+        sub_manager_id: Optional[str] = None,
         phone: Optional[str] = None,
         status: str = "active"
     ) -> dict:
@@ -27,11 +27,12 @@ class UserModel:
             "name":          full_name,
             "role":          role or "staff",
             "admin_id":      admin_id,
-            "sub_admin_id":  sub_admin_id,
+            "sub_manager_id":  sub_manager_id,
             "phone":         phone,
             "status":        status or "active",
             "created_at":    datetime.utcnow(),
             "last_login":    None,
+            "last_seen":     None,
             # Ordered list of login timestamps for the IT oversight layer.
             # Capped at 50 entries via $slice in AuthService — oldest entries
             # are dropped automatically, so the array never grows unbounded.

@@ -111,9 +111,9 @@ const Sidebar = () => {
             ];
         }
 
-        if (role === 'sub_admin') {
+        if (role === 'sub_manager') {
             return [
-                { iconKey: 'portal', label: 'Dashboard', path: '/subadmin' },
+                { iconKey: 'portal', label: 'Dashboard', path: '/sub-manager' },
                 { iconKey: 'projects', label: 'Projects', path: '/projects' },
                 { iconKey: 'taskmaster', label: 'Task Master', path: '/taskmaster' },
                 { iconKey: 'calendar', label: 'Calendar', path: '/calendar' },
@@ -125,10 +125,11 @@ const Sidebar = () => {
 
         if (role === 'staff') {
             return [
-                { iconKey: 'dashboard', label: 'Dashboard',  path: '/dashboard' },
+                { iconKey: 'dashboard', label: 'Dashboard',  path: '/dashboard'  },
                 { iconKey: 'projects',  label: 'My Projects', path: '/my-projects' },
-                { iconKey: 'calendar',  label: 'Calendar',   path: '/calendar'  },
-                { iconKey: 'settings',  label: 'Settings',   path: '/settings'  },
+                { iconKey: 'team',      label: 'My Teams',   path: '/my-teams'   },
+                { iconKey: 'calendar',  label: 'Calendar',   path: '/calendar'   },
+                { iconKey: 'settings',  label: 'Settings',   path: '/settings'   },
             ];
         }
 

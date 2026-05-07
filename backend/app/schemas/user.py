@@ -19,7 +19,7 @@ class UserCreate(BaseModel):
     full_name: str = Field(..., min_length=1, max_length=100)
     role: Optional[str] = Field("staff", description="Role controls which dashboard to open")
     admin_id: Optional[str] = None
-    sub_admin_id: Optional[str] = None
+    sub_manager_id: Optional[str] = None
     phone: Optional[str] = None
     status: Optional[str] = "active"
 
@@ -29,7 +29,7 @@ class UserUpdate(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=100)
     role: Optional[str] = None
     admin_id: Optional[str] = None
-    sub_admin_id: Optional[str] = None
+    sub_manager_id: Optional[str] = None
     phone: Optional[str] = None
     status: Optional[str] = None
 
@@ -53,7 +53,7 @@ class UserResponse(BaseModel):
     name: str = Field(..., alias="name")
     role: str
     admin_id: Optional[str] = None
-    sub_admin_id: Optional[str] = None
+    sub_manager_id: Optional[str] = None
     phone: Optional[str] = None
     status: Optional[str] = None
     created_at: Optional[datetime] = None

@@ -22,7 +22,7 @@ from app.db.collections import (
     USERS_COLLECTION,
 )
 from app.db.mongodb import get_database
-from app.dependencies.rbac import require_it_role
+from app.dependencies.rbac import require_it_role, require_admin_or_it
 from app.models.user import UserModel
 from app.core.security import hash_password
 
@@ -46,9 +46,12 @@ def _serialize_user(doc: Dict[str, Any], include_history: bool = False) -> dict:
         "status":       doc.get("status", "active"),
         "phone":        doc.get("phone"),
         "admin_id":     doc.get("admin_id"),
-        "sub_admin_id": doc.get("sub_admin_id"),
+        "sub_manager_id": doc.get("sub_manager_id"),
         "created_at":   doc.get("created_at"),
         "last_login":   doc.get("last_login"),
+        # last_seen is updated on every authenticated request — used by the
+        # IT portal to derive the user's online/offline presence status.
+        "last_seen":    doc.get("last_seen"),
         "is_active":    doc.get("is_active", True),
         "login_history": [],
     }
@@ -61,12 +64,12 @@ def _serialize_user(doc: Dict[str, Any], include_history: bool = False) -> dict:
 
 # ── user endpoints ────────────────────────────────────────────────────────────
 
-@router.get("/users", summary="List all users (IT)")
+@router.get("/users", summary="List all users (IT / Admin)")
 async def list_all_users(
     role: Optional[str] = Query(default=None, description="Filter by role"),
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=200),
-    _it: Dict[str, Any] = Depends(require_it_role),
+    _it: Dict[str, Any] = Depends(require_admin_or_it),
     db=Depends(get_database),
 ) -> List[dict]:
     """
@@ -90,10 +93,10 @@ async def list_all_users(
     return [_serialize_user(d) for d in docs]
 
 
-@router.get("/users/{user_id}", summary="Get single user with full login history (IT)")
+@router.get("/users/{user_id}", summary="Get single user with full login history (IT / Admin)")
 async def get_user_detail(
     user_id: str,
-    _it: Dict[str, Any] = Depends(require_it_role),
+    _it: Dict[str, Any] = Depends(require_admin_or_it),
     db=Depends(get_database),
 ) -> dict:
     """
@@ -114,10 +117,10 @@ async def get_user_detail(
     return _serialize_user(doc, include_history=True)
 
 
-@router.post("/users", status_code=status.HTTP_201_CREATED, summary="Create a user (IT)")
+@router.post("/users", status_code=status.HTTP_201_CREATED, summary="Create a user (IT / Admin)")
 async def create_user(
     payload: Dict[str, Any],
-    _it: Dict[str, Any] = Depends(require_it_role),
+    _it: Dict[str, Any] = Depends(require_admin_or_it),
     db=Depends(get_database),
 ) -> dict:
     """
@@ -152,7 +155,7 @@ async def create_user(
         full_name=full_name,
         role=payload.get("role") or "staff",
         admin_id=payload.get("admin_id"),
-        sub_admin_id=payload.get("sub_admin_id"),
+        sub_manager_id=payload.get("sub_manager_id"),
         phone=payload.get("phone"),
         status=payload.get("status") or "active",
     )
@@ -161,11 +164,11 @@ async def create_user(
     return _serialize_user(doc)
 
 
-@router.patch("/users/{user_id}", summary="Update user role / status (IT)")
+@router.patch("/users/{user_id}", summary="Update user role / status (IT / Admin)")
 async def update_user(
     user_id: str,
     payload: Dict[str, Any],
-    _it: Dict[str, Any] = Depends(require_it_role),
+    _it: Dict[str, Any] = Depends(require_admin_or_it),
     db=Depends(get_database),
 ) -> dict:
     """
@@ -201,11 +204,11 @@ async def update_user(
 
 # ── task endpoints ────────────────────────────────────────────────────────────
 
-@router.get("/tasks", summary="List all tasks across all teams (IT)")
+@router.get("/tasks", summary="List all tasks across all teams (IT / Admin)")
 async def list_all_tasks(
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=100, ge=1, le=500),
-    _it: Dict[str, Any] = Depends(require_it_role),
+    _it: Dict[str, Any] = Depends(require_admin_or_it),
     db=Depends(get_database),
 ) -> List[dict]:
     """

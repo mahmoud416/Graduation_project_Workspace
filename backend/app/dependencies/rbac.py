@@ -112,7 +112,7 @@ async def can_manage_user(
     Check if current user can manage the target user.
     
     Admin can manage anyone.
-    Sub-Admin can manage only their assigned members.
+    Sub-Manager can manage only their assigned members.
     
     Args:
         team_id: Team ID
@@ -142,8 +142,8 @@ async def can_manage_user(
     if current_membership["role"] == Role.ADMIN:
         return True
     
-    # Sub-Admins can only manage their assigned members
-    if current_membership["role"] == Role.SUBADMIN:
+    # Sub-Managers can only manage their assigned members
+    if current_membership["role"] == Role.SUBMANAGER:
         target_membership = await db[MEMBERSHIPS_COLLECTION].find_one({
             "user_id": target_obj_id,
             "team_id": team_obj_id
@@ -155,7 +155,7 @@ async def can_manage_user(
                 detail="Target user is not a member of this team"
             )
         
-        # Check if this member is managed by the current sub-admin
+        # Check if this member is managed by the current sub-manager
         if target_membership.get("managed_by") == current_user["_id"]:
             return True
     
@@ -184,6 +184,24 @@ async def require_it_role(
     return current_user
 
 
+async def require_admin_or_it(
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """
+    Gate that allows both 'admin' and 'it' system roles.
+
+    Admins share the same cross-team read access as IT for users and tasks,
+    but are intentionally excluded from the messages (comments) endpoint —
+    only IT can read all system-wide communications.
+    """
+    if current_user.get("role") not in ("admin", "it"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin or IT privileges required for this action"
+        )
+    return current_user
+
+
 async def filter_visible_tasks(
     team_id: str,
     current_user: Dict[str, Any] = Depends(get_current_user),
@@ -193,7 +211,7 @@ async def filter_visible_tasks(
     Build MongoDB filter for tasks visible to the current user based on their role.
     
     - Admin: All tasks in the team
-    - Sub-Admin: Tasks assigned to users they manage
+    - Sub-Manager: Tasks assigned to users they manage
     - Member: Only their own tasks
     
     Args:
@@ -221,9 +239,9 @@ async def filter_visible_tasks(
     if membership["role"] == Role.ADMIN:
         return base_filter
     
-    # Sub-Admin sees tasks of users they manage
-    if membership["role"] == Role.SUBADMIN:
-        # Find all members managed by this sub-admin
+    # Sub-Manager sees tasks of users they manage
+    if membership["role"] == Role.SUBMANAGER:
+        # Find all members managed by this sub-manager
         managed_memberships = await db[MEMBERSHIPS_COLLECTION].find({
             "team_id": team_obj_id,
             "managed_by": current_user["_id"]

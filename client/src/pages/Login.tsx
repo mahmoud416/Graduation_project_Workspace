@@ -39,8 +39,8 @@ const Login = () => {
 
             if (data.role === 'admin') {
                 navigate('/dashboard', { replace: true });
-            } else if (data.role === 'sub_admin') {
-                navigate('/subadmin', { replace: true });
+            } else if (data.role === 'sub_manager') {
+                navigate('/sub-manager', { replace: true });
             } else {
                 navigate('/dashboard', { replace: true });
             }
