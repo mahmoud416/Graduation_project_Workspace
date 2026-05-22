@@ -11,10 +11,12 @@ import {
     fetchQualityOverview,
     fetchQualityStandards,
     createQualityStandard,
-    triggerAIAnalysis,
     downloadQualityReport,
+    fetchReportTypes,
+    evaluateTask,
     type CreateStandardPayload,
-    type AIAnalysisPayload,
+    type ReportType,
+    type EvaluationResult,
 } from '../services/qcService';
 
 const API_BASE = (import.meta.env.VITE_API_BASE ?? 'http://localhost:8000/api/v1').replace(/\/$/, '');
@@ -252,15 +254,6 @@ const QCDashboard = () => {
         }
     };
 
-    const handleRunAnalysis = async (payload: AIAnalysisPayload) => {
-        try {
-            await triggerAIAnalysis(payload);
-            setToast({ intent: 'success', message: 'AI evaluation queued' });
-            setAiOpen(false);
-        } catch (err) {
-            setToast({ intent: 'error', message: err instanceof Error ? err.message : 'Unable to start AI review' });
-        }
-    };
 
     const handleExport = async (format: 'csv' | 'pdf') => {
         try {
@@ -485,7 +478,6 @@ const QCDashboard = () => {
             <AIReviewModal
                 isOpen={aiOpen}
                 onClose={() => setAiOpen(false)}
-                onSubmit={handleRunAnalysis}
                 standards={standards}
                 projectOptions={projectOptions}
                 projectsLoading={projectsLoading}
@@ -605,14 +597,13 @@ const CreateStandardModal = ({ isOpen, onClose, onSubmit }: CreateStandardModalP
 interface AIReviewModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSubmit: (payload: AIAnalysisPayload) => Promise<void>;
     standards: QualityStandard[];
     projectOptions: ProjectOption[];
     projectsLoading: boolean;
     projectError?: string | null;
 }
 
-const AIReviewModal = ({ isOpen, onClose, onSubmit, standards, projectOptions, projectsLoading, projectError }: AIReviewModalProps) => {
+const AIReviewModal = ({ isOpen, onClose, standards, projectOptions, projectsLoading, projectError }: AIReviewModalProps) => {
     const [taskTitle, setTaskTitle] = useState('');
     const [taskId, setTaskId] = useState('');
     const [projectId, setProjectId] = useState('');
@@ -621,8 +612,15 @@ const AIReviewModal = ({ isOpen, onClose, onSubmit, standards, projectOptions, p
     const [selectedStandards, setSelectedStandards] = useState<string[]>([]);
     const [docs, setDocs] = useState<File[]>([]);
     const [images, setImages] = useState<File[]>([]);
+    const [reportTypeKey, setReportTypeKey] = useState('');
+    const [reportTypes, setReportTypes] = useState<ReportType[]>([]);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [result, setResult] = useState<EvaluationResult | null>(null);
+
+    useEffect(() => {
+        fetchReportTypes().then(setReportTypes).catch(() => {});
+    }, []);
 
     useEffect(() => {
         if (!isOpen) return;
@@ -631,10 +629,12 @@ const AIReviewModal = ({ isOpen, onClose, onSubmit, standards, projectOptions, p
         setProjectId('');
         setTaskDescription('');
         setNotes('');
+        setReportTypeKey('');
         setSelectedStandards(standards.slice(0, 2).map((std) => std.id));
         setDocs([]);
         setImages([]);
         setError(null);
+        setResult(null);
     }, [isOpen, standards]);
 
     useEffect(() => {
@@ -644,25 +644,39 @@ const AIReviewModal = ({ isOpen, onClose, onSubmit, standards, projectOptions, p
 
     if (!isOpen) return null;
 
+    const toBase64 = (file: File): Promise<string> =>
+        new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve((reader.result as string).split(',')[1] ?? '');
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+
     const handleSubmit = async (event: FormEvent) => {
         event.preventDefault();
         setSubmitting(true);
         setError(null);
+        setResult(null);
         try {
-            const generatedId =
-                taskId || (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `task-${Date.now()}`);
-            await onSubmit({
-                taskId: generatedId,
-                projectId: projectId || (projectOptions[0]?.id ?? ''),
-                taskTitle,
-                taskDescription,
-                descriptionOverride: notes,
-                standardIds: selectedStandards,
-                documentFiles: docs,
-                imageFiles: images,
+            const imageBase64 = await Promise.all(images.map(toBase64));
+            const fileTexts = await Promise.all(
+                docs.map(async (f) => ({
+                    file_name: f.name,
+                    content: await f.text(),
+                    file_type: 'document',
+                }))
+            );
+            const data = await evaluateTask({
+                task_title: taskTitle,
+                task_description: taskDescription + (notes ? `\n\nReviewer notes: ${notes}` : ''),
+                task_id: taskId || undefined,
+                report_type: reportTypeKey || undefined,
+                files: fileTexts,
+                image_base64: imageBase64,
             });
+            setResult(data);
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Unable to queue AI review');
+            setError(err instanceof Error ? err.message : 'Unable to run AI evaluation');
         } finally {
             setSubmitting(false);
         }
@@ -714,6 +728,31 @@ const AIReviewModal = ({ isOpen, onClose, onSubmit, standards, projectOptions, p
                         <input value={taskDescription} onChange={(e) => setTaskDescription(e.target.value)} className="input-field bg-white/5 border-white/10 text-white" placeholder="Optional context" />
                     </label>
                 </div>
+                {/* Report Type */}
+                <label className="space-y-2 text-sm">
+                    <span className="flex items-center gap-2">
+                        نوع التقرير
+                        <span className="text-white/40 text-xs">(اختياري — يحدد معايير التحقق)</span>
+                    </span>
+                    <select
+                        value={reportTypeKey}
+                        onChange={(e) => setReportTypeKey(e.target.value)}
+                        className="input-field bg-white/5 border-white/10 text-white w-full"
+                    >
+                        <option value="">— بدون تصنيف —</option>
+                        {reportTypes.map((rt) => (
+                            <option key={rt.key} value={rt.key}>
+                                {rt.name_ar} — {rt.name_en}
+                            </option>
+                        ))}
+                    </select>
+                    {reportTypeKey && (
+                        <p className="text-xs text-white/50 mt-1">
+                            {reportTypes.find((r) => r.key === reportTypeKey)?.description}
+                        </p>
+                    )}
+                </label>
+
                 <label className="space-y-2 text-sm">
                     <span>Reviewer notes sent to AI</span>
                     <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} className="input-field bg-white/5 border-white/10 text-white" placeholder="Highlight risk areas, brand rules, or acceptance criteria." />
@@ -744,8 +783,81 @@ const AIReviewModal = ({ isOpen, onClose, onSubmit, standards, projectOptions, p
                     </label>
                 </div>
                 {error && <p className="text-sm text-rose-400">{error}</p>}
+
+                {/* AI Evaluation Result */}
+                {result && (
+                    <div className="rounded-2xl border border-white/10 bg-white/5 p-5 space-y-4">
+                        <div className="flex items-center justify-between">
+                            <p className="text-xs uppercase tracking-[0.4em] text-white/50">نتيجة التقييم</p>
+                            <span className={`text-2xl font-bold ${result.compliance_score >= 70 ? 'text-emerald-400' : result.compliance_score >= 40 ? 'text-amber-400' : 'text-rose-400'}`}>
+                                {result.compliance_score.toFixed(0)}%
+                            </span>
+                        </div>
+
+                        {/* Report Type Compliance Banner */}
+                        {result.report_type_compliance && (
+                            <div className={`rounded-xl p-4 border ${result.report_type_compliance.is_compliant ? 'bg-emerald-900/30 border-emerald-500/40' : 'bg-rose-900/30 border-rose-500/40'}`}>
+                                <div className="flex items-center gap-2 mb-2">
+                                    <span className={`text-lg ${result.report_type_compliance.is_compliant ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                        {result.report_type_compliance.is_compliant ? '✓' : '✗'}
+                                    </span>
+                                    <p className={`text-sm font-bold ${result.report_type_compliance.is_compliant ? 'text-emerald-300' : 'text-rose-300'}`}>
+                                        {result.report_type_compliance.is_compliant
+                                            ? `مطابق لمواصفات "${result.report_type_name_ar}"`
+                                            : `غير مطابق لمواصفات "${result.report_type_name_ar}"`}
+                                    </p>
+                                </div>
+                                {result.report_type_compliance.compliance_note && (
+                                    <p className="text-xs text-white/70 leading-relaxed">{result.report_type_compliance.compliance_note}</p>
+                                )}
+                                {!result.report_type_compliance.is_compliant && result.report_type_compliance.missing_elements.length > 0 && (
+                                    <div className="mt-3">
+                                        <p className="text-xs font-semibold text-rose-300 mb-1">العناصر الناقصة:</p>
+                                        <ul className="space-y-1">
+                                            {result.report_type_compliance.missing_elements.map((el, i) => (
+                                                <li key={i} className="flex items-start gap-2 text-xs text-white/70">
+                                                    <span className="text-rose-400 mt-0.5">•</span>
+                                                    {el}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Failed standards */}
+                        {result.failed_standards.length > 0 && (
+                            <div className="space-y-2">
+                                <p className="text-xs font-semibold text-rose-300 uppercase tracking-wide">معايير فاشلة ({result.failed_standards.length})</p>
+                                {result.failed_standards.map((f, i) => (
+                                    <div key={i} className="flex items-start gap-2 p-3 rounded-xl bg-rose-900/20 border border-rose-500/20">
+                                        <span className="text-rose-400 text-xs mt-0.5 flex-shrink-0">✗</span>
+                                        <div>
+                                            <p className="text-xs font-semibold text-rose-200">{f.rule}</p>
+                                            <p className="text-xs text-white/60 mt-0.5">{f.reason}</p>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Suggestions */}
+                        {result.suggestions.length > 0 && (
+                            <div className="space-y-1">
+                                <p className="text-xs font-semibold text-cyan-300 uppercase tracking-wide">اقتراحات التحسين</p>
+                                {result.suggestions.map((s, i) => (
+                                    <p key={i} className="text-xs text-white/70 flex items-start gap-2">
+                                        <span className="text-cyan-400 mt-0.5">→</span> {s}
+                                    </p>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 <button type="submit" disabled={submitting} className="w-full rounded-2xl py-3 font-semibold text-base text-white bg-gradient-to-r from-blue-500 to-teal-400 disabled:opacity-60">
-                    {submitting ? 'Dispatching…' : 'Send to AI pipeline'}
+                    {submitting ? 'جاري التحليل…' : result ? 'إعادة التقييم' : 'إرسال للـ AI'}
                 </button>
             </form>
         </div>

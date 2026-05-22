@@ -15,6 +15,7 @@ import TaskFlowDetail from './pages/TaskFlowDetail';
 import CreateTask from './pages/CreateTask';
 import ConfigurationPage from './pages/ConfigurationPage';
 import StaffProjectsPage from './pages/StaffProjectsPage';
+import StaffTaskDetail from './pages/StaffTaskDetail';
 import QCDashboard from './pages/QCDashboard';
 import QualityInsights from './pages/QualityInsights';
 import ChatbotWidget from './components/ChatbotWidget';
@@ -102,6 +103,7 @@ function App() {
         <Route path="/task-master" element={<TaskMasterDashboard />} />
         <Route path="/configuration" element={<ConfigurationPage />} />
         <Route path="/my-projects" element={<StaffProjectsPage />} />
+        <Route path="/staff-task" element={<StaffTaskDetail />} />
         <Route path="/quality-manager" element={restrictToQualityControl(<QCDashboard />)} />
         <Route path="/quality-control" element={restrictToQualityControl(<QCDashboard />)} />
         <Route path="/qc/dashboard" element={restrictToQualityControl(<QCDashboard />)} />

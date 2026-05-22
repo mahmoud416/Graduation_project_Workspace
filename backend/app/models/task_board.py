@@ -4,7 +4,7 @@ Stores TaskFlow-style data that mirrors each project card.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 
 class TaskBoardModel:
@@ -38,7 +38,15 @@ class TaskBoardModel:
         }
 
     @staticmethod
-    def default_task_structure(task_id: str, title: str, assignee: str, due: str, done: bool) -> Dict[str, Any]:
+    def default_task_structure(
+        task_id: str,
+        title: str,
+        assignee: str,
+        due: str,
+        done: bool,
+        submitted_by: Optional[str] = None,
+        submitted_by_name: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """Helper object for to-do items."""
         return {
             "id": task_id,
@@ -46,4 +54,6 @@ class TaskBoardModel:
             "assignee": assignee,
             "due": due,
             "done": done,
+            "submitted_by": submitted_by,
+            "submitted_by_name": submitted_by_name,
         }

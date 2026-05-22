@@ -39,6 +39,16 @@ try:  # pragma: no cover - optional dependency
 except ImportError:  # pragma: no cover - handled at runtime
     FPDF = None  # type: ignore
 
+try:  # pragma: no cover - optional dependency
+    import pdfplumber
+except ImportError:  # pragma: no cover - handled at runtime
+    pdfplumber = None  # type: ignore
+
+try:  # pragma: no cover - optional dependency
+    from docx import Document as DocxDocument
+except ImportError:  # pragma: no cover - handled at runtime
+    DocxDocument = None  # type: ignore
+
 
 router = APIRouter(prefix="/qc", tags=["Quality Control"])
 
@@ -163,7 +173,7 @@ async def analyze_task_with_ai(
     = None,
     image_files: Annotated[Optional[List[UploadFile]], File(description="Optional image uploads")]
     = None,
-    current_user=Depends(require_quality_control_user),
+    current_user=Depends(get_current_user),
     db=Depends(get_database),
 ):
     parsed_standard_ids = _parse_standard_ids(standard_ids)
@@ -332,16 +342,78 @@ async def _read_documents(files: Optional[List[UploadFile]]) -> List[dict]:
         content_bytes = await upload.read()
         if not content_bytes:
             continue
-        try:
-            text = content_bytes.decode("utf-8")
-        except UnicodeDecodeError:
-            text = content_bytes.decode("latin-1", errors="ignore")
+
+        file_name = upload.filename or "document"
+        content_type = upload.content_type or ""
+        fname_lower = file_name.lower()
+        is_pdf = fname_lower.endswith(".pdf") or "pdf" in content_type.lower()
+        is_docx = fname_lower.endswith(".docx") or fname_lower.endswith(".doc") or "wordprocessingml" in content_type.lower()
+
+        if is_pdf:
+            text = _extract_pdf_text(content_bytes)
+            file_type = "pdf"
+        elif is_docx:
+            text = _extract_docx_text(content_bytes)
+            file_type = "docx"
+        else:
+            try:
+                text = content_bytes.decode("utf-8")
+            except UnicodeDecodeError:
+                text = content_bytes.decode("latin-1", errors="ignore")
+            file_type = content_type or "document"
+
         texts.append({
-            "file_name": upload.filename or "document",
-            "content": text[:5000],
-            "file_type": upload.content_type or "document",
+            "file_name": file_name,
+            "content": text[:8000],
+            "file_type": file_type,
         })
     return texts
+
+
+def _extract_pdf_text(content_bytes: bytes) -> str:
+    if pdfplumber is None:
+        return "[PDF extraction unavailable: install pdfplumber]"
+    try:
+        import io as _io
+        pages_text = []
+        with pdfplumber.open(_io.BytesIO(content_bytes)) as pdf:
+            for i, page in enumerate(pdf.pages):
+                page_text = page.extract_text() or ""
+                # Also extract tables as text
+                tables = page.extract_tables() or []
+                table_text = ""
+                for table in tables:
+                    for row in table:
+                        if row:
+                            table_text += " | ".join(str(cell or "") for cell in row) + "\n"
+                combined = page_text
+                if table_text:
+                    combined += f"\n[TABLE DATA]\n{table_text}"
+                if combined.strip():
+                    pages_text.append(f"[Page {i+1}]\n{combined.strip()}")
+        return "\n\n".join(pages_text) if pages_text else "[PDF has no extractable text]"
+    except Exception as e:
+        return f"[PDF extraction error: {e}]"
+
+
+def _extract_docx_text(content_bytes: bytes) -> str:
+    if DocxDocument is None:
+        return "[Word extraction unavailable: install python-docx]"
+    try:
+        import io as _io
+        doc = DocxDocument(_io.BytesIO(content_bytes))
+        parts = []
+        for para in doc.paragraphs:
+            if para.text.strip():
+                parts.append(para.text.strip())
+        for table in doc.tables:
+            for row in table.rows:
+                row_text = " | ".join(cell.text.strip() for cell in row.cells if cell.text.strip())
+                if row_text:
+                    parts.append(f"[TABLE ROW] {row_text}")
+        return "\n".join(parts) if parts else "[Word document has no extractable text]"
+    except Exception as e:
+        return f"[Word extraction error: {e}]"
 
 
 async def _read_images(files: Optional[List[UploadFile]]) -> List[bytes]:

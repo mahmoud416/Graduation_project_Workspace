@@ -25,11 +25,19 @@ class Settings(BaseSettings):
     APP_VERSION: str = "2.0.0"
     DEBUG: bool = False
 
-    # AI / Quality Model Configuration
-    OPENAI_API_KEY: str = ""
+    # AI / Quality Model Configuration (Google Gemini)
+    GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-2.0-flash"
     QUALITY_DATASETS_DIR: str = "uploads/quality_datasets"
     QUALITY_MAX_DATASET_SIZE_MB: int = 200
     QUALITY_TRAINING_TIMEOUT_SECONDS: int = 600
+
+    # RAG / Vector Store Configuration
+    RAG_ENABLED: bool = True
+    CHROMA_PERSIST_DIR: str = "./chroma_data"
+    EMBEDDING_MODEL: str = "models/text-embedding-004"
+    RAG_RULES_TOP_K: int = 8
+    RAG_PATTERNS_TOP_K: int = 4
 
     # CORS Configuration
     ALLOWED_ORIGINS: str = "http://localhost:3000,http://localhost:8000,http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173"

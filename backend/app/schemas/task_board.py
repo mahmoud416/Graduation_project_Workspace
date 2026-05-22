@@ -36,6 +36,8 @@ class TaskBoardTask(BaseModel):
     assignee: str
     due: str
     done: bool = False
+    submitted_by: Optional[str] = None
+    submitted_by_name: Optional[str] = None
 
 
 class TaskBoardCommentAttachment(BaseModel):

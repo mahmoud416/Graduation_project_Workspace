@@ -23,6 +23,7 @@ from app.routes import (
     events,
     quality,
     qc,
+    rag_admin,
 )
 
 
@@ -36,9 +37,15 @@ async def lifespan(app: FastAPI):
     await connect_to_mongo()
     db = get_database()
     await create_indexes(db)
-    
+
+    # RAG warmup: index report specs + rules + patterns in background
+    # (non-blocking — server starts immediately even if OpenAI is unreachable)
+    import asyncio
+    from app.services.rag_service import warmup_rag
+    asyncio.create_task(warmup_rag(db))
+
     yield
-    
+
     # Shutdown: Close MongoDB connection
     await close_mongo_connection()
 
@@ -76,6 +83,7 @@ app.include_router(upload_rules.router, prefix="/api/v1")
 app.include_router(events.router, prefix="/api/v1")
 app.include_router(quality.router, prefix="/api/v1")
 app.include_router(qc.router, prefix="/api/v1")
+app.include_router(rag_admin.router, prefix="/api/v1")
 
 
 @app.get("/")

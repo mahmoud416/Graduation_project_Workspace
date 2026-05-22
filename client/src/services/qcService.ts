@@ -27,12 +27,16 @@ const handleResponse = async <T>(response: Response): Promise<T> => {
         let detail = `Request failed with status ${response.status}`;
         try {
             const payload = await response.json();
-            detail = payload.detail || payload.message || detail;
-        } catch (err) {
+            if (Array.isArray(payload.detail)) {
+                detail = payload.detail.map((e: any) => e.msg || e.message || String(e)).join('; ');
+            } else {
+                detail = payload.detail || payload.message || detail;
+            }
+        } catch {
             const text = await response.text();
             if (text) detail = text;
         }
-        throw new Error(detail);
+        throw new Error(String(detail));
     }
     return response.json() as Promise<T>;
 };
@@ -135,6 +139,73 @@ export const buildReportExportUrl = (format: 'csv' | 'pdf', params: PlainObject 
         query.set(key, String(value));
     });
     return `${QC_BASE}/reports/export?${query.toString()}`;
+};
+
+// ---------------------------------------------------------------------------
+// Report Types
+// ---------------------------------------------------------------------------
+
+export interface ReportType {
+    key: string;
+    name_ar: string;
+    name_en: string;
+    description: string;
+    required_elements: string[];
+}
+
+export const fetchReportTypes = async (): Promise<ReportType[]> => {
+    const response = await fetch(`${API_BASE}/quality/report-types`, {
+        headers: authHeaders(),
+    });
+    return handleResponse<ReportType[]>(response);
+};
+
+// ---------------------------------------------------------------------------
+// Direct task evaluation (supports report_type)
+// ---------------------------------------------------------------------------
+
+export interface EvaluateTaskPayload {
+    task_title: string;
+    task_description?: string;
+    task_id?: string;
+    report_type?: string;
+    files?: { file_name: string; content: string; file_type: string }[];
+    image_base64?: string[];
+}
+
+export interface ReportTypeCompliance {
+    is_compliant: boolean | null;
+    missing_elements: string[];
+    compliance_note: string;
+}
+
+export interface EvaluationResult {
+    compliance_score: number;
+    passed_standards: { rule: string; result: string }[];
+    failed_standards: { rule: string; reason: string }[];
+    suggestions: string[];
+    report_type_key?: string;
+    report_type_name_ar?: string;
+    report_type_name_en?: string;
+    report_type_compliance?: ReportTypeCompliance;
+    evaluation_id: string;
+    _mode?: string;
+}
+
+export const evaluateTask = async (payload: EvaluateTaskPayload): Promise<EvaluationResult> => {
+    const response = await fetch(`${API_BASE}/quality/evaluate`, {
+        method: 'POST',
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({
+            task_title: payload.task_title,
+            task_description: payload.task_description ?? '',
+            task_id: payload.task_id,
+            report_type: payload.report_type,
+            files: payload.files ?? [],
+            image_base64: payload.image_base64 ?? [],
+        }),
+    });
+    return handleResponse<EvaluationResult>(response);
 };
 
 export const downloadQualityReport = async (format: 'csv' | 'pdf', params: PlainObject = {}) => {

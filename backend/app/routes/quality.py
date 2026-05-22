@@ -4,9 +4,11 @@ Handles quality rules, AI task evaluation, training datasets, and reports.
 Only accessible to quality_manager and admin roles (except report reads for sub_admin).
 """
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.responses import FileResponse
 from bson import ObjectId
 from typing import List, Optional, Any
 from datetime import datetime
+from pathlib import Path
 from pydantic import BaseModel, Field
 
 from app.db.mongodb import get_database
@@ -70,6 +72,7 @@ class EvaluateTaskRequest(BaseModel):
     files: List[dict] = []          # [{"file_name": str, "content": str, "file_type": str}]
     image_base64: List[str] = []    # base64-encoded images
     task_id: Optional[str] = None   # persist result linked to this task
+    report_type: Optional[str] = None  # key from REPORT_TYPES dict
 
 
 class ChatRequest(BaseModel):
@@ -118,6 +121,12 @@ async def create_rule(
     result = await db[QUALITY_RULES_COLLECTION].insert_one(doc)
     doc["_id"] = str(result.inserted_id)
     doc["owner_id"] = str(doc["owner_id"])
+    # Mark RAG index stale so next evaluation re-indexes rules
+    try:
+        from app.services.rag_service import mark_rules_dirty
+        await mark_rules_dirty(db)
+    except Exception:
+        pass
     return doc
 
 
@@ -164,6 +173,12 @@ async def update_rule(
     )
     if not result:
         raise HTTPException(status_code=404, detail="Rule not found")
+    # Mark RAG index stale
+    try:
+        from app.services.rag_service import mark_rules_dirty
+        await mark_rules_dirty(db)
+    except Exception:
+        pass
     return _str_id(result)
 
 
@@ -182,7 +197,35 @@ async def delete_rule(
     result = await db[QUALITY_RULES_COLLECTION].delete_one({"_id": oid})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Rule not found")
+    # Mark RAG index stale
+    try:
+        from app.services.rag_service import mark_rules_dirty
+        await mark_rules_dirty(db)
+    except Exception:
+        pass
     return None
+
+
+# ---------------------------------------------------------------------------
+# Report Types
+# ---------------------------------------------------------------------------
+
+@router.get("/report-types")
+async def get_report_types(
+    current_user: dict = Depends(get_current_user),
+):
+    """Return the list of accreditation report types for task classification."""
+    _require_qc_admin_or_subadmin(current_user)
+    return [
+        {
+            "key": key,
+            "name_ar": rt["name_ar"],
+            "name_en": rt["name_en"],
+            "description": rt["description"],
+            "required_elements": rt["required_elements"],
+        }
+        for key, rt in ai_service.REPORT_TYPES.items()
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -221,7 +264,20 @@ async def evaluate_task(
         image_bytes_list=image_bytes_list if image_bytes_list else None,
         file_texts=body.files if body.files else None,
         db=db,
+        report_type=body.report_type,
     )
+
+    # Attach report type info to result for frontend display
+    if body.report_type and body.report_type in ai_service.REPORT_TYPES:
+        rt = ai_service.REPORT_TYPES[body.report_type]
+        result["report_type_key"] = body.report_type
+        result["report_type_name_ar"] = rt["name_ar"]
+        result["report_type_name_en"] = rt["name_en"]
+        result.setdefault("report_type_compliance", {
+            "is_compliant": None,
+            "missing_elements": [],
+            "compliance_note": "Could not determine compliance.",
+        })
 
     # Persist evaluation
     eval_doc = {
@@ -234,6 +290,8 @@ async def evaluate_task(
         "failed_standards": result.get("failed_standards", []),
         "suggestions": result.get("suggestions", []),
         "files_analyzed": result.get("files_analyzed", []),
+        "report_type": body.report_type,
+        "report_type_compliance": result.get("report_type_compliance"),
         "ai_mode": result.get("_mode", "unknown"),
         "created_at": datetime.utcnow(),
     }
@@ -249,6 +307,8 @@ async def evaluate_task(
                     "qc_status": "pending",
                     "qc_reviewed_by": None,
                     "qc_reviewed_at": None,
+                    "report_type": body.report_type,
+                    "report_type_compliant": result.get("report_type_compliance", {}).get("is_compliant"),
                     "updated_at": datetime.utcnow(),
                 }},
             )
@@ -515,6 +575,13 @@ async def trigger_training(
     }
     await db[AI_MODEL_STATE_COLLECTION].insert_one(state_doc)
 
+    # Mark RAG patterns stale so next evaluation re-indexes learned patterns
+    try:
+        from app.services.rag_service import mark_patterns_dirty
+        await mark_patterns_dirty(db)
+    except Exception:
+        pass
+
     return {
         "run_id": str(run_result.inserted_id),
         "version": new_version,
@@ -628,4 +695,65 @@ async def system_quality_overview(
         "active_rules": total_rules,
         "average_compliance_score": avg_score,
         "recent_evaluations": [_str_id(e) for e in recent],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Template download
+# ---------------------------------------------------------------------------
+
+_TEMPLATES_DIR = Path(__file__).parent.parent.parent / "uploads" / "templates"
+
+_TEMPLATE_FILES = {
+    "course_report":         {"ar": "template_course_report_ar.docx",         "en": "template_course_report_en.docx"},
+    "program_report":        {"ar": "template_program_report_ar.docx",         "en": "template_program_report_en.docx"},
+    "course_specification":  {"ar": "template_course_specification_ar.docx",   "en": "template_course_specification_en.docx"},
+    "program_specification": {"ar": "template_program_specification_ar.docx",  "en": "template_program_specification_en.docx"},
+}
+
+_TEMPLATE_DISPLAY_NAMES = {
+    "course_report":         {"ar": "نموذج تقرير مقرر",         "en": "Course Report Template"},
+    "program_report":        {"ar": "نموذج تقرير برنامج",        "en": "Program Report Template"},
+    "course_specification":  {"ar": "نموذج توصيف مقرر",          "en": "Course Specification Template"},
+    "program_specification": {"ar": "نموذج توصيف برنامج",        "en": "Program Specification Template"},
+}
+
+
+@router.get("/templates/{report_type_key}")
+async def download_template(
+    report_type_key: str,
+    lang: str = Query("ar", regex="^(ar|en)$"),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Download the .docx template for a given report type.
+    lang: 'ar' (default) or 'en'
+    """
+    if report_type_key not in _TEMPLATE_FILES:
+        raise HTTPException(status_code=404, detail=f"No template for report type '{report_type_key}'")
+
+    filename = _TEMPLATE_FILES[report_type_key][lang]
+    file_path = _TEMPLATES_DIR / filename
+
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Template file not found on server")
+
+    display = _TEMPLATE_DISPLAY_NAMES[report_type_key][lang]
+    return FileResponse(
+        path=str(file_path),
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        filename=filename,
+        headers={"Content-Disposition": f'attachment; filename="{display}.docx"'},
+    )
+
+
+@router.get("/templates")
+async def list_templates(current_user: dict = Depends(get_current_user)):
+    """List available template types."""
+    return {
+        key: {
+            "ar": _TEMPLATE_DISPLAY_NAMES[key]["ar"],
+            "en": _TEMPLATE_DISPLAY_NAMES[key]["en"],
+        }
+        for key in _TEMPLATE_FILES
     }

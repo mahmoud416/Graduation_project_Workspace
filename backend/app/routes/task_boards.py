@@ -82,10 +82,12 @@ async def add_task_board_todo(
 ):
     project = await _get_project_or_404(db, project_id)
     _ensure_project_visibility(project, current_user)
-    _ensure_task_privileges(project, current_user)
     board = await TaskBoardService.get_board_by_project(db, _stringify_project_id(project))
     if not board:
         board = await TaskBoardService.ensure_board_for_project(db, project)
+
+    submitted_by = str(current_user.get("_id", ""))
+    submitted_by_name = current_user.get("name") or current_user.get("email", "")
 
     updated = await TaskBoardService.add_task(
         db,
@@ -94,6 +96,8 @@ async def add_task_board_todo(
         assignee=payload.assignee or "Unassigned",
         due=payload.due or "TBD",
         done=payload.done,
+        submitted_by=submitted_by,
+        submitted_by_name=submitted_by_name,
     )
     if not updated:
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Unable to create to-do entry")

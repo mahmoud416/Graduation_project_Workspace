@@ -28,7 +28,7 @@ class TaskBoardService:
     @staticmethod
     async def ensure_board_for_project(db, project_doc: Dict[str, Any]) -> Dict[str, Any]:
         """Fetch or create the board for the supplied project document."""
-        project_identifier = TaskBoardService._stringify_id(project_doc.get("_id"))
+        project_identifier: str = TaskBoardService._stringify_id(project_doc.get("_id"))
         existing = await db[TASK_BOARDS_COLLECTION].find_one({"project_id": project_identifier})
         if existing:
             if project_identifier == TaskBoardService.PUBLIC_PROJECT_ID:
@@ -126,10 +126,16 @@ class TaskBoardService:
         assignee: str,
         due: str,
         done: bool,
+        submitted_by: Optional[str] = None,
+        submitted_by_name: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         """Append a new to-do entry to the board and sync progress."""
         task_id = TaskBoardService._generate_task_id()
-        task_doc = TaskBoardModel.default_task_structure(task_id, title, assignee, due, done)
+        task_doc = TaskBoardModel.default_task_structure(
+            task_id, title, assignee, due, done,
+            submitted_by=submitted_by,
+            submitted_by_name=submitted_by_name,
+        )
         board = await db[TASK_BOARDS_COLLECTION].find_one_and_update(
             {"project_id": project_id},
             {

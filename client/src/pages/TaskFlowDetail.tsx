@@ -3,8 +3,24 @@ import type { FormEvent, ChangeEvent, KeyboardEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
+import TaskAnalysisModal from '../components/TaskAnalysisModal';
 
 const API_BASE = (import.meta.env.VITE_API_BASE ?? 'http://localhost:8000/api/v1').replace(/\/$/, '');
+
+type ReportType = {
+    key: string;
+    name_ar: string;
+    name_en: string;
+    description?: string;
+    required_elements?: string[];
+};
+
+const DEFAULT_REPORT_TYPES: ReportType[] = [
+    { key: 'course_report',         name_ar: 'تقرير المقرر الدراسي',   name_en: 'Course Report' },
+    { key: 'program_report',        name_ar: 'تقرير البرنامج الدراسي', name_en: 'Program Report' },
+    { key: 'course_specification',  name_ar: 'توصيف المقرر الدراسي',   name_en: 'Course Specification' },
+    { key: 'program_specification', name_ar: 'توصيف البرنامج الدراسي', name_en: 'Program Specification' },
+];
 
 type TaskItem = {
     id: string;
@@ -12,6 +28,7 @@ type TaskItem = {
     assignee: string;
     due: string;
     done: boolean;
+    report_type?: string;
 };
 
 type MemberProfile = {
@@ -111,7 +128,8 @@ const TaskFlowDetail = () => {
     const [memberConfig, setMemberConfig] = useState({ responsibility: '', role: '' });
     const [isSavingMemberConfig, setIsSavingMemberConfig] = useState(false);
     const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
-    const [taskDraft, setTaskDraft] = useState<Omit<TaskItem, 'id'>>({ title: '', assignee: '', due: '', done: false });
+    const [taskDraft, setTaskDraft] = useState<Omit<TaskItem, 'id'>>({ title: '', assignee: '', due: '', done: false, report_type: '' });
+    const [reportTypes, setReportTypes] = useState<ReportType[]>(DEFAULT_REPORT_TYPES);
     const [boardOverview, setBoardOverview] = useState<TaskBoardOverview | null>(null);
     const modalTitle = boardOverview?.title ? `Add member to ${boardOverview.title}` : 'Add board member';
     const [groupMembers, setGroupMembers] = useState<MemberProfile[]>([]);
@@ -119,6 +137,7 @@ const TaskFlowDetail = () => {
     const [boardError, setBoardError] = useState<string | null>(null);
     const [isSavingTask, setIsSavingTask] = useState(false);
     const [isUploadingResource, setIsUploadingResource] = useState(false);
+    const [analysisTask, setAnalysisTask] = useState<TaskItem | null>(null);
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
     const [uploadRules, setUploadRules] = useState<UploadRules | null>(null);
     const [, setIsLoadingRules] = useState(false);
@@ -256,6 +275,21 @@ const TaskFlowDetail = () => {
         fetchBoard();
     }, [fetchBoard]);
 
+    useEffect(() => {
+        const token = localStorage.getItem('token');
+        const userId = localStorage.getItem('userId');
+        if (!token) return;
+        fetch(`${API_BASE}/quality/report-types`, {
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'X-User-Id': userId ?? '',
+            },
+        })
+            .then((r) => r.ok ? r.json() : null)
+            .then((data) => Array.isArray(data) && data.length > 0 ? setReportTypes(data) : undefined)
+            .catch(() => {});
+    }, []);
+
     const sendTaskBoardRequest = useCallback(
         async (
             endpoint: string,
@@ -292,7 +326,7 @@ const TaskFlowDetail = () => {
                 if (closeForm) {
                     setIsTaskFormOpen(false);
                     setEditingTaskId(null);
-                    setTaskDraft({ title: '', assignee: '', due: '', done: false });
+                    setTaskDraft({ title: '', assignee: '', due: '', done: false, report_type: '' });
                 }
                 return payload;
             } catch (err: unknown) {
@@ -673,10 +707,10 @@ const TaskFlowDetail = () => {
     const openTaskForm = (task?: TaskItem) => {
         if (task) {
             setEditingTaskId(task.id);
-            setTaskDraft({ title: task.title, assignee: task.assignee, due: task.due, done: task.done });
+            setTaskDraft({ title: task.title, assignee: task.assignee, due: task.due, done: task.done, report_type: task.report_type ?? '' });
         } else {
             setEditingTaskId(null);
-            setTaskDraft({ title: '', assignee: '', due: '', done: false });
+            setTaskDraft({ title: '', assignee: '', due: '', done: false, report_type: '' });
         }
         setIsTaskFormOpen(true);
     };
@@ -702,6 +736,7 @@ const TaskFlowDetail = () => {
                 assignee: taskDraft.assignee || 'Unassigned',
                 due: taskDraft.due || 'TBD',
                 done: taskDraft.done,
+                ...(taskDraft.report_type ? { report_type: taskDraft.report_type } : {}),
             },
             true
         );
@@ -710,7 +745,7 @@ const TaskFlowDetail = () => {
     const handleCancelTaskEdit = () => {
         setIsTaskFormOpen(false);
         setEditingTaskId(null);
-        setTaskDraft({ title: '', assignee: '', due: '', done: false });
+        setTaskDraft({ title: '', assignee: '', due: '', done: false, report_type: '' });
     };
 
     const handleDeleteTask = async (taskId: string) => {
@@ -740,7 +775,7 @@ const TaskFlowDetail = () => {
             applyBoardPayload(payload);
             setIsTaskFormOpen(false);
             setEditingTaskId(null);
-            setTaskDraft({ title: '', assignee: '', due: '', done: false });
+            setTaskDraft({ title: '', assignee: '', due: '', done: false, report_type: '' });
         } catch (err: unknown) {
             const message = err instanceof Error ? err.message : 'Unable to delete task';
             setBoardError(message);
@@ -1039,6 +1074,21 @@ const TaskFlowDetail = () => {
                                                 )}
                                             </div>
                                         </div>
+                                        <div>
+                                            <label className="text-xs font-semibold text-text-gray dark:text-gray-300 uppercase">نوع التقرير / Report Type</label>
+                                            <select
+                                                value={taskDraft.report_type ?? ''}
+                                                onChange={(e) => handleTaskDraftChange('report_type', e.target.value)}
+                                                className="mt-1 w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-text-dark dark:text-gray-100 focus:border-primary focus:outline-none"
+                                            >
+                                                <option value="">— بدون تصنيف —</option>
+                                                {reportTypes.map((rt) => (
+                                                    <option key={rt.key} value={rt.key}>
+                                                        {rt.name_ar} — {rt.name_en}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
                                         <div className="flex items-center gap-4">
                                             <div className="flex-1">
                                                 <label className="text-xs font-semibold text-text-gray dark:text-gray-300 uppercase">Deadline</label>
@@ -1107,9 +1157,13 @@ const TaskFlowDetail = () => {
                                             <div className="flex-1">
                                                 <div className="flex items-center justify-between flex-wrap gap-2">
                                                     <div className="flex items-center gap-2 flex-wrap">
-                                                        <span className={`text-sm font-semibold ${task.done ? 'text-primary' : 'text-text-dark dark:text-gray-200'}`}>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setAnalysisTask(task)}
+                                                            className={`text-sm font-semibold text-left hover:underline hover:text-primary transition-colors ${task.done ? 'text-primary' : 'text-text-dark dark:text-gray-200'}`}
+                                                        >
                                                             {task.title}
-                                                        </span>
+                                                        </button>
                                                         {isSystemCard && task.assignee && task.assignee !== 'Unassigned' && (
                                                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/30 text-xs font-medium text-primary dark:text-blue-300 border border-blue-200 dark:border-blue-700">
                                                                 <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
@@ -1802,6 +1856,17 @@ const TaskFlowDetail = () => {
                         </div>
                     </form>
                 </div>
+            )}
+
+            {analysisTask && (
+                <TaskAnalysisModal
+                    isOpen={true}
+                    taskId={analysisTask.id}
+                    taskTitle={analysisTask.title}
+                    projectId={projectId}
+                    reportType={analysisTask.report_type}
+                    onClose={() => setAnalysisTask(null)}
+                />
             )}
         </>
     );

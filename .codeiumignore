@@ -1,0 +1,14 @@
+# Heavy directories — excluded from AI indexing
+node_modules/
+__pycache__/
+*.pyc
+.pytest_cache/
+dist/
+build/
+.venv/
+venv/
+*.log
+uploads/
+
+# Claude worktrees — exclude all worktrees to avoid duplicate indexing
+.claude/

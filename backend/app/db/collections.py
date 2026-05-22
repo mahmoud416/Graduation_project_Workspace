@@ -23,6 +23,7 @@ QUALITY_STANDARDS_COLLECTION = "quality_standards"
 QUALITY_ANALYSES_COLLECTION  = "quality_analyses"
 TODO_AUDIT_COLLECTION        = "todo_audit"
 QC_REPORTS_CACHE_COLLECTION  = "qc_reports_cache"
+RAG_INDEX_STATE_COLLECTION   = "rag_index_state"
 
 
 async def _safe_create_index(collection, keys, **kwargs):
