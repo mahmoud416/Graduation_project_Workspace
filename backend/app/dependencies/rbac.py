@@ -52,6 +52,14 @@ async def require_quality_control_user(
     return current_user
 
 
+async def require_founder(
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Dependency that ensures the caller is a founder."""
+    ensure_roles(current_user, ["founder"])
+    return current_user
+
+
 async def get_user_membership(
     team_id: str,
     current_user: Dict[str, Any] = Depends(get_current_user),
@@ -238,8 +246,8 @@ async def filter_visible_tasks(
     # Base filter: tasks in this team
     base_filter = {"team_id": team_obj_id}
     
-    # Admin sees all tasks in the team
-    if membership["role"] == Role.ADMIN:
+    # Admin and Manager see all tasks in the team
+    if membership["role"] in (Role.ADMIN, Role.MANAGER):
         return base_filter
     
     # Sub-Admin sees tasks of users they manage
@@ -259,3 +267,51 @@ async def filter_visible_tasks(
     # Member sees only their own tasks
     base_filter["assigned_to"] = current_user["_id"]
     return base_filter
+
+
+# ---------------------------------------------------------------------------
+# Manager-aware RBAC helpers (NEW — does not modify any existing function)
+# ---------------------------------------------------------------------------
+
+async def require_team_manager_or_admin(
+    team_id: str,
+    current_user: Dict[str, Any],
+    db,
+) -> Dict[str, Any]:
+    """
+    Ensure caller is a Manager or Admin of the team.
+    
+    Managers have full control inside their own team:
+    - Add/remove users
+    - Create projects and tasks
+    - View team analytics
+    
+    They CANNOT modify roles or access other teams.
+    """
+    membership = await get_user_membership(team_id, current_user, db)
+
+    if membership["role"] not in (Role.ADMIN, Role.MANAGER):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Manager or Admin privileges required for this action",
+        )
+
+    return membership
+
+
+async def require_team_manager_admin_or_subadmin(
+    team_id: str,
+    current_user: Dict[str, Any],
+    db,
+) -> Dict[str, Any]:
+    """Allow Manager, Admin, or Sub-Admin."""
+    membership = await get_user_membership(team_id, current_user, db)
+
+    if membership["role"] not in (Role.ADMIN, Role.MANAGER, Role.SUBADMIN):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient privileges for this action",
+        )
+
+    return membership
+

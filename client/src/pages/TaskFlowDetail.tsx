@@ -4,6 +4,8 @@ import { useSearchParams } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 import TaskAnalysisModal from '../components/TaskAnalysisModal';
+import MultiAssigneePicker from '../components/MultiAssigneePicker';
+import type { TeamMember } from '../components/MultiAssigneePicker';
 
 const API_BASE = (import.meta.env.VITE_API_BASE ?? 'http://localhost:8000/api/v1').replace(/\/$/, '');
 
@@ -129,6 +131,8 @@ const TaskFlowDetail = () => {
     const [isSavingMemberConfig, setIsSavingMemberConfig] = useState(false);
     const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
     const [taskDraft, setTaskDraft] = useState<Omit<TaskItem, 'id'>>({ title: '', assignee: '', due: '', done: false, report_type: '' });
+    const [taskAssignees, setTaskAssignees] = useState<string[]>([]);
+    const [taskVisibility, setTaskVisibility] = useState<'team' | 'private'>('team');
     const [reportTypes, setReportTypes] = useState<ReportType[]>(DEFAULT_REPORT_TYPES);
     const [boardOverview, setBoardOverview] = useState<TaskBoardOverview | null>(null);
     const modalTitle = boardOverview?.title ? `Add member to ${boardOverview.title}` : 'Add board member';
@@ -153,9 +157,11 @@ const TaskFlowDetail = () => {
     const currentUserId = typeof window !== 'undefined' ? localStorage.getItem('userId') : null;
     const currentUserRole = typeof window !== 'undefined' ? localStorage.getItem('role') : null;
     const normalizedUserRole = (currentUserRole ?? '').toLowerCase();
-    const canModerateComments = normalizedUserRole === 'admin' || normalizedUserRole === 'sub_admin';
+    const currentUserGroupRole = groupMembers.find(m => m.user_id === currentUserId)?.role?.toLowerCase() || '';
+    const hasManagerRights = normalizedUserRole === 'admin' || normalizedUserRole === 'sub_admin' || currentUserGroupRole === 'manager';
+    const canModerateComments = hasManagerRights;
     const isSystemCard = projectId === 'public-group' || projectId === 'all-sub-admin';
-    const canAddTask = normalizedUserRole === 'admin' || normalizedUserRole === 'sub_admin';
+    const canAddTask = hasManagerRights;
     const canDeleteComment = (comment: BoardComment) => {
         if (canModerateComments) {
             return true;
@@ -708,9 +714,14 @@ const TaskFlowDetail = () => {
         if (task) {
             setEditingTaskId(task.id);
             setTaskDraft({ title: task.title, assignee: task.assignee, due: task.due, done: task.done, report_type: task.report_type ?? '' });
+            // Pre-select assignee in the multi-picker if it matches a member
+            const matched = groupMembers.find((m) => m.name === task.assignee);
+            setTaskAssignees(matched?.user_id ? [matched.user_id] : []);
         } else {
             setEditingTaskId(null);
             setTaskDraft({ title: '', assignee: '', due: '', done: false, report_type: '' });
+            setTaskAssignees([]);
+            setTaskVisibility('team');
         }
         setIsTaskFormOpen(true);
     };
@@ -733,9 +744,20 @@ const TaskFlowDetail = () => {
             method,
             {
                 title: taskDraft.title,
-                assignee: taskDraft.assignee || 'Unassigned',
+                // Resolve assignee name from selected IDs (fall back to taskDraft.assignee)
+                assignee: (() => {
+                    if (taskAssignees.length > 0) {
+                        const names = taskAssignees
+                            .map((id) => groupMembers.find((m) => m.user_id === id)?.name)
+                            .filter(Boolean) as string[];
+                        return names.join(', ') || taskDraft.assignee || 'Unassigned';
+                    }
+                    return taskDraft.assignee || 'Unassigned';
+                })(),
                 due: taskDraft.due || 'TBD',
                 done: taskDraft.done,
+                visibility: taskVisibility,
+                assignee_ids: taskAssignees,
                 ...(taskDraft.report_type ? { report_type: taskDraft.report_type } : {}),
             },
             true
@@ -1048,21 +1070,25 @@ const TaskFlowDetail = () => {
                                                     required
                                                 />
                                             </div>
-                                            <div>
-                                                <label className="text-xs font-semibold text-text-gray dark:text-gray-300 uppercase">Assignee</label>
+                                            <div className="col-span-1 md:col-span-2">
+                                                <label className="text-xs font-semibold text-text-gray dark:text-gray-300 uppercase">Assignees &amp; Visibility</label>
                                                 {isSystemCard ? (
-                                                    <select
-                                                        value={taskDraft.assignee}
-                                                        onChange={(e) => handleTaskDraftChange('assignee', e.target.value)}
-                                                        className="mt-1 w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-text-dark dark:text-gray-100 focus:border-primary focus:outline-none"
-                                                    >
-                                                        <option value="">— Unassigned —</option>
-                                                        {groupMembers.map((member) => (
-                                                            <option key={member.user_id ?? member.name} value={member.name}>
-                                                                {member.name} ({member.role})
-                                                            </option>
-                                                        ))}
-                                                    </select>
+                                                    <div className="mt-2">
+                                                        <MultiAssigneePicker
+                                                            members={groupMembers
+                                                                .filter((m): m is typeof m & { user_id: string } => !!m.user_id)
+                                                                .map((m): TeamMember => ({
+                                                                    id: m.user_id!,
+                                                                    name: m.name,
+                                                                    email: m.email,
+                                                                    role: m.role,
+                                                                }))}
+                                                            selectedIds={taskAssignees}
+                                                            onChange={setTaskAssignees}
+                                                            visibility={taskVisibility}
+                                                            onVisibilityChange={setTaskVisibility}
+                                                        />
+                                                    </div>
                                                 ) : (
                                                     <input
                                                         type="text"

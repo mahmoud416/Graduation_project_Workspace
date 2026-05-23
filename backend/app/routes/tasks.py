@@ -25,48 +25,81 @@ async def create_task(
 ):
     """
     Create a new task.
-    
+
+    Supports multi-assignee selection and visibility control:
+    - visibility='team'    → task visible to all team members
+    - visibility='private' → task visible only to listed assignees
+
     Requires: Team membership.
-    
-    The assigned user must be a member of the specified team.
     """
+    team_id_str = task_data.team_id
+    if not team_id_str:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="team_id is required")
     try:
-        team_obj_id = ObjectId(task_data.team_id)
-        assigned_to_obj_id = ObjectId(task_data.assigned_to)
+        team_obj_id = ObjectId(team_id_str)
     except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid ID format"
-        )
-    
-    # Verify current user is a member of the team
-    await require_team_member(task_data.team_id, current_user, db)
-    
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid team_id format")
+
+    # Verify creator is a member of the team
+    await require_team_member(team_id_str, current_user, db)
+
+    # Merge assigned_to + assignees list, deduplicate while preserving order
+    raw_assignees: List[str] = list(task_data.assignees)
+    if task_data.assigned_to and task_data.assigned_to not in raw_assignees:
+        raw_assignees.insert(0, task_data.assigned_to)
+
+    # Fall back to current user if no assignee provided and not assigning to all
+    primary_assignee_str = None
+    if raw_assignees:
+        primary_assignee_str = raw_assignees[0]
+    elif not task_data.assign_to_all:
+        primary_assignee_str = str(current_user["_id"])
+
+    try:
+        primary_assignee_id = ObjectId(primary_assignee_str) if primary_assignee_str else None
+        assignee_obj_ids = [ObjectId(uid) for uid in raw_assignees] if raw_assignees else None
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid assignee ID format")
+
+    visibility = task_data.visibility if task_data.visibility in ("team", "private") else "team"
+
     try:
         task = await TaskService.create_task(
             db,
             title=task_data.title,
             team_id=team_obj_id,
-            assigned_to=assigned_to_obj_id,
+            assigned_to=primary_assignee_id,
+            assignees=assignee_obj_ids,
+            visibility=visibility,
             created_by=current_user["_id"],
-            description=task_data.description,
+            description=task_data.description or "",
             status=task_data.status,
-            priority=task_data.priority
+            priority=task_data.priority,
+            report_type=task_data.report_type,
+            template_id=task_data.template_id,
+            assign_to_all=task_data.assign_to_all,
         )
-        
-        # Convert ObjectIds to strings
-        task["_id"] = str(task["_id"])
-        task["team_id"] = str(task["team_id"])
-        task["assigned_to"] = str(task["assigned_to"])
-        task["created_by"] = str(task["created_by"])
-        
+
+        # Populate assignees_names
+        assignees_names: List[str] = []
+        for uid in task.get("assignees", []):
+            u = await db["users"].find_one({"_id": uid})
+            if u:
+                assignees_names.append(u.get("full_name") or u.get("email", str(uid)))
+        task["assignees_names"] = assignees_names
+
+        # Stringify ObjectIds
+        task["_id"]         = str(task["_id"])
+        task["team_id"]     = str(task.get("team_id", ""))
+        task["assigned_to"] = str(task["assigned_to"]) if task.get("assigned_to") else None
+        task["created_by"]  = str(task["created_by"])
+        task["assignees"]   = [str(uid) for uid in task.get("assignees", [])]
+
         return task
-        
+
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
 
 
 @router.get("", response_model=List[TaskResponse])

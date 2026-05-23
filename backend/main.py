@@ -24,6 +24,11 @@ from app.routes import (
     quality,
     qc,
     rag_admin,
+    chat,
+    profile,
+    analytics,
+    entities,
+    ai,
 )
 
 
@@ -84,6 +89,11 @@ app.include_router(events.router, prefix="/api/v1")
 app.include_router(quality.router, prefix="/api/v1")
 app.include_router(qc.router, prefix="/api/v1")
 app.include_router(rag_admin.router, prefix="/api/v1")
+app.include_router(chat.router, prefix="/api/v1")
+app.include_router(profile.router, prefix="/api/v1")
+app.include_router(analytics.router, prefix="/api/v1")
+app.include_router(entities.router, prefix="/api/v1")
+app.include_router(ai.router, prefix="/api/v1")
 
 
 @app.get("/")

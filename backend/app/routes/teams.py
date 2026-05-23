@@ -34,6 +34,39 @@ async def create_team(
         description=team_data.description
     )
     
+    from app.models.membership import MembershipModel, Role
+    from app.db.collections import MEMBERSHIPS_COLLECTION
+    team_oid = team["_id"]
+    
+    memberships_to_add = []
+    
+    for sid in (team_data.managerIds or []):
+        if ObjectId.is_valid(sid):
+            memberships_to_add.append(MembershipModel.create_document(
+                user_id=ObjectId(sid),
+                team_id=team_oid,
+                role=Role.MANAGER
+            ))
+        
+    for sid in (team_data.subManagerIds or []):
+        if ObjectId.is_valid(sid):
+            memberships_to_add.append(MembershipModel.create_document(
+                user_id=ObjectId(sid),
+                team_id=team_oid,
+                role=Role.SUBADMIN
+            ))
+            
+    for sid in (team_data.staffIds or []):
+        if ObjectId.is_valid(sid):
+            memberships_to_add.append(MembershipModel.create_document(
+                user_id=ObjectId(sid),
+                team_id=team_oid,
+                role=Role.MEMBER
+            ))
+            
+    if memberships_to_add:
+        await db[MEMBERSHIPS_COLLECTION].insert_many(memberships_to_add)
+    
     # Convert ObjectIds to strings
     team["_id"] = str(team["_id"])
     team["created_by"] = str(team["created_by"])

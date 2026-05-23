@@ -3,7 +3,7 @@ Task model for MongoDB.
 Represents tasks/work items assigned within a project.
 """
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 from bson import ObjectId
 from enum import Enum
 
@@ -49,26 +49,40 @@ class TaskModel:
         project_id: ObjectId,
         created_by: ObjectId,
         assigned_to: Optional[ObjectId] = None,
+        assignees: Optional[List[ObjectId]] = None,
+        visibility: str = "team",
         description: str = "",
         status: TaskStatus = TaskStatus.TODO,
         priority: TaskPriority = TaskPriority.MEDIUM,
         deadline: Optional[datetime] = None,
         order: int = 0,
         team_id: Optional[ObjectId] = None,
+        report_type: Optional[str] = None,
+        template_id: Optional[str] = None,
+        assign_to_all: bool = False,
+        creator_name: Optional[str] = None,
+        creator_avatar: Optional[str] = None,
     ) -> dict:
         now = datetime.utcnow()
         doc = {
-            "title":       title,
-            "description": description,
-            "project_id":  project_id,
-            "assigned_to": assigned_to,
-            "created_by":  created_by,
-            "status":      status.value,
-            "priority":    priority.value,
-            "deadline":    deadline,
-            "order":       order,
-            "created_at":  now,
-            "updated_at":  now,
+            "title":          title,
+            "description":    description,
+            "project_id":     project_id,
+            "assigned_to":    assigned_to,
+            "assignees":      assignees or ([assigned_to] if assigned_to else []),
+            "visibility":     visibility,
+            "created_by":     created_by,
+            "status":         status.value,
+            "priority":       priority.value,
+            "deadline":       deadline,
+            "order":          order,
+            "report_type":    report_type,
+            "template_id":    template_id,
+            "assign_to_all":  assign_to_all,
+            "creator_name":   creator_name,
+            "creator_avatar": creator_avatar,
+            "created_at":     now,
+            "updated_at":     now,
         }
         if team_id is not None:
             doc["team_id"] = team_id

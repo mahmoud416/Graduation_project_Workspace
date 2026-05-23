@@ -12,6 +12,7 @@ class Role(str, Enum):
     """User roles within a team."""
     ADMIN = "admin"
     SUBADMIN = "subadmin"
+    MANAGER = "manager"
     MEMBER = "member"
 
 

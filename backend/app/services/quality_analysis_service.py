@@ -6,7 +6,7 @@ from bson import ObjectId
 
 from app.db.collections import QUALITY_ANALYSES_COLLECTION
 from app.schemas.quality_control import QualityAnalysisRequest
-from app.services import ai_service
+from app.services import qc_service
 from app.services.quality_standard_service import QualityStandardService
 
 
@@ -78,7 +78,7 @@ class QualityAnalysisService:
         rules_for_ai = QualityAnalysisService._standards_to_rules(standards)
         description = request.description_override or request.task_description or ""
 
-        ai_result = await ai_service.analyze_task_against_standards(
+        ai_result = await qc_service.analyze_task_against_standards(
             task_title=request.task_title,
             task_description=description,
             standards_rules=rules_for_ai,

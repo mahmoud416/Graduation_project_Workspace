@@ -5,8 +5,9 @@ from typing import Any, Dict, List, Optional
 from bson import ObjectId
 
 from app.db.collections import (
-    QUALITY_ANALYSES_COLLECTION,
+    QUALITY_EVALUATIONS_COLLECTION,
     TODO_AUDIT_COLLECTION,
+    TASKS_COLLECTION,
 )
 
 
@@ -61,13 +62,13 @@ class QualityReportService:
                             }
                         }
                     },
-                    "avgScore": {"$avg": "$score"},
+                    "avgScore": {"$avg": "$compliance_score"},
                     "count": {"$sum": 1},
                 }
             },
             {"$sort": {"_id.day": 1}},
         ]
-        docs = await db[QUALITY_ANALYSES_COLLECTION].aggregate(pipeline).to_list(length=120)
+        docs = await db[QUALITY_EVALUATIONS_COLLECTION].aggregate(pipeline).to_list(length=120)
         return [
             {
                 "date": item["_id"]["day"],
@@ -133,13 +134,13 @@ class QualityReportService:
             {
                 "$group": {
                     "_id": "$project_id",
-                    "avgScore": {"$avg": "$score"},
+                    "avgScore": {"$avg": "$compliance_score"},
                     "evaluations": {"$sum": 1},
                 }
             },
             {"$sort": {"avgScore": -1}},
         ]
-        docs = await db[QUALITY_ANALYSES_COLLECTION].aggregate(pipeline).to_list(length=50)
+        docs = await db[QUALITY_EVALUATIONS_COLLECTION].aggregate(pipeline).to_list(length=50)
         result = []
         for item in docs:
             project_id = item.get("_id")
@@ -158,21 +159,46 @@ class QualityReportService:
         if project_id:
             query["project_id"] = project_id
         docs = (
-            await db[QUALITY_ANALYSES_COLLECTION]
+            await db[QUALITY_EVALUATIONS_COLLECTION]
             .find(query)
             .sort("created_at", -1)
             .limit(20)
             .to_list(length=20)
         )
+        
+        # Fetch the underlying tasks to determine true completion status
+        task_ids = [doc.get("task_id") for doc in docs if doc.get("task_id")]
+        # Filter out anything that's not a valid ObjectId or string
+        valid_task_ids = []
+        for tid in task_ids:
+            if isinstance(tid, ObjectId):
+                valid_task_ids.append(tid)
+            elif isinstance(tid, str) and ObjectId.is_valid(tid):
+                valid_task_ids.append(ObjectId(tid))
+                
+        tasks_map = {}
+        if valid_task_ids:
+            tasks = await db[TASKS_COLLECTION].find({"_id": {"$in": valid_task_ids}}, {"status": 1}).to_list(length=None)
+            for t in tasks:
+                tasks_map[str(t["_id"])] = t.get("status")
+
         history = []
         for doc in docs:
+            t_id = str(doc.get("task_id")) if doc.get("task_id") else None
+            t_status = tasks_map.get(t_id)
+            
+            if t_status == "DONE":
+                display_status = "Completed"
+            else:
+                display_status = "Not Completed Yet"
+
             history.append(
                 {
                     "analysisId": str(doc.get("_id")),
-                    "taskTitle": doc.get("task_title"),
-                    "score": doc.get("score"),
+                    "taskTitle": doc.get("task_title", "Unknown Task"),
+                    "score": doc.get("compliance_score", 0),
                     "createdAt": doc.get("created_at").isoformat() if doc.get("created_at") else None,
-                    "status": doc.get("status"),
+                    "status": display_status,
                 }
             )
         return history

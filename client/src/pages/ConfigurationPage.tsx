@@ -11,7 +11,7 @@ type CreateModalState = {
     email: string;
     password: string;
     phone: string;
-    role: 'admin' | 'sub_admin' | 'staff';
+    role: 'admin' | 'subadmin' | 'manager' | 'staff';
     subAdminId?: string;
 };
 
@@ -139,7 +139,7 @@ const ConfigurationPage = () => {
         fetchAccounts();
     }, [fetchAccounts]);
 
-    const subAdminOptions = useMemo(() => accounts.filter((account) => account.role === 'sub_admin'), [accounts]);
+    const subAdminOptions = useMemo(() => accounts.filter((account) => account.role === 'subadmin'), [accounts]);
 
     const registerUser = async (payload: Record<string, string | undefined>) => {
         const response = await fetch(`${API_BASE}/auth/register`, {
@@ -474,7 +474,8 @@ const ConfigurationPage = () => {
                                     className="mt-1 w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-text-dark dark:text-gray-100 focus:border-primary focus:outline-none"
                                 >
                                     <option value="admin">Admin</option>
-                                    <option value="sub_admin">Sub Admin</option>
+                                    <option value="manager">Manager</option>
+                                    <option value="subadmin">Sub Manager</option>
                                     <option value="staff">Staff</option>
                                 </select>
                             </div>
@@ -580,7 +581,8 @@ const ConfigurationPage = () => {
                                         className="mt-1 w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-text-dark dark:text-gray-100 focus:border-primary focus:outline-none"
                                     >
                                         <option value="admin">Admin</option>
-                                        <option value="sub_admin">Sub Admin</option>
+                                        <option value="manager">Manager</option>
+                                        <option value="subadmin">Sub Manager</option>
                                         <option value="staff">Staff</option>
                                     </select>
                                 </div>

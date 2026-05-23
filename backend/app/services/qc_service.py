@@ -728,8 +728,8 @@ async def get_learned_patterns(db=None) -> str:
 def _get_gemini_model(model_name: Optional[str] = None):
     """Configure and return a Gemini GenerativeModel instance."""
     try:
-        import google.generativeai as genai
-        genai.configure(api_key=settings.GEMINI_API_KEY)
+        from app.services.gemini_service import genai
+        
         return genai.GenerativeModel(model_name or settings.GEMINI_MODEL)
     except ImportError:
         raise RuntimeError("google-generativeai not installed. Run: pip install google-generativeai")
@@ -1033,7 +1033,7 @@ async def _online_analyze_task(
             files_analyzed.append({"file_name": ft["file_name"], "file_type": ft.get("file_type", "text")})
 
     # Build image parts for Gemini vision
-    import google.generativeai as genai
+    from app.services.gemini_service import genai
     content_parts: List[Any] = []
 
     has_pdf = any(
@@ -1049,17 +1049,26 @@ async def _online_analyze_task(
         extra_json_fields += ',\n  "formatting_compliance": {"formatting_score": 0-100, "cover_page": {...}, "table_of_contents": {...}, "introduction": {...}, "main_body": {...}, "conclusion": {...}, "recommendations": {...}, "appendices": {...}, "signatures_approvals": {...}, "language_quality": {...}, "visual_organization": {...}, "missing_sections": ["..."], "formatting_strengths": ["..."], "formatting_weaknesses": ["..."]}'
 
     prompt_text = f"""You are a Quality Control AI assistant for Egyptian university accreditation and quality assurance.
-Your job is to evaluate whether tasks and uploaded documents meet defined quality standards.
+Your job is to evaluate whether submitted documents meet defined quality standards.
 You must respond ONLY with a valid JSON object. No markdown, no explanation outside JSON.
 
 JSON format:
 {{
+  "verdict": "ACCEPTED" or "NOT ACCEPTED",
   "compliance_score": <number 0-100>,
+  "rejection_details": [
+    {{
+      "issue": "<clear description of the problem in English>",
+      "reason": "<why this makes the document non-compliant>",
+      "location": "<page number and paragraph/section reference, e.g. Page 3, Section 2.1 or Page 5, Paragraph 2>",
+      "how_to_fix": "<specific actionable instruction on how to correct this issue>"
+    }}
+  ],
   "passed_standards": [
     {{"rule": "<rule text>", "result": "<why it passed>"}}
   ],
   "failed_standards": [
-    {{"rule": "<rule text>", "reason": "<why it failed>"}}
+    {{"rule": "<rule text>", "reason": "<why it failed>", "location": "<page and paragraph reference if applicable>"}}
   ],
   "suggestions": [
     "<actionable improvement tip>"
@@ -1068,6 +1077,13 @@ JSON format:
     {{"file_name": "<name>", "analysis_result": "<one sentence result>"}}
   ]{extra_json_fields}
 }}
+
+VERDICT RULES:
+- Set verdict to "ACCEPTED" ONLY if compliance_score >= 70 AND no critical required elements are missing.
+- Set verdict to "NOT ACCEPTED" if compliance_score < 70 OR any critical standard is failed.
+- The "rejection_details" array MUST be populated with ALL issues when verdict is "NOT ACCEPTED".
+- For EACH issue in rejection_details, you MUST provide: the exact page number, the section/paragraph reference, a clear reason, and specific instructions on how to fix it.
+- If the document is ACCEPTED, rejection_details should be an empty array [].
 
 {learned_context}{report_type_context}{formatting_prompt}
 
@@ -1084,6 +1100,7 @@ Evaluate this task against EACH quality standard listed above.
 Also apply any learned quality patterns from the trained model above.
 {('IMPORTANT: Also validate whether this task meets ALL required elements of the specified report type above. Add "report_type_compliance" to your JSON response.') if report_type_context else ''}
 {('IMPORTANT: Since a PDF is attached, you MUST also evaluate document formatting compliance and add "formatting_compliance" to your JSON response.') if has_pdf else ''}
+For EVERY failed standard, identify the exact page number and paragraph/section in the document.
 Be specific about which rules passed and which failed.
 Provide 2-5 actionable improvement suggestions."""
 
@@ -1113,8 +1130,14 @@ Provide 2-5 actionable improvement suggestions."""
     result.setdefault("failed_standards", [])
     result.setdefault("suggestions", [])
     result.setdefault("files_analyzed", files_analyzed)
+    result.setdefault("rejection_details", [])
 
     result["compliance_score"] = max(0.0, min(100.0, float(result["compliance_score"])))
+
+    # Auto-compute verdict if AI didn't provide one
+    if "verdict" not in result:
+        result["verdict"] = "ACCEPTED" if result["compliance_score"] >= 70 else "NOT ACCEPTED"
+
     result["_raw"] = raw
     result["_mode"] = "online"
     return result
@@ -1155,7 +1178,7 @@ async def _online_analyze_roadmap(
     extra_context: str = "",
 ) -> dict:
     """Online Gemini roadmap analysis with web search augmentation."""
-    import google.generativeai as genai
+    from app.services.gemini_service import genai
     model = _get_gemini_model()
 
     tasks_text = "\n".join(f"- {t}" for t in tasks_list) if tasks_list else "(No tasks listed)"
@@ -1263,7 +1286,7 @@ async def _online_chat_with_analysis(
     conversation: List[dict],
     user_message: str,
 ) -> str:
-    import google.generativeai as genai
+    from app.services.gemini_service import genai
     model = _get_gemini_model()
 
     system_context = f"""You are an expert Quality Control AI assistant helping a software team.
@@ -1324,7 +1347,7 @@ async def _online_best_practices(
     context: str = "",
 ) -> List[str]:
     """Online best practices with web search (Gemini)."""
-    import google.generativeai as genai
+    from app.services.gemini_service import genai
     model = _get_gemini_model()
 
     # Search the web for current best practices

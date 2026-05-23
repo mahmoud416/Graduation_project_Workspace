@@ -14,9 +14,11 @@ import {
     downloadQualityReport,
     fetchReportTypes,
     evaluateTask,
+    fetchAIHistory,
     type CreateStandardPayload,
     type ReportType,
     type EvaluationResult,
+    type AIHistoryItem,
 } from '../services/qcService';
 
 const API_BASE = (import.meta.env.VITE_API_BASE ?? 'http://localhost:8000/api/v1').replace(/\/$/, '');
@@ -157,6 +159,7 @@ const QCDashboard = () => {
     const [aiOpen, setAiOpen] = useState(false);
     const [exporting, setExporting] = useState<'csv' | 'pdf' | null>(null);
     const [toast, setToast] = useState<ToastPayload>(null);
+    const [aiHistory, setAiHistory] = useState<AIHistoryItem[]>([]);
     const [projectOptions, setProjectOptions] = useState<ProjectOption[]>(DEFAULT_PROJECT_OPTIONS);
     const [projectsLoading, setProjectsLoading] = useState(false);
     const [projectFetchError, setProjectFetchError] = useState<string | null>(null);
@@ -171,13 +174,15 @@ const QCDashboard = () => {
         setLoading(true);
         setError(null);
         try {
-            const [overviewData, standardData] = await Promise.all([
+            const [overviewData, standardData, historyData] = await Promise.all([
                 fetchQualityOverview({ days: range }),
                 fetchQualityStandards({ status: 'active' }),
+                fetchAIHistory()
             ]);
             if (!mountedRef.current) return;
             setOverview(overviewData);
             setStandards(standardData);
+            setAiHistory(historyData);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Unable to load QC data');
         } finally {
@@ -433,7 +438,6 @@ const QCDashboard = () => {
                                 <p className="text-xs uppercase tracking-[0.4em] text-white/50">AI history</p>
                                 <h3 className="text-xl font-semibold">Recent evaluations</h3>
                             </div>
-                            <button type="button" onClick={() => setAiOpen(true)} className="text-sm font-semibold text-cyan-300 hover:text-white">Run new</button>
                         </div>
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm">
@@ -446,26 +450,28 @@ const QCDashboard = () => {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-white/5">
-                                    {(overview?.aiHistory ?? []).slice(0, 8).map((entry) => (
-                                        <tr key={entry.analysisId} className="hover:bg-white/5">
+                                    {aiHistory.slice(0, 10).map((entry) => (
+                                        <tr key={entry.taskId} className="hover:bg-white/5">
                                             <td className="py-3 pr-4">
                                                 <p className="font-semibold">{entry.taskTitle || 'Untitled task'}</p>
-                                                <p className="text-xs text-white/50">{entry.analysisId}</p>
+                                                <p className="text-xs text-white/50">{entry.taskId}</p>
                                             </td>
                                             <td className="py-3 pr-4">
                                                 {typeof entry.score === 'number' ? (
-                                                    <span className="font-semibold text-emerald-300">{entry.score.toFixed(1)}</span>
+                                                    <span className={`font-semibold ${entry.score >= 80 ? 'text-emerald-400' : entry.score >= 50 ? 'text-amber-400' : 'text-rose-400'}`}>
+                                                        {entry.score.toFixed(1)}
+                                                    </span>
                                                 ) : (
                                                     <span className="text-white/50">—</span>
                                                 )}
                                             </td>
                                             <td className="py-3 pr-4"><StatusPill status={entry.status} /></td>
-                                            <td className="py-3 text-xs text-white/70">{entry.createdAt ? new Date(entry.createdAt).toLocaleString() : '—'}</td>
+                                            <td className="py-3 text-xs text-white/70">{entry.timestamp ? new Date(entry.timestamp).toLocaleString() : '—'}</td>
                                         </tr>
                                     ))}
                                 </tbody>
                             </table>
-                            {(!overview?.aiHistory || overview.aiHistory.length === 0) && (
+                            {aiHistory.length === 0 && (
                                 <p className="text-sm text-white/60">No AI evaluations captured for this range.</p>
                             )}
                         </div>

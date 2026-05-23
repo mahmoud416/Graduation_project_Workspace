@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
+import CreateTeamModal from '../components/CreateTeamModal';
 
 const API_BASE = (import.meta.env.VITE_API_BASE ?? 'http://localhost:8000/api/v1').replace(/\/$/, '');
 
@@ -56,26 +57,29 @@ const TeamPage = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [roleFilter, setRoleFilter] = useState<string>('all');
     const [page, setPage] = useState(1);
+    const [isCreateTeamOpen, setIsCreateTeamOpen] = useState(false);
+    const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+    const fetchUsers = async () => {
+        try {
+            setIsLoading(true);
+            setError(null);
+            const token = localStorage.getItem('token');
+            const res = await fetch(`${API_BASE}/users`, {
+                headers: { Authorization: `Bearer ${token ?? ''}` },
+            });
+            if (!res.ok) throw new Error(`Failed to load team members (${res.status})`);
+            const data: TeamMember[] = await res.json();
+            data.sort((a, b) => (ROLES_ORDER[a.role] ?? 9) - (ROLES_ORDER[b.role] ?? 9));
+            setMembers(data);
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Failed to load team members');
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     useEffect(() => {
-        const fetchUsers = async () => {
-            try {
-                setIsLoading(true);
-                setError(null);
-                const token = localStorage.getItem('token');
-                const res = await fetch(`${API_BASE}/users`, {
-                    headers: { Authorization: `Bearer ${token ?? ''}` },
-                });
-                if (!res.ok) throw new Error(`Failed to load team members (${res.status})`);
-                const data: TeamMember[] = await res.json();
-                data.sort((a, b) => (ROLES_ORDER[a.role] ?? 9) - (ROLES_ORDER[b.role] ?? 9));
-                setMembers(data);
-            } catch (err: unknown) {
-                setError(err instanceof Error ? err.message : 'Failed to load team members');
-            } finally {
-                setIsLoading(false);
-            }
-        };
         void fetchUsers();
     }, []);
 
@@ -114,7 +118,23 @@ const TeamPage = () => {
                                 Review your team's directory and manage member information.
                             </p>
                         </div>
+                        <button
+                            onClick={() => setIsCreateTeamOpen(true)}
+                            className="bg-primary hover:bg-primary-hover text-white px-5 py-2.5 rounded-xl text-sm font-semibold shadow-lg shadow-primary/30 transition-all flex items-center gap-2"
+                        >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                            </svg>
+                            Add Team
+                        </button>
                     </div>
+
+                    {successMessage && (
+                        <div className="mb-6 p-4 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 text-sm rounded-lg border border-emerald-100 dark:border-emerald-900/50 flex justify-between items-center">
+                            <span>{successMessage}</span>
+                            <button onClick={() => setSuccessMessage(null)} className="opacity-70 hover:opacity-100">✕</button>
+                        </div>
+                    )}
 
                     {/* Stats Cards */}
                     <div className="grid grid-cols-4 gap-5 mb-6">
@@ -355,6 +375,16 @@ const TeamPage = () => {
                     </div>
                 </main>
             </div>
+            
+            <CreateTeamModal
+                isOpen={isCreateTeamOpen}
+                onClose={() => setIsCreateTeamOpen(false)}
+                onSuccess={() => {
+                    setIsCreateTeamOpen(false);
+                    setSuccessMessage('Team created successfully!');
+                    void fetchUsers();
+                }}
+            />
         </div>
     );
 };

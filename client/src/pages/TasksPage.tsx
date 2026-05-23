@@ -11,7 +11,7 @@ interface TaskItem {
     name: string;
     category: string;
     assignees: string[];
-    status: 'To Do' | 'In Progress' | 'Done' | 'Review' | 'UR';
+    status: 'To Do' | 'In Progress' | 'Done' | 'Review' | 'UR' | 'Completed' | 'Not Completed Yet';
     priority: 'LOW' | 'MED' | 'HIGH';
     dueDate: string;
     overdue?: boolean;
@@ -32,13 +32,13 @@ const TasksPage = () => {
         percentage: 65,
     };
 
-    const tasks: TaskItem[] = [
+    const [tasks, setTasks] = useState<TaskItem[]>([
         {
             id: '1',
             name: 'Design System Audit & Update',
             category: 'Finance • #TSK-10-24',
             assignees: ['AB', 'CD'],
-            status: 'In Progress',
+            status: 'Not Completed Yet',
             priority: 'HIGH',
             dueDate: 'Oct 24, 2023',
             projectId: 'public-group',
@@ -48,7 +48,7 @@ const TasksPage = () => {
             name: 'API Integration for Payment Gateway',
             category: 'Marketing • #TSK-10-39',
             assignees: ['EF'],
-            status: 'To Do',
+            status: 'Not Completed Yet',
             priority: 'MED',
             dueDate: 'Oct 28, 2023',
             projectId: 'all-sub-admin',
@@ -58,7 +58,7 @@ const TasksPage = () => {
             name: 'Drafting Q4 Budget Proposal',
             category: 'Finance • #TSK-11-01',
             assignees: ['GH'],
-            status: 'Done',
+            status: 'Completed',
             priority: 'LOW',
             dueDate: 'Oct 15, 2023',
             projectId: 'public-group',
@@ -68,7 +68,7 @@ const TasksPage = () => {
             name: 'Security Vulnerability Patch v2.3',
             category: 'Security • #TSK-10-25',
             assignees: [],
-            status: 'UR',
+            status: 'Not Completed Yet',
             priority: 'HIGH',
             dueDate: 'Overdue',
             overdue: true,
@@ -79,23 +79,35 @@ const TasksPage = () => {
             name: 'Marketing Copy for Landing Page',
             category: 'Content • #TSK-SD-231',
             assignees: ['IJ', 'KL'],
-            status: 'In Progress',
+            status: 'Not Completed Yet',
             priority: 'MED',
             dueDate: 'Nov 02, 2023',
             projectId: 'public-group',
         },
-    ];
+    ]);
+
+    const toggleTaskCompletion = (taskId: string) => {
+        setTasks((prevTasks) =>
+            prevTasks.map((task) =>
+                task.id === taskId
+                    ? { ...task, status: task.status === 'Completed' ? 'Not Completed Yet' : 'Completed' }
+                    : task
+            )
+        );
+    };
 
     const getStatusColor = (status: string) => {
         switch (status) {
             case 'In Progress':
+            case 'Not Completed Yet':
+            case 'To Do':
+            case 'UR':
                 return 'bg-blue-100 text-primary';
             case 'Done':
+            case 'Completed':
                 return 'bg-green-100 text-success';
             case 'Review':
                 return 'bg-purple-100 text-purple-600';
-            case 'UR':
-                return 'bg-gray-100 text-text-gray';
             default:
                 return 'bg-gray-100 text-text-gray';
         }
@@ -270,7 +282,12 @@ const TasksPage = () => {
                                     className="grid grid-cols-12 gap-4 px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-700/40 transition-colors border-b border-gray-200 dark:border-gray-700 last:border-0"
                                 >
                                     <div className="col-span-1 flex items-center">
-                                        <input type="checkbox" className="w-4 h-4 border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800" />
+                                        <input 
+                                            type="checkbox" 
+                                            checked={task.status === 'Completed'}
+                                            onChange={() => toggleTaskCompletion(task.id)}
+                                            className="w-4 h-4 border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800" 
+                                        />
                                     </div>
 
                                     <div className="col-span-4" onClick={() => navigate('/taskflow')}>

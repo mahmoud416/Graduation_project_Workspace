@@ -120,7 +120,7 @@ async def index_report_type_specs(openai_client) -> int:
         return 0
 
     # Import here to avoid circular dependency
-    from app.services.ai_service import REPORT_TYPES
+    from app.services.qc_service import REPORT_TYPES
 
     docs, ids, metas = [], [], []
     now = datetime.utcnow().isoformat()

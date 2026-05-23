@@ -24,6 +24,8 @@ QUALITY_ANALYSES_COLLECTION  = "quality_analyses"
 TODO_AUDIT_COLLECTION        = "todo_audit"
 QC_REPORTS_CACHE_COLLECTION  = "qc_reports_cache"
 RAG_INDEX_STATE_COLLECTION   = "rag_index_state"
+QUALITY_SCORES_COLLECTION    = "quality_scores"
+ENTITIES_COLLECTION          = "entities"
 
 
 async def _safe_create_index(collection, keys, **kwargs):
@@ -165,5 +167,26 @@ async def create_indexes(db):
         db[QC_REPORTS_CACHE_COLLECTION],
         [("project_id", 1), ("date", -1)]
     )
+
+    # quality_scores — AI QC scoring per task
+    await _safe_create_index(db[QUALITY_SCORES_COLLECTION], "task_id")
+    await _safe_create_index(db[QUALITY_SCORES_COLLECTION], "user_id")
+    await _safe_create_index(db[QUALITY_SCORES_COLLECTION], "team_id")
+    await _safe_create_index(db[QUALITY_SCORES_COLLECTION], "project_id")
+    await _safe_create_index(
+        db[QUALITY_SCORES_COLLECTION],
+        [("user_id", 1), ("created_at", -1)]
+    )
+
+    # users — avatar_url for profile lookups
+    await _safe_create_index(db[USERS_COLLECTION], "avatar_url")
+
+    # tasks — new indexes for assignees array lookups
+    await _safe_create_index(db[TASKS_COLLECTION], "assignees")
+
+    # entities — unique name and lookups by founder
+    await _safe_create_index(db[ENTITIES_COLLECTION], "name", unique=True)
+    await _safe_create_index(db[ENTITIES_COLLECTION], "founder_id")
+    await _safe_create_index(db[ENTITIES_COLLECTION], "it_staff_ids")
 
     print("✓ Database indexes created")

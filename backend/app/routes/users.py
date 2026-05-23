@@ -45,8 +45,10 @@ async def list_users(
             detail="Only admins can access the user directory"
         )
 
-    query = {}
+    query = {"role": {"$ne": "founder"}}
     if role:
+        if role.lower() == "founder":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot query founders")
         query["role"] = role
 
     users = await db[USERS_COLLECTION].find(query).sort("name", 1).to_list(length=None)
@@ -79,7 +81,10 @@ async def update_user(
     if payload.name is not None:
         update_fields["name"] = payload.name
     if payload.role is not None:
+        if payload.role.lower() == "founder":
+            raise HTTPException(status_code=403, detail="Cannot assign founder role")
         update_fields["role"] = payload.role
+        update_fields["roles"] = [payload.role]
     if payload.phone is not None:
         update_fields["phone"] = payload.phone
     if payload.status is not None:

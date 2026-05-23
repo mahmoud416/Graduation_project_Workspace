@@ -153,6 +153,23 @@ const Sidebar = () => {
             ];
         }
 
+        if (role === 'founder') {
+            return [
+                { iconKey: 'dashboard', label: 'Dashboard', path: '/dashboard' },
+                { iconKey: 'settings', label: 'Settings', path: '/settings' },
+            ];
+        }
+
+        if (role === 'manager') {
+            return [
+                { iconKey: 'dashboard', label: 'Dashboard', path: '/dashboard' },
+                { iconKey: 'projects', label: 'Projects', path: '/projects' },
+                { iconKey: 'team', label: 'My Team', path: '/team' },
+                { iconKey: 'reports', label: 'Analytics', path: '/reports' },
+                { iconKey: 'settings', label: 'Settings', path: '/settings' },
+            ];
+        }
+
         return [
             { iconKey: 'dashboard', label: 'Dashboard', path: '/dashboard' },
             { iconKey: 'projects', label: 'Projects', path: '/projects' },

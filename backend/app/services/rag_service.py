@@ -23,7 +23,7 @@ _reindex_lock = asyncio.Lock()
 
 
 # ---------------------------------------------------------------------------
-# RagContext dataclass — returned to ai_service.py
+# RagContext dataclass — returned to qc_service.py
 # ---------------------------------------------------------------------------
 
 @dataclass
@@ -163,7 +163,7 @@ async def build_rag_context(
     db,
 ) -> RagContext:
     """
-    Main entry point called by ai_service.py.
+    Main entry point called by qc_service.py.
 
     1. Ensure index is fresh (lazy re-index if needed)
     2. Embed the task query
@@ -172,7 +172,7 @@ async def build_rag_context(
     5. Return RagContext
 
     Falls back gracefully: if anything fails, RagContext.fallback_used=True
-    signals ai_service to use the old full-dump path.
+    signals qc_service to use the old full-dump path.
     """
     if not settings.RAG_ENABLED:
         return RagContext(fallback_used=True)

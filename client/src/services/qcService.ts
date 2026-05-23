@@ -141,6 +141,21 @@ export const buildReportExportUrl = (format: 'csv' | 'pdf', params: PlainObject 
     return `${QC_BASE}/reports/export?${query.toString()}`;
 };
 
+export interface AIHistoryItem {
+    taskId: string;
+    taskTitle: string;
+    score: number;
+    status: string;
+    timestamp: string | null;
+}
+
+export const fetchAIHistory = async (): Promise<AIHistoryItem[]> => {
+    const response = await fetch(`${API_BASE}/ai/history`, {
+        headers: authHeaders(),
+    });
+    return handleResponse<AIHistoryItem[]>(response);
+};
+
 // ---------------------------------------------------------------------------
 // Report Types
 // ---------------------------------------------------------------------------

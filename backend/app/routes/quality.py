@@ -23,7 +23,7 @@ from app.db.collections import (
 )
 from app.dependencies.auth import get_current_user
 from app.dependencies.rbac import ensure_roles, QC_ROLE, LEGACY_QM_ROLE
-from app.services import ai_service
+from app.services import qc_service
 
 
 router = APIRouter(prefix="/quality", tags=["Quality Control"])
@@ -224,7 +224,7 @@ async def get_report_types(
             "description": rt["description"],
             "required_elements": rt["required_elements"],
         }
-        for key, rt in ai_service.REPORT_TYPES.items()
+        for key, rt in qc_service.REPORT_TYPES.items()
     ]
 
 
@@ -257,7 +257,7 @@ async def evaluate_task(
         except Exception:
             pass
 
-    result = await ai_service.analyze_task_against_standards(
+    result = await qc_service.analyze_task_against_standards(
         task_title=body.task_title,
         task_description=body.task_description,
         standards_rules=rules,
@@ -268,8 +268,8 @@ async def evaluate_task(
     )
 
     # Attach report type info to result for frontend display
-    if body.report_type and body.report_type in ai_service.REPORT_TYPES:
-        rt = ai_service.REPORT_TYPES[body.report_type]
+    if body.report_type and body.report_type in qc_service.REPORT_TYPES:
+        rt = qc_service.REPORT_TYPES[body.report_type]
         result["report_type_key"] = body.report_type
         result["report_type_name_ar"] = rt["name_ar"]
         result["report_type_name_en"] = rt["name_en"]
@@ -280,8 +280,16 @@ async def evaluate_task(
         })
 
     # Persist evaluation
+    def _safe_task_id(tid: str | None):
+        if not tid:
+            return None
+        try:
+            return ObjectId(tid)
+        except Exception:
+            return tid  # store as plain string if not a valid ObjectId
+
     eval_doc = {
-        "task_id": ObjectId(body.task_id) if body.task_id else None,
+        "task_id": _safe_task_id(body.task_id),
         "task_title": body.task_title,
         "evaluated_by": current_user["_id"],
         "rules_count": len(rules),
@@ -309,6 +317,7 @@ async def evaluate_task(
                     "qc_reviewed_at": None,
                     "report_type": body.report_type,
                     "report_type_compliant": result.get("report_type_compliance", {}).get("is_compliant"),
+                    "aiScore": result.get("compliance_score", 0),
                     "updated_at": datetime.utcnow(),
                 }},
             )
@@ -410,7 +419,7 @@ async def chat_about_evaluation(
 ):
     """Conversational follow-up about a QC evaluation result."""
     _require_qc_or_admin(current_user)
-    reply = await ai_service.chat_with_analysis(
+    reply = await qc_service.chat_with_analysis(
         task_title=body.task_title,
         task_description=body.task_description,
         analysis_summary=body.analysis_summary,
@@ -448,7 +457,7 @@ async def analyze_roadmap(
     rules = await db[QUALITY_RULES_COLLECTION].find({"is_active": True}).to_list(length=200)
     standards_context = "\n".join(f"- [{r['category']}] {r['rule']}" for r in rules)
 
-    result = await ai_service.analyze_project_roadmap(
+    result = await qc_service.analyze_project_roadmap(
         project_title=project.get("name", "Unknown"),
         project_description=project.get("description", ""),
         tasks_list=task_titles,
@@ -471,7 +480,7 @@ async def best_practices(
 ):
     """Return AI-generated best practices for a given project type."""
     _require_qc_admin_or_subadmin(current_user)
-    practices = await ai_service.get_best_practices_for_project(project_type, context)
+    practices = await qc_service.get_best_practices_for_project(project_type, context)
     return {"best_practices": practices}
 
 

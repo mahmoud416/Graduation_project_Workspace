@@ -79,17 +79,25 @@ const CreateProjectModal = ({ onClose, onSuccess }: CreateProjectModalProps) => 
 
             const headers = { 'X-User-Id': userId, 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') };
             try {
-                const [subResponse, staffResponse] = await Promise.all([
-                    fetch(`${API_BASE}/users?role=sub_admin`, { headers }),
+                const [subResponse, staffResponse, managerResponse] = await Promise.all([
+                    fetch(`${API_BASE}/users?role=subadmin`, { headers }),
                     fetch(`${API_BASE}/users?role=staff`, { headers }),
+                    fetch(`${API_BASE}/users?role=manager`, { headers }),
                 ]);
 
-                if (!subResponse.ok || !staffResponse.ok) {
+                if (!subResponse.ok || !staffResponse.ok || !managerResponse.ok) {
                     throw new Error('Failed to load directory data');
                 }
 
-                const [subData, staffData] = await Promise.all([subResponse.json(), staffResponse.json()]);
-                setSubAdmins(subData.map(normalizeDirectoryEntry));
+                const [subData, staffData, managerData] = await Promise.all([
+                    subResponse.json(), 
+                    staffResponse.json(),
+                    managerResponse.json()
+                ]);
+                
+                // Combine Sub-Admins and Managers into the same list for assignment
+                const combinedManagers = [...subData, ...managerData].map(normalizeDirectoryEntry);
+                setSubAdmins(combinedManagers);
                 setStaffDirectory(staffData.map(normalizeDirectoryEntry));
             } catch (err: unknown) {
                 const message = err instanceof Error ? err.message : 'Unable to load directory data';
@@ -255,8 +263,8 @@ const CreateProjectModal = ({ onClose, onSuccess }: CreateProjectModalProps) => 
                         <div className="space-y-1.5">
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <p className="text-xs font-semibold uppercase text-text-gray">Assigned Sub Admins</p>
-                                    <p className="text-xs text-text-gray">Select sub admins who will co-manage</p>
+                                    <p className="text-xs font-semibold uppercase text-text-gray">Assigned Managers / Sub Managers</p>
+                                    <p className="text-xs text-text-gray">Select managers/sub-managers who will co-manage</p>
                                 </div>
                                 <span className="text-xs font-semibold text-text-gray">{selectedSubAdmins.length} selected</span>
                             </div>
@@ -264,7 +272,7 @@ const CreateProjectModal = ({ onClose, onSuccess }: CreateProjectModalProps) => 
                                 {directoryLoading ? (
                                     <p className="text-sm text-text-gray">Loading directory...</p>
                                 ) : subAdmins.length === 0 ? (
-                                    <p className="text-sm text-text-gray">No sub admins available.</p>
+                                    <p className="text-sm text-text-gray">No managers or sub managers available.</p>
                                 ) : (
                                     subAdmins.map((member) => (
                                         <label

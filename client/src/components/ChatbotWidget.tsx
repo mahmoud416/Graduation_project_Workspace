@@ -92,7 +92,7 @@ const ChatbotWidget = () => {
         }
     }, [open]);
 
-    const sendMessage = useCallback(() => {
+    const sendMessage = useCallback(async () => {
         const text = input.trim();
         if (!text) return;
 
@@ -101,14 +101,39 @@ const ChatbotWidget = () => {
         setInput('');
         setTyping(true);
 
-        // Simulate bot typing delay
-        setTimeout(() => {
-            const reply = getBotReply(text);
-            const botMsg: Message = { id: idRef.current++, from: 'bot', text: reply, time: now() };
+        try {
+            const API_BASE = (import.meta.env.VITE_API_BASE ?? 'http://localhost:8000/api/v1').replace(/\/$/, '');
+            const token = localStorage.getItem('token') ?? '';
+            
+            const response = await fetch(`${API_BASE}/chat`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ message: text })
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to get response from AI');
+            }
+            
+            const data = await response.json();
+            const botMsg: Message = { id: idRef.current++, from: 'bot', text: data.reply, time: now() };
             setMessages(prev => [...prev, botMsg]);
+        } catch (error) {
+            console.error('Chat error:', error);
+            const errorMsg: Message = { 
+                id: idRef.current++, 
+                from: 'bot', 
+                text: "Sorry, I'm having trouble connecting right now. Please try again later.", 
+                time: now() 
+            };
+            setMessages(prev => [...prev, errorMsg]);
+        } finally {
             setTyping(false);
             if (!open) setUnread(n => n + 1);
-        }, 700 + Math.random() * 400);
+        }
     }, [input, open]);
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {

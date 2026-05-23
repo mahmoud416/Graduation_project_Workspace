@@ -1,0 +1,388 @@
+INFO:     Will watch for changes in these directories: ['/mnt/2/projects/Graduation_project_Workspace/backend']
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [249608] using WatchFiles
+/mnt/2/projects/Graduation_project_Workspace/backend/app/services/gemini_service.py:1: FutureWarning: 
+
+All support for the `google.generativeai` package has ended. It will no longer be receiving 
+updates or bug fixes. Please switch to the `google.genai` package as soon as possible.
+See README for more details:
+
+https://github.com/google-gemini/deprecated-generative-ai-python/blob/main/README.md
+
+  import google.generativeai as genai
+INFO:     Started server process [249610]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+✓ Connected to MongoDB: hericle_workspace
+✓ Database indexes created
+[RAG] Starting background index warmup…
+[RAG] Index warmup skipped (ChromaDB unavailable)
+INFO:     127.0.0.1:59080 - "OPTIONS /api/v1/quality/report-types HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59090 - "OPTIONS /api/v1/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59080 - "OPTIONS /api/v1/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59098 - "GET /api/v1/quality/report-types HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59104 - "GET /api/v1/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59080 - "GET /api/v1/quality/report-types HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59104 - "GET /api/v1/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49644 - "GET /docs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49644 - "GET /openapi.json HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39028 - "GET /api/v1/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39028 - "GET /api/v1/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39044 - "OPTIONS /api/v1/task-boards/public-group HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39056 - "OPTIONS /api/v1/task-boards/public-group HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39054 - "GET /api/v1/quality/report-types HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39056 - "GET /api/v1/quality/report-types HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39070 - "GET /api/v1/task-boards/public-group HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39070 - "GET /api/v1/task-boards/public-group HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41304 - "OPTIONS /api/v1/task-boards/public-group/todos/task-1778250897970 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41314 - "PATCH /api/v1/task-boards/public-group/todos/task-1778250897970 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59528 - "GET /api/v1/quality/report-types HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59542 - "GET /api/v1/quality/report-types HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59540 - "GET /api/v1/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59540 - "GET /api/v1/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56642 - "GET /api/v1/quality/report-types HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56658 - "GET /api/v1/quality/report-types HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56648 - "GET /api/v1/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56648 - "GET /api/v1/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41436 - "GET /api/v1/quality/evaluations HTTP/1.1" 401 Unauthorized
+INFO:     127.0.WARNING:  WatchFiles detected changes in 'app/schemas/team.py'. Reloading...
+Process SpawnProcess-2:
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/multiprocessing/process.py", line 314, in _bootstrap
+    self.run()
+  File "/usr/lib/python3.12/multiprocessing/process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+  File "/home/ahmed/.local/lib/python3.12/site-packages/uvicorn/_subprocess.py", line 78, in subprocess_started
+    target(sockets=sockets)
+  File "/home/ahmed/.local/lib/python3.12/site-packages/uvicorn/server.py", line 62, in run
+    return asyncio.run(self.serve(sockets=sockets))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/runners.py", line 194, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "uvloop/loop.pyx", line 1516, in uvloop.loop.Loop.run_until_complete
+  File "/home/ahmed/.local/lib/python3.12/site-packages/uvicorn/server.py", line 69, in serve
+    config.load()
+  File "/home/ahmed/.local/lib/python3.12/site-packages/uvicorn/config.py", line 458, in load
+    self.loaded_app = import_from_string(self.app)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ahmed/.local/lib/python3.12/site-packages/uvicorn/importer.py", line 24, in import_from_string
+    raise exc from None
+  File "/home/ahmed/.local/lib/python3.12/site-packages/uvicorn/importer.py", line 21, in import_from_string
+    module = importlib.import_module(module_str)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/importlib/__init__.py", line 90, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1387, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1360, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1331, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 935, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 995, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "/mnt/2/projects/Graduation_project_Workspace/backend/main.py", line 12, in <module>
+    from app.routes import (
+  File "/mnt/2/projects/Graduation_project_Workspace/backend/app/routes/chat.py", line 3, in <module>
+    from app.services.chat_service import ChatService
+  File "/mnt/2/projects/Graduation_project_Workspace/backend/app/services/chat_service.py", line 1, in <module>
+    from app.services.gemini_service import get_gemini_model
+  File "/mnt/2/projects/Graduation_project_Workspace/backend/app/services/gemini_service.py", line 1, in <module>
+    import google.generativeai as genai
+ModuleNotFoundError: No module named 'google'
+WARNING:  WatchFiles detected changes in 'app/routes/teams.py'. Reloading...
+Process SpawnProcess-3:
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/multiprocessing/process.py", line 314, in _bootstrap
+    self.run()
+  File "/usr/lib/python3.12/multiprocessing/process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+  File "/home/ahmed/.local/lib/python3.12/site-packages/uvicorn/_subprocess.py", line 78, in subprocess_started
+    target(sockets=sockets)
+  File "/home/ahmed/.local/lib/python3.12/site-packages/uvicorn/server.py", line 62, in run
+    return asyncio.run(self.serve(sockets=sockets))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/runners.py", line 194, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "uvloop/loop.pyx", line 1516, in uvloop.loop.Loop.run_until_complete
+  File "/home/ahmed/.local/lib/python3.12/site-packages/uvicorn/server.py", line 69, in serve
+    config.load()
+  File "/home/ahmed/.local/lib/python3.12/site-packages/uvicorn/config.py", line 458, in load
+    self.loaded_app = import_from_string(self.app)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ahmed/.local/lib/python3.12/site-packages/uvicorn/importer.py", line 24, in import_from_string
+    raise exc from None
+  File "/home/ahmed/.local/lib/python3.12/site-packages/uvicorn/importer.py", line 21, in import_from_string
+    module = importlib.import_module(module_str)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/importlib/__init__.py", line 90, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^/mnt/2/projects/Graduation_project_Workspace/backend/app/services/gemini_service.py:1: FutureWarning: 
+
+All support for the `google.generativeai` package has ended. It will no longer be receiving 
+updates or bug fixes. Please switch to the `google.genai` package as soon as possible.
+See README for more details:
+
+https://github.com/google-gemini/deprecated-generative-ai-python/blob/main/README.md
+
+  import google.generativeai as genai
+INFO:     Started server process [255094]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+✓ Connected to MongoDB: hericle_workspace
+✓ Database indexes created
+[RAG] Starting background index warmup…
+[RAG] Index warmup skipped (ChromaDB unavailable)
+INFO:     127.0.0.1:56354 - "OPTIONS /api/v1/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56362 - "GET /api/v1/users HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:40244 - "OPTIONS /api/v1/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40256 - "POST /api/v1/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40256 - "OPTIONS /api/v1/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40244 - "OWARNING:  WatchFiles detected changes in 'app/schemas/team.py'. Reloading...
+Process SpawnProcess-4:
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/multiprocessing/process.py", line 314, in _bootstrap
+    self.run()
+  File "/usr/lib/python3.12/multiprocessing/process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+  File "/home/ahmed/.local/lib/python3.12/site-packages/uvicorn/_subprocess.py", line 78, in subprocess_started
+    target(sockets=sockets)
+  File "/home/ahmed/.local/lib/python3.12/site-packages/uvicorn/server.py", line 62, in run
+    return asyncio.run(self.serve(sockets=sockets))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/runners.py", line 194, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "uvloop/loop.pyx", line 1516, in uvloop.loop.Loop.run_until_complete
+  File "/home/ahmed/.local/lib/python3.12/site-packages/uvicorn/server.py", line 69, in serve
+    config.load()
+  File "/home/ahmed/.local/lib/python3.12/site-packages/uvicorn/config.py", line 458, in load
+    self.loaded_app = import_from_string(self.app)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ahmed/.local/lib/python3.12/site-packages/uvicorn/importer.py", line 24, in import_from_string
+    raise exc from None
+  File "/home/ahmed/.local/lib/python3.12/site-packages/uvicorn/importer.py", line 21, in import_from_string
+    module = importlib.import_module(module_str)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/importlib/__init__.py", line 90, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1387, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1360, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1331, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 935, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 995, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "/mnt/2/projects/Graduation_project_Workspace/backend/main.py", line 12, in <module>
+    from app.routes import (
+  File "/mnt/2/projects/Graduation_project_Workspace/backend/app/routes/chat.py", line 3, in <module>
+    from app.services.chat_service import ChatService
+  File "/mnt/2/projects/Graduation_project_Workspace/backend/app/services/chat_service.py", line 1, in <module>
+    from app.services.gemini_service import get_gemini_model
+  File "/mnt/2/projects/Graduation_project_Workspace/backend/app/services/gemini_service.py", line 1, in <module>
+    import google.generativeai as genai
+ModuleNotFoundError: No module named 'google'
+WARNING:  WatchFiles detected changes in 'app/schemas/team.py'. Reloading...
+Process SpawnProcess-5:
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/multiprocessing/process.py", line 314, in _bootstrap
+    self.run()
+  File "/usr/lib/python3.12/multiprocessing/process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+  File "/home/ahmed/.local/lib/python3.12/site-packages/uvicorn/_subprocess.py", line 78, in subprocess_started
+    target(sockets=sockets)
+  File "/home/ahmed/.local/lib/python3.12/site-packages/uvicorn/server.py", line 62, in run
+    return asyncio.run(self.serve(sockets=sockets))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/runners.py", line 194, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "uvloop/loop.pyx", line 1516, in uvloop.loop.Loop.run_until_complete
+  File "/home/ahmed/.local/lib/python3.12/site-packages/uvicorn/server.py", line 69, in serve
+    config.load()
+  File "/home/ahmed/.local/lib/python3.12/site-packages/uvicorn/config.py", line 458, in load
+    self.loaded_app = import_from_string(self.app)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ahmed/.local/lib/python3.12/site-packages/uvicorn/importer.py", line 24, in import_from_string
+    raise exc from None
+  File "/home/ahmed/.local/lib/python3.12/site-packages/uvicorn/importer.py", line 21, in import_from_string
+    module = importlib.import_module(module_str)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/importlib/__init__.py", line 90, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1387, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1360, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1331, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 935, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 995, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "/mnt/2/projects/Graduation_project_Workspace/backend/main.py", line 12, in <module>
+    from app.routes import (
+  File "/mnt/2/proj/mnt/2/projects/Graduation_project_Workspace/backend/app/services/gemini_service.py:1: FutureWarning: 
+
+All support for the `google.generativeai` package has ended. It will no longer be receiving 
+updates or bug fixes. Please switch to the `google.genai` package as soon as possible.
+See README for more details:
+
+https://github.com/google-gemini/deprecated-generative-ai-python/blob/main/README.md
+
+  import google.generativeai as genai
+INFO:     Started server process [258534]
+INFO:     Waiting for applicatWARNING:  WatchFiles detected changes in 'app/routes/teams.py'. Reloading...
+Process SpawnProcess-6:
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/multiprocessing/process.py", line 314, in _bootstrap
+    self.run()
+  File "/usr/lib/python3.12/multiprocessing/process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+  File "/home/ahmed/.local/lib/python3.12/site-packages/uvicorn/_subprocess.py", line 78, in subprocess_started
+    target(so/mnt/2/projects/Graduation_project_Workspace/backend/app/services/gemini_service.py:1: FutureWarning: 
+
+All support for the `google.generativeai` package has ended. It will no longer be receiving 
+updates or bug fixes. Please switch to the `google.genai` package as soon as possible.
+See README for more details:
+
+https://github.com/google-gemini/deprecated-generative-ai-python/blob/main/README.md
+
+  import google.generativeai as genai
+INFO:     Started server process [258585]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+✓ Connected to MongoDB: hericle_workspace
+✓ Database indexes created
+[RAG] Starting background index warmup…
+[RAG] Index warmup skipped (ChromaDB unavailable)
+INFO:     127.0.0.1:35926 - "GET /api/v1/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35926 - "GET /api/v1/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42996 - "OPTIONS /api/v1/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43004 - "OPTIONS /api/v1/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43010 - "GET /api/v1/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43010 - "GET /api/v1/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36462 - "GET /api/v1/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34648 - "OPTIONS /api/v1/teams HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34660 - "POST /api/v1/teams HTTP/1.1" 201 Created
+INFO:     127.0.0.1:34660 - "GET /api/v1/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37776 - "GET /api/v1/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36630 - "POST /api/v1/teams HTTP/1.1" 201 Created
+INFO:     127.0.0.1:36630 - "GET /api/v1/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45394 - "GET /api/v1/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45396 - "GET /api/v1/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45394 - "GET /api/v1/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45396 - "GET /api/v1/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40166 - "GET /api/v1/quality/report-types HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40186 - "GET /api/v1/qc/standards?status_filter=active HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40222 - "GET /api/v1/quality/report-types HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40194 - "GET /api/v1/ai/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40208 - "GET /api/v1/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40186 - "GET /api/v1/qc/standards?status_filter=active HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40194 - "GET /api/v1/ai/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40174 - "GET /api/v1/qc/reports/overview?days=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40INFO:     Stopping reloader process [249410]
+INFO:     127.0.0.1:40186 - "GET /api/v1/qc/reports/overview?days=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52008 - "GET /api/v1/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52008 - "GET /api/v1/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52008 - "OPTIONS /api/v1/task-boards/public-group HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52018 - "GET /api/v1/quality/report-types HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52024 - "OPTIONS /api/v1/task-boards/public-group HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52008 - "GET /api/v1/quality/report-types HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52026 - "GET /api/v1/task-boards/public-group HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52026 - "GET /api/v1/task-boards/public-group HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51650 - "OPTIONS /api/v1/task-boards/public-group/todos HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51652 - "POST /api/v1/task-boards/public-group/todos HTTP/1.1" 201 Created
+INFO:     127.0.0.1:51652 - "GET /api/v1/quality/report-types HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49462 - "GET /api/v1/ai/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49446 - "GET /api/v1/qc/standards?status_filter=active HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49480 - "GET /api/v1/quality/report-types HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49464 - "GET /api/v1/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49446 - "GET /api/v1/ai/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49462 - "GET /api/v1/qc/standards?status_filter=active HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51650 - "GET /api/v1/qc/reports/overview?days=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49464 - "GET /api/v1/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49462 - "GET /api/v1/qc/reports/overview?days=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49462 - "GET /api/v1/quality/report-types HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51650 - "GET /api/v1/qc/standards?status_filter=active HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49446 - "GET /api/v1/ai/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51652 - "GET /api/v1/quality/report-types HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49480 - "GET /api/v1/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51650 - "GET /api/v1/qc/standards?status_filter=active HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49446 - "GET /api/v1/ai/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49464 - "GET /api/v1/qc/reports/overview?days=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49480 - "GET /api/v1/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49446 - "GET /api/v1/qc/reports/overview?days=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47030 - "GET /api/v1/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47018 - "GET /api/v1/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47030 - "GET /api/v1/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47018 - "GET /api/v1/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47018 - "GET /api/v1/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47018 - "GET /api/v1/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47018 - "OPTIONS /api/v1/events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47030 - "OPTIONS /api/v1/events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47038 - "GET /api/v1/events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47038 - "GET /api/v1/events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50938 - "GET /api/v1/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50938 - "GET /api/v1/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54844 - "GET /api/v1/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54838 - "GET /api/v1/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54844 - "GET /api/v1/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54838 - "GET /api/v1/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54838 - "OPTIONS /api/v1/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54844 - "OPTIONS /api/v1/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54846 - "GET /api/v1/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54846 - "GET /api/v1/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44556 - "OPTIONS /api/v1/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44562 - "GET /api/v1/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44562 - "GET /api/v1/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44568 - "OPTIONS /api/v1/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44582 - "OPTIONS /api/v1/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44568 - "GET /api/v1/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44582 - "GET /api/v1/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60162 - "OPTIONS /api/v1/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60176 - "GET /api/v1/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60176 - "GET /api/v1/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60192 - "OPTIONS /api/v1/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60198 - "OPTIONS /api/v1/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60192 - "GET /api/v1/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60198 - "GET /api/v1/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33206 - "GET /api/v1/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33206 - "GET /api/v1/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33218 - "GET /api/v1/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33220 - "GET /api/v1/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60330 - "GET /api/v1/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60330 - "GET /api/v1/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60334 - "GET /api/v1/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60338 - "GET /api/v1/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50988 - "GET /api/v1/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51004 - "GET /api/v1/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50992 - "GET /api/v1/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51016 - "GET /api/v1/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46592 - "GET /api/v1/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46592 - "GET /api/v1/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46598 - "GET /api/v1/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46614 - "GET /api/v1/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54490 - "GET /api/v1/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54490 - "GET /api/v1/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54494 - "GET /api/v1/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54504 - "GET /api/v1/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35210 - "GET /api/v1/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35210 - "GET /api/v1/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35222 - "GET /api/v1/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35230 - "GET /api/v1/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46012 - "GET /api/v1/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46012 - "GET /api/v1/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46014 - "GET /api/v1/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46026 - "GET /api/v1/projects HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.

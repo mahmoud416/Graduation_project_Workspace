@@ -22,44 +22,56 @@ class TaskService:
         created_by: ObjectId,
         description: str = "",
         status: TaskStatus = TaskStatus.TODO,
-        priority: TaskPriority = TaskPriority.MEDIUM
+        priority: TaskPriority = TaskPriority.MEDIUM,
+        assignees: Optional[List[ObjectId]] = None,
+        visibility: str = "team",
+        report_type: Optional[str] = None,
+        template_id: Optional[str] = None,
+        assign_to_all: bool = False,
     ) -> Dict[str, Any]:
         """
-        Create a new task.
-        
-        Args:
-            db: Database instance
-            title: Task title
-            team_id: Team ObjectId
-            assigned_to: User ObjectId to assign the task
-            created_by: User ObjectId creating the task
-            description: Task description
-            status: Initial status
-            priority: Task priority
-            
-        Returns:
-            Created task document
-            
-        Raises:
-            ValueError: If assignee is not a member of the team
+        Create a new task with multi-assignee and visibility control.
         """
-        # Verify assignee is a member of the team
-        assignee_membership = await db[MEMBERSHIPS_COLLECTION].find_one({
-            "user_id": assigned_to,
-            "team_id": team_id
-        })
-        if not assignee_membership:
-            raise ValueError("Assigned user is not a member of this team")
-        
+        # Fetch creator details for task attribution
+        creator = await db[USERS_COLLECTION].find_one({"_id": created_by})
+        creator_name = creator.get("name") or creator.get("full_name") if creator else "System"
+        creator_avatar = creator.get("avatar_url") if creator else None
+
+        # Fetch all team members if assign_to_all is enabled
+        if assign_to_all:
+            memberships = await db[MEMBERSHIPS_COLLECTION].find({"team_id": team_id}).to_list(length=None)
+            assignees = list({m["user_id"] for m in memberships})
+            if not assigned_to and assignees:
+                assigned_to = assignees[0]
+        else:
+            if assigned_to:
+                assignee_membership = await db[MEMBERSHIPS_COLLECTION].find_one({
+                    "user_id": assigned_to,
+                    "team_id": team_id
+                })
+                if not assignee_membership:
+                    raise ValueError("Assigned user is not a member of this team")
+            
+            if not assignees:
+                assignees = [assigned_to] if assigned_to else []
+
         # Create task document
         task_doc = TaskModel.create_document(
             title=title,
+            project_id=None,
             team_id=team_id,
             assigned_to=assigned_to,
+            assignees=assignees,
+            visibility=visibility,
             created_by=created_by,
             description=description,
             status=status,
-            priority=priority
+            priority=priority,
+            report_type=report_type,
+            template_id=template_id,
+            assign_to_all=assign_to_all,
+            creator_name=creator_name,
+            creator_avatar=creator_avatar,
         )
         
         # Insert task
@@ -112,10 +124,12 @@ class TaskService:
             if assignee:
                 task["assigned_to_name"] = assignee["full_name"]
             
-            # Get creator name
+            # Get creator name and avatar
             creator = await db[USERS_COLLECTION].find_one({"_id": task["created_by"]})
             if creator:
-                task["created_by_name"] = creator["full_name"]
+                task["created_by_name"] = creator.get("name") or creator.get("full_name")
+                task["creator_name"] = creator.get("name") or creator.get("full_name")
+                task["creator_avatar"] = creator.get("avatar_url")
             
             # Get team name
             team = await db[TEAMS_COLLECTION].find_one({"_id": task["team_id"]})
