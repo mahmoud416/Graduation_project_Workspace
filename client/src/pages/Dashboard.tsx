@@ -320,7 +320,6 @@ const StaffProjectAssignments = () => {
                     </div>
                 )}
             </section>
-
         </main>
     );
 };
@@ -332,8 +331,11 @@ const AdminDashboard = () => {
     const adminName = localStorage.getItem('fullName') || localStorage.getItem('email') || 'Admin';
     const today = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
-    const [projects, setProjects] = useState<(Project & { is_system_card?: boolean })[]>([]);
-    const [users, setUsers] = useState<UserEntry[]>([]);
+    const [projectCount, setProjectCount] = useState<number>(0);
+    const [userCount, setUserCount] = useState<number>(0);
+    const [projectStats, setProjectStats] = useState({ completed: 0, inProgress: 0, notStarted: 0 });
+    const [activeProjects, setActiveProjects] = useState<number>(0);
+    
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -341,17 +343,28 @@ const AdminDashboard = () => {
         setLoading(true);
         setError(null);
         try {
-            const [projRes, userRes] = await Promise.all([
-                fetch(`${API_BASE}/projects`, { headers: authHeaders() }),
-                fetch(`${API_BASE}/users`, { headers: authHeaders() }),
+            const [projCountRes, userCountRes, projStatsRes] = await Promise.all([
+                fetch(`${API_BASE}/projects/count`, { headers: authHeaders() }),
+                fetch(`${API_BASE}/users/count`, { headers: authHeaders() }),
+                fetch(`${API_BASE}/projects/stats`, { headers: authHeaders() })
             ]);
-            if (projRes.ok) {
-                const data = await projRes.json();
-                if (Array.isArray(data)) setProjects(data.map(mapProject));
+            
+            if (projCountRes.ok) {
+                const data = await projCountRes.json();
+                setProjectCount(data.count);
             }
-            if (userRes.ok) {
-                const data = await userRes.json();
-                if (Array.isArray(data)) setUsers(data);
+            if (userCountRes.ok) {
+                const data = await userCountRes.json();
+                setUserCount(data.count);
+            }
+            if (projStatsRes.ok) {
+                const data = await projStatsRes.json();
+                setProjectStats({
+                    completed: data.completed,
+                    inProgress: data.inProgress,
+                    notStarted: data.notStarted
+                });
+                setActiveProjects(data.inProgress);
             }
         } catch (err) {
             setError('Unable to load dashboard data.');
@@ -362,31 +375,7 @@ const AdminDashboard = () => {
 
     useEffect(() => { fetchAll(); }, [fetchAll]);
 
-    // ── Computed analytics ────────────────────────────────────────────────────
-
-    const systemCards = useMemo(() => projects.filter(p => p.isDefaultGroup || p.is_system_card), [projects]);
-    const customProjects = useMemo(() => projects.filter(p => !p.isDefaultGroup && !p.is_system_card), [projects]);
-
-    const activeCount    = useMemo(() => customProjects.filter(p => p.status === 'ACTIVE').length, [customProjects]);
-    const onHoldCount    = useMemo(() => customProjects.filter(p => p.status === 'ON HOLD').length, [customProjects]);
-    const completedCount = useMemo(() => customProjects.filter(p => p.status === 'COMPLETED').length, [customProjects]);
-    const totalCustom    = customProjects.length;
-
-    const avgProgress = useMemo(() =>
-        totalCustom ? Math.round(customProjects.reduce((s, p) => s + p.progress, 0) / totalCustom) : 0,
-    [customProjects, totalCustom]);
-
-    const subAdmins = useMemo(() => users.filter(u => u.role === 'sub_admin'), [users]);
-    const staffMembers = useMemo(() => users.filter(u => u.role === 'staff'), [users]);
-    const totalMembers = useMemo(() => users.filter(u => u.role !== 'admin').length, [users]);
-
-    const recentProjects = useMemo(() =>
-        [...customProjects].sort((a, b) => new Date(b.updatedAtRaw ?? b.updatedAt).getTime() - new Date(a.updatedAtRaw ?? a.updatedAt).getTime()).slice(0, 6),
-    [customProjects]);
-
     const statBar = (count: number, total: number) => total === 0 ? 0 : Math.round((count / total) * 100);
-
-    // ── Render ────────────────────────────────────────────────────────────────
 
     return (
         <main className="page-main p-6 lg:p-8">
@@ -418,344 +407,93 @@ const AdminDashboard = () => {
             {/* ── Stats Row ─────────────────────────────────────────────────── */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                 {/* Total Projects */}
-                <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5">
+                <div onClick={() => navigate('/projects')} className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5 cursor-pointer hover:shadow-md transition-shadow">
                     <div className="flex items-center justify-between mb-3">
                         <p className="text-xs font-semibold uppercase tracking-wide text-text-gray dark:text-gray-400">Total Projects</p>
                         <div className="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center">
                             <svg className="w-5 h-5 text-primary" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor"><path d="M3 7h18M3 12h18M3 17h18" /></svg>
                         </div>
                     </div>
-                    <div className="text-3xl font-bold text-text-dark dark:text-white">{loading ? '—' : totalCustom}</div>
-                    <p className="text-xs text-text-gray dark:text-gray-400 mt-1">{completedCount} completed</p>
+                    <div className="text-3xl font-bold text-text-dark dark:text-white">{loading ? '—' : projectCount}</div>
+                    <p className="text-xs text-text-gray dark:text-gray-400 mt-1">View all projects &rarr;</p>
                 </div>
 
-                {/* Total Members */}
-                <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5">
+                {/* Team Members */}
+                <div onClick={() => navigate('/teams')} className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5 cursor-pointer hover:shadow-md transition-shadow">
                     <div className="flex items-center justify-between mb-3">
                         <p className="text-xs font-semibold uppercase tracking-wide text-text-gray dark:text-gray-400">Team Members</p>
                         <div className="w-9 h-9 rounded-xl bg-purple-50 dark:bg-purple-900/20 flex items-center justify-center">
                             <svg className="w-5 h-5 text-purple-600" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" /></svg>
                         </div>
                     </div>
-                    <div className="text-3xl font-bold text-text-dark dark:text-white">{loading ? '—' : totalMembers}</div>
-                    <p className="text-xs text-text-gray dark:text-gray-400 mt-1">{subAdmins.length} sub-admins · {staffMembers.length} staff</p>
+                    <div className="text-3xl font-bold text-text-dark dark:text-white">{loading ? '—' : userCount}</div>
+                    <p className="text-xs text-text-gray dark:text-gray-400 mt-1">View all teams &rarr;</p>
                 </div>
 
                 {/* Active Projects */}
-                <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5">
+                <div onClick={() => navigate('/projects/active')} className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5 cursor-pointer hover:shadow-md transition-shadow">
                     <div className="flex items-center justify-between mb-3">
                         <p className="text-xs font-semibold uppercase tracking-wide text-text-gray dark:text-gray-400">Active Projects</p>
                         <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center">
                             <svg className="w-5 h-5 text-emerald-600" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                         </div>
                     </div>
-                    <div className="text-3xl font-bold text-text-dark dark:text-white">{loading ? '—' : activeCount}</div>
-                    <p className="text-xs text-text-gray dark:text-gray-400 mt-1">{onHoldCount} on hold</p>
+                    <div className="text-3xl font-bold text-text-dark dark:text-white">{loading ? '—' : activeProjects}</div>
+                    <p className="text-xs text-text-gray dark:text-gray-400 mt-1">View active &rarr;</p>
                 </div>
 
-                {/* Avg Progress */}
-                <div className="bg-primary rounded-2xl p-5 text-white">
+                {/* Active Progress */}
+                <div onClick={() => navigate('/projects/progress')} className="bg-primary rounded-2xl p-5 text-white cursor-pointer hover:shadow-md transition-shadow">
                     <div className="flex items-center justify-between mb-3">
-                        <p className="text-xs font-semibold uppercase tracking-wide opacity-80">Avg Progress</p>
+                        <p className="text-xs font-semibold uppercase tracking-wide opacity-80">Progress Report</p>
                         <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center">
                             <svg className="w-5 h-5 text-white" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor"><path d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
                         </div>
                     </div>
-                    <div className="text-3xl font-bold">{loading ? '—' : `${avgProgress}%`}</div>
+                    <div className="text-3xl font-bold">{loading ? '—' : 'View'}</div>
                     <div className="mt-2 w-full h-1.5 bg-white/30 rounded-full overflow-hidden">
-                        <div className="h-full bg-white rounded-full transition-all" style={{ width: `${avgProgress}%` }} />
+                        <div className="h-full bg-white rounded-full transition-all" style={{ width: `100%` }} />
                     </div>
                 </div>
             </div>
 
-            {/* ── System Cards ──────────────────────────────────────────────── */}
-            <div className="mb-8">
-                <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-base font-bold text-text-dark dark:text-white">System Channels</h2>
-                    <span className="text-xs text-text-gray dark:text-gray-400">Auto-managed cards · cannot be deleted</span>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Public Card */}
-                    <div
-                        className="group bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-blue-200 dark:border-blue-800 rounded-2xl p-5 cursor-pointer hover:shadow-md transition-all"
-                        onClick={() => navigate('/taskflow?projectId=public-group')}
-                    >
-                        <div className="flex items-start justify-between mb-3">
-                            <div className="flex items-center gap-2">
-                                <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center">
-                                    <svg className="w-5 h-5 text-white" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor"><path d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            {/* ── Main Grid ───────────────────────────── */}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-8">
+                {/* Status Distribution */}
+                <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5">
+                    <h3 className="text-sm font-bold text-text-dark dark:text-white mb-4">Project Status</h3>
+                    <div className="space-y-4">
+                        {[
+                            { label: 'In Progress', count: projectStats.inProgress, bar: statBar(projectStats.inProgress, projectCount), color: 'bg-primary', text: 'text-primary' },
+                            { label: 'Not Started', count: projectStats.notStarted, bar: statBar(projectStats.notStarted, projectCount), color: 'bg-amber-400', text: 'text-amber-600' },
+                            { label: 'Completed', count: projectStats.completed, bar: statBar(projectStats.completed, projectCount), color: 'bg-emerald-500', text: 'text-emerald-600' },
+                        ].map(item => (
+                            <div key={item.label}>
+                                <div className="flex items-center justify-between text-xs mb-1.5">
+                                    <span className="font-medium text-text-dark dark:text-gray-200">{item.label}</span>
+                                    <span className={`font-bold ${item.text}`}>{loading ? '—' : `${item.count} (${item.bar}%)`}</span>
                                 </div>
-                                <div>
-                                    <p className="text-xs font-bold uppercase tracking-wide text-primary">Public Card</p>
-                                    <h3 className="text-base font-bold text-text-dark dark:text-white">Public</h3>
+                                <div className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                    <div className={`h-full ${item.color} rounded-full transition-all duration-500`} style={{ width: loading ? '0%' : `${item.bar}%` }} />
                                 </div>
                             </div>
-                            <span className="px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-xs font-bold text-blue-700 dark:text-blue-300">System</span>
-                        </div>
-                        <p className="text-sm text-text-gray dark:text-gray-300 mb-3 line-clamp-2">
-                            {systemCards.find(c => c.id === 'public-group')?.description ?? 'Open channel — every workspace member can access shared tasks and updates.'}
-                        </p>
-                        <div className="flex items-center justify-between text-xs text-text-gray dark:text-gray-400">
-                            <span className="font-medium text-primary group-hover:underline">Open board →</span>
-                            <span>{totalMembers} members access</span>
-                        </div>
+                        ))}
                     </div>
 
-                    {/* All_SubAdmin Card */}
-                    <div
-                        className="group bg-gradient-to-br from-purple-50 to-violet-50 dark:from-purple-900/20 dark:to-violet-900/20 border border-purple-200 dark:border-purple-800 rounded-2xl p-5 cursor-pointer hover:shadow-md transition-all"
-                        onClick={() => navigate('/taskflow?projectId=all-sub-admin')}
-                    >
-                        <div className="flex items-start justify-between mb-3">
-                            <div className="flex items-center gap-2">
-                                <div className="w-9 h-9 rounded-xl bg-purple-600 flex items-center justify-center">
-                                    <svg className="w-5 h-5 text-white" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor"><path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
-                                </div>
-                                <div>
-                                    <p className="text-xs font-bold uppercase tracking-wide text-purple-600">SubAdmin Card</p>
-                                    <h3 className="text-base font-bold text-text-dark dark:text-white">All_SubAdmin</h3>
-                                </div>
-                            </div>
-                            <span className="px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/40 text-xs font-bold text-purple-700 dark:text-purple-300">System</span>
+                    <div className="mt-5 pt-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-around text-center">
+                        <div>
+                            <div className="text-xl font-bold text-primary">{loading ? '—' : projectCount}</div>
+                            <div className="text-[10px] text-text-gray dark:text-gray-400">Total</div>
                         </div>
-                        <p className="text-sm text-text-gray dark:text-gray-300 mb-3 line-clamp-2">
-                            {systemCards.find(c => c.id === 'all-sub-admin')?.description ?? 'Restricted channel — sub-admins only. Coordination hub for project leads.'}
-                        </p>
-                        <div className="flex items-center justify-between text-xs text-text-gray dark:text-gray-400">
-                            <span className="font-medium text-purple-600 group-hover:underline">Open board →</span>
-                            <span>{subAdmins.length} sub-admins access</span>
+                        <div className="w-px h-8 bg-gray-200 dark:bg-gray-600" />
+                        <div>
+                            <div className="text-xl font-bold text-emerald-600">{loading ? '—' : projectStats.completed}</div>
+                            <div className="text-[10px] text-text-gray dark:text-gray-400">Done</div>
                         </div>
                     </div>
                 </div>
+
             </div>
-
-            {/* ── Main Grid: Projects + Analytics ───────────────────────────── */}
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8">
-
-                {/* Projects Grid (2/3 width) */}
-                <div className="xl:col-span-2">
-                    <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-base font-bold text-text-dark dark:text-white">
-                            Custom Projects
-                            <span className="ml-2 px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-xs font-semibold text-text-gray dark:text-gray-300">{totalCustom}</span>
-                        </h2>
-                        <button type="button" onClick={() => navigate('/projects')} className="text-sm font-semibold text-primary hover:underline">View all →</button>
-                    </div>
-
-                    {loading ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {[...Array(4)].map((_, i) => (
-                                <div key={i} className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5 animate-pulse">
-                                    <div className="h-3 w-16 bg-gray-200 dark:bg-gray-600 rounded mb-4" />
-                                    <div className="h-5 w-3/4 bg-gray-200 dark:bg-gray-600 rounded mb-2" />
-                                    <div className="h-3 w-full bg-gray-100 dark:bg-gray-700 rounded mb-1" />
-                                    <div className="h-3 w-2/3 bg-gray-100 dark:bg-gray-700 rounded mb-4" />
-                                    <div className="h-1.5 w-full bg-gray-200 dark:bg-gray-700 rounded-full" />
-                                </div>
-                            ))}
-                        </div>
-                    ) : recentProjects.length === 0 ? (
-                        <div className="rounded-2xl border border-dashed border-gray-300 dark:border-gray-700 p-10 text-center text-sm text-text-gray dark:text-gray-400">
-                            No custom projects yet.{' '}
-                            <button type="button" onClick={() => navigate('/projects')} className="text-primary font-semibold hover:underline">Create one →</button>
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {recentProjects.map(project => {
-                                const leadLabel = project.subAdminNames?.length
-                                    ? (project.subAdminNames.length === 1 ? `Lead · ${project.subAdminNames[0]}` : `Leads · ${project.subAdminNames.slice(0, 2).join(', ')}${project.subAdminNames.length > 2 ? ` +${project.subAdminNames.length - 2}` : ''}`)
-                                    : null;
-                                return (
-                                    <div
-                                        key={project.id}
-                                        onClick={() => navigate(`/taskflow?projectId=${project.id}`)}
-                                        className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5 cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all"
-                                    >
-                                        <div className="flex items-start justify-between mb-3">
-                                            <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase ${getStatusBadge(project.status)}`}>
-                                                {project.status}
-                                            </span>
-                                            <span className="text-xs text-text-gray dark:text-gray-400">{relativeTime(project.updatedAtRaw ?? project.updatedAt)}</span>
-                                        </div>
-                                        <h3 className="text-sm font-bold text-text-dark dark:text-white mb-1">{project.title}</h3>
-                                        <p className="text-xs text-text-gray dark:text-gray-400 mb-1 line-clamp-1">{project.description}</p>
-                                        {leadLabel && <p className="text-xs text-text-gray dark:text-gray-400 mb-3">{leadLabel}</p>}
-                                        <div className="mt-3">
-                                            <div className="flex items-center justify-between text-xs mb-1">
-                                                <span className="text-text-gray dark:text-gray-400">Progress</span>
-                                                <span className="font-semibold text-text-dark dark:text-gray-200">{project.progress}%</span>
-                                            </div>
-                                            <div className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                                                <div className={`h-full ${getProgressColor(project.status)} transition-all`} style={{ width: `${project.progress}%` }} />
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center justify-between mt-3">
-                                            <div className="flex -space-x-2">
-                                                {project.team.slice(0, 3).map((m, i) => (
-                                                    <div key={i} className={`w-6 h-6 rounded-full bg-gradient-to-br ${getAvatarColor(i)} border-2 border-white dark:border-gray-800 flex items-center justify-center text-white text-[9px] font-semibold`}>{m}</div>
-                                                ))}
-                                                {project.team.length > 3 && <div className="w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-600 border-2 border-white dark:border-gray-800 flex items-center justify-center text-[9px] font-semibold text-text-gray">+{project.team.length - 3}</div>}
-                                            </div>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    )}
-                </div>
-
-                {/* Analytics Sidebar (1/3 width) */}
-                <div className="space-y-5">
-                    {/* Status Distribution */}
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5">
-                        <h3 className="text-sm font-bold text-text-dark dark:text-white mb-4">Project Status</h3>
-                        <div className="space-y-4">
-                            {[
-                                { label: 'Active', count: activeCount, bar: statBar(activeCount, totalCustom), color: 'bg-primary', text: 'text-primary' },
-                                { label: 'On Hold', count: onHoldCount, bar: statBar(onHoldCount, totalCustom), color: 'bg-amber-400', text: 'text-amber-600' },
-                                { label: 'Completed', count: completedCount, bar: statBar(completedCount, totalCustom), color: 'bg-emerald-500', text: 'text-emerald-600' },
-                            ].map(item => (
-                                <div key={item.label}>
-                                    <div className="flex items-center justify-between text-xs mb-1.5">
-                                        <span className="font-medium text-text-dark dark:text-gray-200">{item.label}</span>
-                                        <span className={`font-bold ${item.text}`}>{loading ? '—' : `${item.count} (${item.bar}%)`}</span>
-                                    </div>
-                                    <div className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                                        <div className={`h-full ${item.color} rounded-full transition-all duration-500`} style={{ width: loading ? '0%' : `${item.bar}%` }} />
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-
-                        {/* Donut-style visual summary */}
-                        <div className="mt-5 pt-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-around text-center">
-                            <div>
-                                <div className="text-xl font-bold text-primary">{loading ? '—' : totalCustom}</div>
-                                <div className="text-[10px] text-text-gray dark:text-gray-400">Total</div>
-                            </div>
-                            <div className="w-px h-8 bg-gray-200 dark:bg-gray-600" />
-                            <div>
-                                <div className="text-xl font-bold text-emerald-600">{loading ? '—' : completedCount}</div>
-                                <div className="text-[10px] text-text-gray dark:text-gray-400">Done</div>
-                            </div>
-                            <div className="w-px h-8 bg-gray-200 dark:bg-gray-600" />
-                            <div>
-                                <div className="text-xl font-bold text-primary">{loading ? '—' : `${avgProgress}%`}</div>
-                                <div className="text-[10px] text-text-gray dark:text-gray-400">Avg</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Team Breakdown */}
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5">
-                        <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-sm font-bold text-text-dark dark:text-white">Sub-Admin Leads</h3>
-                            <button type="button" onClick={() => navigate('/configuration')} className="text-xs font-semibold text-primary hover:underline">Manage</button>
-                        </div>
-                        {loading ? (
-                            <div className="space-y-3">
-                                {[...Array(3)].map((_, i) => <div key={i} className="h-10 bg-gray-100 dark:bg-gray-700 rounded-lg animate-pulse" />)}
-                            </div>
-                        ) : subAdmins.length === 0 ? (
-                            <p className="text-xs text-text-gray dark:text-gray-400">No sub-admins created yet.</p>
-                        ) : (
-                            <div className="space-y-2.5 max-h-52 overflow-y-auto pr-1">
-                                {subAdmins.map((u, i) => (
-                                    <div key={u._id} className="flex items-center gap-3">
-                                        <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${getAvatarColor(i)} flex items-center justify-center text-white text-xs font-semibold flex-shrink-0`}>
-                                            {(u.name || u.email || 'SA').slice(0, 2).toUpperCase()}
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="text-xs font-semibold text-text-dark dark:text-gray-200 truncate">{u.name || u.email}</div>
-                                            <div className="text-[10px] text-text-gray dark:text-gray-400 truncate">{u.email}</div>
-                                        </div>
-                                        <span className="px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-[10px] font-bold text-purple-700 dark:text-purple-300">Lead</span>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-
-                        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between text-xs">
-                            <span className="text-text-gray dark:text-gray-400">Staff members</span>
-                            <span className="font-bold text-text-dark dark:text-gray-200">{loading ? '—' : staffMembers.length}</span>
-                        </div>
-                    </div>
-
-                    {/* Quick Actions */}
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5">
-                        <h3 className="text-sm font-bold text-text-dark dark:text-white mb-4">Quick Actions</h3>
-                        <div className="space-y-2">
-                            {[
-                                { label: 'Create new project', icon: 'M12 5v14m7-7H5', color: 'text-primary bg-blue-50 dark:bg-blue-900/20', path: '/projects' },
-                                { label: 'Add team member', icon: 'M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z', color: 'text-purple-600 bg-purple-50 dark:bg-purple-900/20', path: '/configuration' },
-                                { label: 'View all projects', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2', color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20', path: '/projects' },
-                                { label: 'Open public channel', icon: 'M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z', color: 'text-blue-600 bg-blue-50 dark:bg-blue-900/20', path: '/taskflow?projectId=public-group' },
-                            ].map(action => (
-                                <button
-                                    key={action.label}
-                                    type="button"
-                                    onClick={() => navigate(action.path)}
-                                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-left"
-                                >
-                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${action.color}`}>
-                                        <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor"><path d={action.icon} /></svg>
-                                    </div>
-                                    <span className="text-sm font-medium text-text-dark dark:text-gray-200">{action.label}</span>
-                                    <svg className="w-4 h-4 text-text-gray dark:text-gray-400 ml-auto" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor"><path d="M9 5l7 7-7 7" /></svg>
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* ── All Members Table ─────────────────────────────────────────── */}
-            {!loading && users.length > 0 && (
-                <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6">
-                    <div className="flex items-center justify-between mb-5">
-                        <h2 className="text-base font-bold text-text-dark dark:text-white">Workspace Members</h2>
-                        <button type="button" onClick={() => navigate('/configuration')} className="text-sm font-semibold text-primary hover:underline">Manage accounts →</button>
-                    </div>
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="border-b border-gray-200 dark:border-gray-700">
-                                    <th className="text-left text-xs font-semibold uppercase text-text-gray dark:text-gray-400 pb-3 pr-4">Member</th>
-                                    <th className="text-left text-xs font-semibold uppercase text-text-gray dark:text-gray-400 pb-3 pr-4">Email</th>
-                                    <th className="text-left text-xs font-semibold uppercase text-text-gray dark:text-gray-400 pb-3">Role</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
-                                {users.filter(u => u.role !== 'admin').slice(0, 8).map((u, i) => (
-                                    <tr key={u._id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                                        <td className="py-3 pr-4">
-                                            <div className="flex items-center gap-3">
-                                                <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${getAvatarColor(i)} flex items-center justify-center text-white text-xs font-semibold flex-shrink-0`}>
-                                                    {(u.name || u.email).slice(0, 2).toUpperCase()}
-                                                </div>
-                                                <span className="font-semibold text-text-dark dark:text-gray-200 truncate max-w-[160px]">{u.name || '—'}</span>
-                                            </div>
-                                        </td>
-                                        <td className="py-3 pr-4 text-text-gray dark:text-gray-400 truncate max-w-[200px]">{u.email}</td>
-                                        <td className="py-3">
-                                            <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase ${u.role === 'sub_admin' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>
-                                                {u.role === 'sub_admin' ? 'Sub-Admin' : 'Staff'}
-                                            </span>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                        {users.filter(u => u.role !== 'admin').length > 8 && (
-                            <div className="mt-4 text-center">
-                                <button type="button" onClick={() => navigate('/configuration')} className="text-sm text-primary font-semibold hover:underline">
-                                    View all {users.filter(u => u.role !== 'admin').length} members →
-                                </button>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            )}
         </main>
     );
 };

@@ -166,6 +166,62 @@ async def create_project(
     return await _serialize_single(db, project)
 
 
+def _custom_projects_query(current_user: dict) -> dict:
+    """Return a query for custom projects visible to the user."""
+    return {"$and": [_visibility_filter(current_user), {"_id": {"$nin": list(DEFAULT_GROUP_IDS)}}]}
+
+
+@router.get("/count")
+async def get_projects_count(
+    current_user = Depends(get_current_user),
+    db = Depends(get_database)
+):
+    """Return the total number of custom projects visible to the user."""
+    count = await db[PROJECTS_COLLECTION].count_documents(_custom_projects_query(current_user))
+    return {"count": count}
+
+
+@router.get("/stats")
+async def get_projects_stats(
+    current_user = Depends(get_current_user),
+    db = Depends(get_database)
+):
+    """Return project distribution by status using an aggregation pipeline."""
+    pipeline = [
+        {"$match": _custom_projects_query(current_user)},
+        {"$group": {
+            "_id": None,
+            "total": {"$sum": 1},
+            "completed": {
+                "$sum": {"$cond": [{"$eq": [{"$toUpper": "$status"}, "COMPLETED"]}, 1, 0]}
+            },
+            "inProgress": {
+                "$sum": {"$cond": [
+                    {"$and": [
+                        {"$eq": [{"$toUpper": "$status"}, "ACTIVE"]},
+                        {"$gt": [{"$ifNull": ["$progress", 0]}, 0]}
+                    ]}, 1, 0
+                ]}
+            }
+        }}
+    ]
+    
+    result = await db[PROJECTS_COLLECTION].aggregate(pipeline).to_list(length=1)
+    if not result:
+        return {"completed": 0, "inProgress": 0, "notStarted": 0}
+        
+    stats = result[0]
+    completed = stats.get("completed", 0)
+    in_progress = stats.get("inProgress", 0)
+    not_started = stats.get("total", 0) - completed - in_progress
+            
+    return {
+        "completed": completed,
+        "inProgress": in_progress,
+        "notStarted": max(0, not_started)
+    }
+
+
 @router.get("", response_model=List[ProjectResponse])
 async def list_projects(
     status_filter: Optional[ProjectStatus] = Query(default=None, alias="status"),

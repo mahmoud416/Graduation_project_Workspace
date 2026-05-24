@@ -56,6 +56,21 @@ async def list_users(
     return [_serialize_user(user) for user in users]
 
 
+@router.get("/count")
+async def get_users_count(
+    current_user = Depends(get_current_user),
+    db = Depends(get_database)
+):
+    """Return the total number of non-admin team members."""
+    if current_user.get("role") != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admins can access the user directory"
+        )
+    count = await db[USERS_COLLECTION].count_documents({"role": {"$nin": ["admin", "founder"]}})
+    return {"count": count}
+
+
 @router.patch("/{user_id}", response_model=UserResponse)
 async def update_user(
     user_id: str,

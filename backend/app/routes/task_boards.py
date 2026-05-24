@@ -114,11 +114,12 @@ async def update_task_board_todo(
 ):
     project = await _get_project_or_404(db, project_id)
     _ensure_project_visibility(project, current_user)
-    _ensure_task_privileges(project, current_user)
     normalized_id = _stringify_project_id(project)
     board = await TaskBoardService.get_board_by_project(db, normalized_id)
     if not board:
         board = await TaskBoardService.ensure_board_for_project(db, project)
+
+    _ensure_task_privileges(project, current_user, board)
 
     updates = {
         "title": payload.title,
@@ -152,7 +153,12 @@ async def delete_task_board_todo(
 ):
     project = await _get_project_or_404(db, project_id)
     _ensure_project_visibility(project, current_user)
-    _ensure_task_privileges(project, current_user)
+    normalized_id = _stringify_project_id(project)
+    board = await TaskBoardService.get_board_by_project(db, normalized_id)
+    if not board:
+        board = await TaskBoardService.ensure_board_for_project(db, project)
+
+    _ensure_task_privileges(project, current_user, board)
     updated = await TaskBoardService.delete_task(db, _stringify_project_id(project), task_id)
     if not updated:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Task entry not found")
@@ -537,12 +543,19 @@ def _resolve_storage_path(relative_path: str) -> Path:
     return candidate
 
 
-def _ensure_task_privileges(project: dict[str, Any], current_user: dict[str, Any]) -> None:
-    """Only admin and sub_admin can create/edit/delete tasks."""
+def _ensure_task_privileges(project: dict[str, Any], current_user: dict[str, Any], board: dict[str, Any] = None) -> None:
+    """Only admin, sub_admin, or board manager can manage tasks."""
     role = (current_user.get("role") or "").lower()
     if role in {"admin", "sub_admin"}:
         return
-    raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Only admins and sub-admins can manage tasks")
+        
+    if board:
+        user_id = str(current_user.get("_id"))
+        for member in board.get("members", []):
+            if member.get("user_id") == user_id and member.get("role", "").lower() == "manager":
+                return
+                
+    raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Only admins, sub-admins, or managers can manage tasks")
 
 
 def _safe_delete_relative_path(relative_path: str) -> None:

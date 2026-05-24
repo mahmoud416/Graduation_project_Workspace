@@ -19,6 +19,10 @@ import StaffTaskDetail from './pages/StaffTaskDetail';
 import QCDashboard from './pages/QCDashboard';
 import QualityInsights from './pages/QualityInsights';
 import ChatbotWidget from './components/ChatbotWidget';
+import TeamsPage from './pages/TeamsPage';
+import TeamDetailsPage from './pages/TeamDetailsPage';
+import ActiveProjectsPage from './pages/ActiveProjectsPage';
+import ProgressProjectsPage from './pages/ProgressProjectsPage';
 
 const USER_UPDATE_EVENT = 'workspace:user-update';
 
@@ -91,9 +95,13 @@ function App() {
           element={redirectQualityDashboard(redirectSubAdminDashboard(<Dashboard />))}
         />
         <Route path="/projects" element={restrictForStaff(<Projects />)} />
+        <Route path="/projects/active" element={restrictForStaff(<ActiveProjectsPage />)} />
+        <Route path="/projects/progress" element={restrictForStaff(<ProgressProjectsPage />)} />
         <Route path="/tasks" element={restrictForStaff(<TasksPage />)} />
         <Route path="/calendar" element={<CalendarPage />} />
         <Route path="/team" element={restrictForStaff(<TeamPage />)} />
+        <Route path="/teams" element={restrictForStaff(<TeamsPage />)} />
+        <Route path="/teams/:id" element={restrictForStaff(<TeamDetailsPage />)} />
         <Route path="/reports" element={restrictForStaff(<ReportsPage />)} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/taskmaster" element={restrictForSubAdminOnly(<TaskMasterDashboard />)} />
