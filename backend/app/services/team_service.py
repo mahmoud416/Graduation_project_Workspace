@@ -65,7 +65,10 @@ class TeamService:
         Returns:
             Team document or None if not found
         """
-        return await db[TEAMS_COLLECTION].find_one({"_id": team_id})
+        team = await db[TEAMS_COLLECTION].find_one({"_id": team_id})
+        if team:
+            team["memberCount"] = await db[MEMBERSHIPS_COLLECTION].count_documents({"team_id": team_id})
+        return team
     
     @staticmethod
     async def list_user_teams(db, user_id: ObjectId) -> List[Dict[str, Any]]:
@@ -95,10 +98,11 @@ class TeamService:
             "_id": {"$in": team_ids}
         }).to_list(length=None)
         
-        # Add user's role to each team
+        # Add user's role and member count to each team
         membership_map = {m["team_id"]: m["role"] for m in memberships}
         for team in teams:
             team["user_role"] = membership_map.get(team["_id"])
+            team["memberCount"] = await db[MEMBERSHIPS_COLLECTION].count_documents({"team_id": team["_id"]})
         
         return teams
     

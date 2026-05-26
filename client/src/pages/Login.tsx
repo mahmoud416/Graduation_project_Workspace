@@ -39,6 +39,8 @@ const Login = () => {
 
             if (data.role === 'sub_admin') {
                 navigate('/subadmin', { replace: true });
+            } else if (data.role === 'it_staff') {
+                navigate('/it-portal', { replace: true });
             } else if (data.role === 'quality_control' || data.role === 'quality_manager') {
                 navigate('/quality-control', { replace: true });
             } else if (data.role === 'admin') {

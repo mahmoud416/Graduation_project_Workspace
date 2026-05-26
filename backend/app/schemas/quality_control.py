@@ -83,6 +83,7 @@ class QualityAnalysisRequest(BaseModel):
     standard_ids: List[str] = Field(default_factory=list)
     triggered_by: Optional[str] = None
     description_override: Optional[str] = None
+    report_type: Optional[str] = None
 
 
 class QualityAnalysisResult(BaseModel):

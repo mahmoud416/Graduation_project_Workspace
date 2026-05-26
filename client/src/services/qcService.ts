@@ -186,6 +186,7 @@ export interface EvaluateTaskPayload {
     report_type?: string;
     files?: { file_name: string; content: string; file_type: string }[];
     image_base64?: string[];
+    submission_notes?: string;
 }
 
 export interface ReportTypeCompliance {
@@ -218,6 +219,7 @@ export const evaluateTask = async (payload: EvaluateTaskPayload): Promise<Evalua
             report_type: payload.report_type,
             files: payload.files ?? [],
             image_base64: payload.image_base64 ?? [],
+            submission_notes: payload.submission_notes,
         }),
     });
     return handleResponse<EvaluationResult>(response);

@@ -9,6 +9,8 @@ from app.services.auth_service import AuthService
 from app.services.task_board_service import TaskBoardService
 from app.dependencies.auth import get_current_user
 from app.db.mongodb import get_database
+from app.db.collections import USER_SESSIONS_COLLECTION
+from datetime import datetime, timezone
 
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -36,6 +38,17 @@ async def register(
         await TaskBoardService.ensure_public_membership_for_user(db, user)
 
         token = AuthService.generate_token(user)
+
+        from app.db.collections import AUDIT_LOGS_COLLECTION
+        from datetime import datetime, timezone
+        await db[AUDIT_LOGS_COLLECTION].insert_one({
+            "user_id": str(user["_id"]),
+            "action_type": "CREATE",
+            "entity_type": "User",
+            "entity_id": str(user["_id"]),
+            "timestamp": datetime.now(timezone.utc),
+            "metadata": {"action": "register", "role": user_data.role or "staff"}
+        })
 
         return {
             "_id":   str(user["_id"]),
@@ -66,6 +79,27 @@ async def login(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password"
         )
+
+    now = datetime.now(timezone.utc)
+    await db[USER_SESSIONS_COLLECTION].insert_one({
+        "user_id": str(user["_id"]),
+        "email": user.get("email"),
+        "name": user.get("name") or user.get("full_name"),
+        "role": user.get("role"),
+        "login_time": now,
+        "last_active": now,
+        "duration_minutes": 0
+    })
+
+    from app.db.collections import AUDIT_LOGS_COLLECTION
+    await db[AUDIT_LOGS_COLLECTION].insert_one({
+        "user_id": str(user["_id"]),
+        "action_type": "LOGIN",
+        "entity_type": "User",
+        "entity_id": str(user["_id"]),
+        "timestamp": now,
+        "metadata": {"action": "login"}
+    })
 
     token = AuthService.generate_token(user)
 
@@ -107,3 +141,31 @@ async def change_password(
         )
 
     return {"success": True}
+
+from fastapi import Request
+@router.post("/logout", status_code=status.HTTP_200_OK)
+async def logout(
+    request: Request,
+    current_user=Depends(get_current_user),
+    db=Depends(get_database)
+):
+    """Logout the user by blacklisting their token."""
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        token = auth_header.split(" ")[1]
+        from app.db.collections import BLACKLISTED_TOKENS_COLLECTION, AUDIT_LOGS_COLLECTION
+        await db[BLACKLISTED_TOKENS_COLLECTION].insert_one({
+            "token": token,
+            "user_id": str(current_user["_id"]),
+            "timestamp": datetime.now(timezone.utc)
+        })
+        
+        await db[AUDIT_LOGS_COLLECTION].insert_one({
+            "user_id": str(current_user["_id"]),
+            "action_type": "LOGOUT",
+            "entity_type": "User",
+            "entity_id": str(current_user["_id"]),
+            "timestamp": datetime.now(timezone.utc),
+            "metadata": {"action": "logout"}
+        })
+    return {"status": "success"}

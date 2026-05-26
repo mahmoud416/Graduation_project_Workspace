@@ -53,6 +53,7 @@ class UserResponse(BaseModel):
     created_at: Optional[datetime] = None
     is_active: Optional[bool] = None
     password: Optional[str] = None
+    last_seen: Optional[datetime] = None
 
     class Config:
         populate_by_name = True

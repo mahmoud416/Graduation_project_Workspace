@@ -14,6 +14,7 @@ interface Team {
     managerIds?: string[];
     subManagerIds?: string[];
     staffIds?: string[];
+    memberCount?: number;
 }
 
 const TeamsPage = () => {
@@ -26,8 +27,12 @@ const TeamsPage = () => {
         const fetchTeams = async () => {
             try {
                 const token = localStorage.getItem('token');
+                const userId = localStorage.getItem('userId');
                 const res = await fetch(`${API_BASE}/teams`, {
-                    headers: { Authorization: `Bearer ${token ?? ''}` },
+                    headers: { 
+                        'Authorization': `Bearer ${token ?? ''}`,
+                        'X-User-Id': userId ?? ''
+                    },
                 });
                 if (!res.ok) throw new Error('Failed to load teams');
                 const data = await res.json();
@@ -69,7 +74,7 @@ const TeamsPage = () => {
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             {teams.map(team => {
-                                const totalMembers = (team.managerIds?.length || 0) + (team.subManagerIds?.length || 0) + (team.staffIds?.length || 0) + 1; // +1 for creator/manager if not in lists
+                                const totalMembers = team.memberCount ?? 1;
                                 return (
                                     <div
                                         key={team._id}

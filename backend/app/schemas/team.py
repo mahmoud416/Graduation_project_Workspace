@@ -28,6 +28,7 @@ class TeamResponse(BaseModel):
     description: str
     created_by: str
     created_at: datetime
+    memberCount: Optional[int] = 1
     
     class Config:
         populate_by_name = True

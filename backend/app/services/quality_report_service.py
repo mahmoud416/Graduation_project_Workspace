@@ -36,12 +36,27 @@ class QualityReportService:
         recent_analyses = await QualityReportService._recent_analyses(db, project_oid)
         todo_stats = await QualityReportService._todo_totals(db, start_date, project_oid)
 
+        admin_insights = {
+            "globalRejectionRate": 12.4, # Mock global rejection rate
+            "burnoutRiskUsers": 3, # Mock high burnout users
+            "bottlenecks": [
+                {"name": "API Microservices", "avgHours": 32.5},
+                {"name": "Database Migration", "avgHours": 28.0}
+            ],
+            "globalIssues": [
+                "Uncaught exceptions in API",
+                "Missing mobile responsiveness",
+                "Authentication token expiration bugs"
+            ]
+        }
+
         return {
             "scoreTrend": score_trend,
             "completionTrend": completion_trend,
             "projectScores": project_scores,
             "aiHistory": recent_analyses,
             "todoStats": todo_stats,
+            "adminInsights": admin_insights,
         }
 
     @staticmethod

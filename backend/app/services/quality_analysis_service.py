@@ -85,6 +85,7 @@ class QualityAnalysisService:
             image_bytes_list=image_bytes,
             file_texts=file_texts,
             db=db,
+            report_type=request.report_type,
         )
 
         now = datetime.utcnow()

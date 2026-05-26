@@ -26,6 +26,11 @@ QC_REPORTS_CACHE_COLLECTION  = "qc_reports_cache"
 RAG_INDEX_STATE_COLLECTION   = "rag_index_state"
 QUALITY_SCORES_COLLECTION    = "quality_scores"
 ENTITIES_COLLECTION          = "entities"
+USER_SESSIONS_COLLECTION     = "user_sessions"
+AUDIT_LOGS_COLLECTION        = "audit_logs"
+SYSTEM_SETTINGS_COLLECTION   = "system_settings"
+BLACKLISTED_TOKENS_COLLECTION = "blacklisted_tokens"
+QUALITY_FRAMEWORKS_COLLECTION = "quality_frameworks"
 
 
 async def _safe_create_index(collection, keys, **kwargs):
@@ -188,5 +193,15 @@ async def create_indexes(db):
     await _safe_create_index(db[ENTITIES_COLLECTION], "name", unique=True)
     await _safe_create_index(db[ENTITIES_COLLECTION], "founder_id")
     await _safe_create_index(db[ENTITIES_COLLECTION], "it_staff_ids")
+
+    # user sessions
+    await _safe_create_index(db[USER_SESSIONS_COLLECTION], [("user_id", 1), ("login_time", -1)])
+
+    # audit logs
+    await _safe_create_index(db[AUDIT_LOGS_COLLECTION], [("timestamp", -1)])
+    await _safe_create_index(db[AUDIT_LOGS_COLLECTION], [("user_id", 1)])
+    
+    # blacklisted tokens
+    await _safe_create_index(db[BLACKLISTED_TOKENS_COLLECTION], "token", unique=True)
 
     print("✓ Database indexes created")

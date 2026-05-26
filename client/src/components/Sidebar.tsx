@@ -116,8 +116,7 @@ const Sidebar = () => {
                 { iconKey: 'projects', label: 'Projects', path: '/projects' },
                 { iconKey: 'calendar', label: 'Calendar', path: '/calendar' },
                 { iconKey: 'team', label: 'Team', path: '/team' },
-                { iconKey: 'reports', label: 'Reports', path: '/reports' },
-                { iconKey: 'quality', label: 'Quality Lab', path: '/quality-control' },
+                { iconKey: 'quality', label: 'Reports', path: '/quality-control' },
                 { iconKey: 'settings', label: 'Settings', path: '/settings' },
                 { iconKey: 'configuration', label: 'Configuration', path: '/configuration' },
             ];
@@ -125,9 +124,8 @@ const Sidebar = () => {
 
         if (role === 'quality_manager' || role === 'quality_control') {
             return [
-                { iconKey: 'quality', label: 'Quality Lab', path: '/quality-control' },
+                { iconKey: 'quality', label: 'Reports', path: '/quality-control' },
                 { iconKey: 'insights', label: 'Quality Insights', path: '/quality-insights' },
-                { iconKey: 'reports', label: 'Reports', path: '/reports' },
                 { iconKey: 'settings', label: 'Settings', path: '/settings' },
             ];
         }
@@ -139,7 +137,7 @@ const Sidebar = () => {
                 { iconKey: 'taskmaster', label: 'Task Master', path: '/taskmaster' },
                 { iconKey: 'calendar', label: 'Calendar', path: '/calendar' },
                 { iconKey: 'team', label: 'Team', path: '/team' },
-                { iconKey: 'reports', label: 'Reports', path: '/reports' },
+                { iconKey: 'quality', label: 'Reports', path: '/quality-control' },
                 { iconKey: 'settings', label: 'Settings', path: '/settings' },
             ];
         }
@@ -147,7 +145,9 @@ const Sidebar = () => {
         if (role === 'staff') {
             return [
                 { iconKey: 'dashboard', label: 'Dashboard',  path: '/dashboard' },
+                { iconKey: 'portal',    label: 'Public Channel', path: '/taskflow?projectId=public-group' },
                 { iconKey: 'projects',  label: 'My Projects', path: '/my-projects' },
+                { iconKey: 'team', label: 'My Team', path: '/team' },
                 { iconKey: 'calendar',  label: 'Calendar',   path: '/calendar'  },
                 { iconKey: 'settings',  label: 'Settings',   path: '/settings'  },
             ];
@@ -155,7 +155,15 @@ const Sidebar = () => {
 
         if (role === 'founder') {
             return [
-                { iconKey: 'dashboard', label: 'Dashboard', path: '/dashboard' },
+                { iconKey: 'dashboard', label: 'Global Dashboard', path: '/founder' },
+                { iconKey: 'settings', label: 'Settings', path: '/settings' },
+            ];
+        }
+
+        if (role === 'it_staff') {
+            return [
+                { iconKey: 'configuration', label: 'Configuration', path: '/configuration' },
+                { iconKey: 'reports', label: 'IT Portal', path: '/it-portal' },
                 { iconKey: 'settings', label: 'Settings', path: '/settings' },
             ];
         }
@@ -165,7 +173,7 @@ const Sidebar = () => {
                 { iconKey: 'dashboard', label: 'Dashboard', path: '/dashboard' },
                 { iconKey: 'projects', label: 'Projects', path: '/projects' },
                 { iconKey: 'team', label: 'My Team', path: '/team' },
-                { iconKey: 'reports', label: 'Analytics', path: '/reports' },
+                { iconKey: 'quality', label: 'Reports', path: '/quality-control' },
                 { iconKey: 'settings', label: 'Settings', path: '/settings' },
             ];
         }
@@ -176,7 +184,7 @@ const Sidebar = () => {
             { iconKey: 'tasks', label: 'Tasks', path: '/tasks' },
             { iconKey: 'calendar', label: 'Calendar', path: '/calendar' },
             { iconKey: 'team', label: 'Team', path: '/team' },
-            { iconKey: 'reports', label: 'Reports', path: '/reports' },
+            // { iconKey: 'reports', label: 'Reports', path: '/reports' },
             { iconKey: 'settings', label: 'Settings', path: '/settings' },
         ];
     }, [role]);

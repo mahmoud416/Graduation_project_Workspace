@@ -82,14 +82,14 @@ const GROUPED_PROJECTS: Project[] = [
     {
         id: 'all-sub-admin',
         title: 'All_SubAdmin',
-        description: 'Dedicated group holding every sub-admin for oversight and control.',
+        description: 'Dedicated group holding every sub-manager for oversight and control.',
         status: 'ACTIVE',
         progress: 100,
         team: ['SUB', 'ADM'],
         updatedAt: new Date().toISOString(),
         updatedAtRaw: new Date().toISOString(),
-        subAdminName: 'Sub Admin Leads',
-        subAdminNames: ['Sub Admin Leads'],
+        subAdminName: 'Sub Manager Leads',
+        subAdminNames: ['Sub Manager Leads'],
         subAdminIds: [],
         staffIds: [],
         isDefaultGroup: true,
@@ -115,6 +115,7 @@ const Projects = () => {
     const [configSaving, setConfigSaving] = useState(false);
     const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
     const [isDeletingProject, setIsDeletingProject] = useState(false);
+    const [activeTab, setActiveTab] = useState<'public' | 'projects'>('projects');
     const messageTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
@@ -187,6 +188,16 @@ const Projects = () => {
             if (role === 'sub_admin') {
                 scoped = scoped.filter((project) => {
                     if (project.id === 'public-group' || project.id === 'all-sub-admin' || project.isDefaultGroup) {
+                        return true;
+                    }
+                    if (!userId) {
+                        return false;
+                    }
+                    return project.subAdminIds?.includes(userId) ?? false;
+                });
+            } else if (role === 'manager') {
+                scoped = scoped.filter((project) => {
+                    if (project.id === 'public-group') {
                         return true;
                     }
                     if (!userId) {
@@ -430,7 +441,7 @@ const Projects = () => {
         return `Leads · ${base}${extra}`;
     };
 
-    const canManageProjects = role === 'admin';
+    const canManageProjects = role === 'admin' || role === 'manager';
 
     const handleAddProjectClick = () => {
         if (!canManageProjects) {
@@ -528,23 +539,7 @@ const Projects = () => {
                             </div>
                         </div>
 
-                        {role === 'admin' && (
-                            <div className="flex flex-wrap items-center justify-between gap-4 mb-6 rounded-2xl border border-dashed border-primary/30 bg-blue-50/60 dark:bg-blue-900/20 px-5 py-4">
-                                <div>
-                                    <p className="text-sm font-semibold text-primary">Admin access enabled</p>
-                                    <p className="text-xs text-text-gray dark:text-gray-300">Create projects and assign sub-admin leads directly from this workspace.</p>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={() => navigate('/configuration')}
-                                        className="h-10 px-4 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-blue-600"
-                                    >
-                                        Make Account
-                                    </button>
-                                </div>
-                            </div>
-                        )}
+
 
                         {permissionMessage && (
                             <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
@@ -575,8 +570,23 @@ const Projects = () => {
 
                             return (
                                 <>
+                                    <div className="flex space-x-8 mb-6 border-b border-gray-200 dark:border-gray-800">
+                                        <button
+                                            onClick={() => setActiveTab('public')}
+                                            className={`pb-3 text-sm font-semibold transition-colors ${activeTab === 'public' ? 'text-primary border-b-2 border-primary' : 'text-text-gray dark:text-gray-400 hover:text-text-dark dark:hover:text-gray-200'}`}
+                                        >
+                                            Public
+                                        </button>
+                                        <button
+                                            onClick={() => setActiveTab('projects')}
+                                            className={`pb-3 text-sm font-semibold transition-colors ${activeTab === 'projects' ? 'text-primary border-b-2 border-primary' : 'text-text-gray dark:text-gray-400 hover:text-text-dark dark:hover:text-gray-200'}`}
+                                        >
+                                            Projects
+                                        </button>
+                                    </div>
+
                                     {/* ── Channel cards section ─────────────────────── */}
-                                    {channelProjects.length > 0 && (
+                                    {activeTab === 'public' && channelProjects.length > 0 && (
                                         <div className="mb-8">
                                             <div className="flex items-center gap-3 mb-4">
                                                 <div className="flex items-center gap-2">
@@ -698,7 +708,7 @@ const Projects = () => {
                                     )}
 
                                     {/* ── Project boards section ────────────────────── */}
-                                    {sortedProjects.length === 0 && !usingSampleData ? (
+                                    {activeTab === 'projects' && (sortedProjects.length === 0 && !usingSampleData ? (
                                         <div className="rounded-2xl border border-dashed border-gray-300 dark:border-gray-700 p-10 text-center text-sm text-text-gray dark:text-gray-400">
                                             {emptyStateMessage}
                                         </div>
@@ -842,7 +852,7 @@ const Projects = () => {
                                                 })}
                                             </div>
                                         </>
-                                    ) : null}
+                                    ) : null)}
                                 </>
                             );
                         })()}

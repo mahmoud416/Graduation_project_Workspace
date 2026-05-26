@@ -66,13 +66,20 @@ class RuleUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
+MAX_FILES = 5
+MAX_IMAGES = 10
+MAX_FILE_SIZE_B64 = 27_962_027  # ~20 MB decoded (20 * 1024 * 1024 * 4/3 rounded up)
+MAX_IMAGE_SIZE_B64 = 13_981_014  # ~10 MB decoded
+
+
 class EvaluateTaskRequest(BaseModel):
-    task_title: str
-    task_description: str = ""
-    files: List[dict] = []          # [{"file_name": str, "content": str, "file_type": str}]
-    image_base64: List[str] = []    # base64-encoded images
-    task_id: Optional[str] = None   # persist result linked to this task
-    report_type: Optional[str] = None  # key from REPORT_TYPES dict
+    task_title: str = Field(..., min_length=1, max_length=500)
+    task_description: str = Field("", max_length=10_000)
+    files: List[dict] = Field(default_factory=list, max_length=MAX_FILES)
+    image_base64: List[str] = Field(default_factory=list, max_length=MAX_IMAGES)
+    task_id: Optional[str] = None
+    report_type: Optional[str] = None
+    submission_notes: Optional[str] = Field(None, max_length=5_000)
 
 
 class ChatRequest(BaseModel):
@@ -214,8 +221,7 @@ async def delete_rule(
 async def get_report_types(
     current_user: dict = Depends(get_current_user),
 ):
-    """Return the list of accreditation report types for task classification."""
-    _require_qc_admin_or_subadmin(current_user)
+    """Return the list of accreditation report types for task classification. Accessible to all authenticated users."""
     return [
         {
             "key": key,
@@ -241,9 +247,19 @@ async def evaluate_task(
     """
     Run AI quality evaluation against all active rules.
     Optionally links the result to a task_id.
-    Requires quality_manager or admin.
     """
-    _require_qc_or_admin(current_user)
+    if body.report_type and body.report_type not in qc_service.REPORT_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail="Unknown report type. Use GET /quality/report-types for valid keys.",
+        )
+
+    for f in body.files:
+        if len(f.get("content", "")) > MAX_FILE_SIZE_B64:
+            raise HTTPException(status_code=400, detail=f"File '{f.get('file_name', '?')}' exceeds 20 MB limit")
+    for idx, img in enumerate(body.image_base64):
+        if len(img) > MAX_IMAGE_SIZE_B64:
+            raise HTTPException(status_code=400, detail=f"Image #{idx + 1} exceeds 10 MB limit")
 
     # Load all active rules
     rules = await db[QUALITY_RULES_COLLECTION].find({"is_active": True}).to_list(length=500)
@@ -257,12 +273,44 @@ async def evaluate_task(
         except Exception:
             pass
 
+    # Decode and extract text from files
+    file_texts = []
+    if body.files:
+        from app.routes.qc import _extract_pdf_text, _extract_docx_text
+        for f in body.files:
+            file_name = f.get("file_name", "")
+            content_b64 = f.get("content", "")
+            file_type = f.get("file_type", "")
+            try:
+                content_bytes = base64.b64decode(content_b64)
+                extracted_text = ""
+                if file_name.lower().endswith(".pdf") or "pdf" in file_type.lower():
+                    extracted_text = _extract_pdf_text(content_bytes)
+                elif file_name.lower().endswith(".docx") or "word" in file_type.lower() or "document" in file_type.lower():
+                    extracted_text = _extract_docx_text(content_bytes)
+                else:
+                    try:
+                        extracted_text = content_bytes.decode('utf-8')
+                    except UnicodeDecodeError:
+                        extracted_text = "[Binary file, cannot extract text]"
+                
+                entry = {
+                    "file_name": file_name,
+                    "content": extracted_text,
+                    "file_type": file_type,
+                }
+                if file_name.lower().endswith(".pdf") or "pdf" in file_type.lower():
+                    entry["raw_b64"] = content_b64
+                file_texts.append(entry)
+            except Exception as e:
+                print(f"Error decoding file {file_name}: {e}")
+
     result = await qc_service.analyze_task_against_standards(
         task_title=body.task_title,
         task_description=body.task_description,
         standards_rules=rules,
         image_bytes_list=image_bytes_list if image_bytes_list else None,
-        file_texts=body.files if body.files else None,
+        file_texts=file_texts if file_texts else None,
         db=db,
         report_type=body.report_type,
     )
@@ -288,43 +336,52 @@ async def evaluate_task(
         except Exception:
             return tid  # store as plain string if not a valid ObjectId
 
-    eval_doc = {
-        "task_id": _safe_task_id(body.task_id),
-        "task_title": body.task_title,
-        "evaluated_by": current_user["_id"],
-        "rules_count": len(rules),
-        "compliance_score": result.get("compliance_score", 0),
-        "passed_standards": result.get("passed_standards", []),
-        "failed_standards": result.get("failed_standards", []),
-        "suggestions": result.get("suggestions", []),
-        "files_analyzed": result.get("files_analyzed", []),
-        "report_type": body.report_type,
-        "report_type_compliance": result.get("report_type_compliance"),
-        "ai_mode": result.get("_mode", "unknown"),
-        "created_at": datetime.utcnow(),
-    }
-    inserted = await db[QUALITY_EVALUATIONS_COLLECTION].insert_one(eval_doc)
+    score = result.get("compliance_score", 0)
+    is_passed = score >= 85
 
-    # If linked to a task, update task QC fields
-    if body.task_id:
-        try:
-            await db[TASKS_COLLECTION].update_one(
-                {"_id": ObjectId(body.task_id)},
-                {"$set": {
-                    "qc_evaluation_id": inserted.inserted_id,
-                    "qc_status": "pending",
-                    "qc_reviewed_by": None,
-                    "qc_reviewed_at": None,
-                    "report_type": body.report_type,
-                    "report_type_compliant": result.get("report_type_compliance", {}).get("is_compliant"),
-                    "aiScore": result.get("compliance_score", 0),
-                    "updated_at": datetime.utcnow(),
-                }},
-            )
-        except Exception:
-            pass
+    if is_passed:
+        eval_doc = {
+            "task_id": _safe_task_id(body.task_id),
+            "task_title": body.task_title,
+            "evaluated_by": current_user["_id"],
+            "rules_count": len(rules),
+            "compliance_score": score,
+            "passed_standards": result.get("passed_standards", []),
+            "failed_standards": result.get("failed_standards", []),
+            "suggestions": result.get("suggestions", []),
+            "files_analyzed": result.get("files_analyzed", []),
+            "report_type": body.report_type,
+            "report_type_compliance": result.get("report_type_compliance"),
+            "ai_mode": result.get("_mode", "unknown"),
+            "submission_notes": body.submission_notes,
+            "created_at": datetime.utcnow(),
+        }
+        inserted = await db[QUALITY_EVALUATIONS_COLLECTION].insert_one(eval_doc)
+        result["evaluation_id"] = str(inserted.inserted_id)
 
-    result["evaluation_id"] = str(inserted.inserted_id)
+        # If linked to a task, update task QC fields
+        if body.task_id:
+            try:
+                await db[TASKS_COLLECTION].update_one(
+                    {"_id": ObjectId(body.task_id)},
+                    {"$set": {
+                        "qc_evaluation_id": inserted.inserted_id,
+                        "status": "QC_REVIEW",
+                        "qc_status": "pending",
+                        "qc_reviewed_by": None,
+                        "qc_reviewed_at": None,
+                        "report_type": body.report_type,
+                        "report_type_compliant": result.get("report_type_compliance", {}).get("is_compliant"),
+                        "aiScore": score,
+                        "submission_notes": body.submission_notes,
+                        "updated_at": datetime.utcnow(),
+                    }},
+                )
+            except Exception:
+                pass
+    else:
+        result["evaluation_id"] = "failed_attempt"
+
     result.pop("_raw", None)
     return result
 

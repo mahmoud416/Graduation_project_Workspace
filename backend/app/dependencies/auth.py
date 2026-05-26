@@ -8,7 +8,7 @@ from bson import ObjectId
 from typing import Dict, Any, Optional
 
 from app.db.mongodb import get_database
-from app.db.collections import USERS_COLLECTION
+from app.db.collections import USERS_COLLECTION, BLACKLISTED_TOKENS_COLLECTION, SYSTEM_SETTINGS_COLLECTION
 from app.core.security import decode_access_token
 
 
@@ -25,10 +25,22 @@ async def get_current_user(
     Falls back to X-User-Id header for backward compatibility during migration.
     """
     user_id: Optional[str] = None
+    token: Optional[str] = None
 
     # --- Primary: JWT Bearer token ---
     if credentials and credentials.credentials:
-        payload = decode_access_token(credentials.credentials)
+        token = credentials.credentials
+        
+        # Check blacklist
+        is_blacklisted = await db[BLACKLISTED_TOKENS_COLLECTION].find_one({"token": token})
+        if is_blacklisted:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token has been revoked",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        payload = decode_access_token(token)
         if payload:
             user_id = payload.get("sub")
 
@@ -59,6 +71,15 @@ async def get_current_user(
             detail="Account is inactive or suspended",
         )
 
+    # Check maintenance mode
+    settings = await db[SYSTEM_SETTINGS_COLLECTION].find_one({"_id": "global_settings"})
+    if settings and settings.get("maintenance_mode", False):
+        if user.get("role") not in ["admin", "it_staff"]:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="System is currently under maintenance",
+            )
+
     # Ensure roles array exists for downstream RBAC logic
     if not user.get("roles"):
         primary_role = (user.get("role") or "staff").strip().lower()
@@ -74,5 +95,15 @@ async def get_current_user(
         user["roles"] = normalized_roles or [(user.get("role") or "staff").strip().lower()]
 
     user["role"] = (user.get("role") or "staff").strip().lower()
+
+    # Update last_seen passively on every authenticated request (fire-and-forget style)
+    try:
+        from datetime import datetime, timezone
+        await db[USERS_COLLECTION].update_one(
+            {"_id": lookup_id},
+            {"$set": {"last_seen": datetime.now(timezone.utc)}}
+        )
+    except Exception:
+        pass  # Never block the request for this
 
     return user

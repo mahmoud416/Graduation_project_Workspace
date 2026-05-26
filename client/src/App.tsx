@@ -14,6 +14,8 @@ import SubAdminPortal from './pages/SubAdminPortal';
 import TaskFlowDetail from './pages/TaskFlowDetail';
 import CreateTask from './pages/CreateTask';
 import ConfigurationPage from './pages/ConfigurationPage';
+import SessionLogsPage from './pages/SessionLogsPage';
+import ITPortal from './pages/ITPortal';
 import StaffProjectsPage from './pages/StaffProjectsPage';
 import StaffTaskDetail from './pages/StaffTaskDetail';
 import QCDashboard from './pages/QCDashboard';
@@ -23,6 +25,9 @@ import TeamsPage from './pages/TeamsPage';
 import TeamDetailsPage from './pages/TeamDetailsPage';
 import ActiveProjectsPage from './pages/ActiveProjectsPage';
 import ProgressProjectsPage from './pages/ProgressProjectsPage';
+import PublicProjectsPage from './pages/PublicProjectsPage';
+import PortfolioPage from './pages/PortfolioPage';
+import FounderDashboard from './pages/FounderDashboard';
 
 const USER_UPDATE_EVENT = 'workspace:user-update';
 
@@ -64,7 +69,13 @@ function App() {
     if (!role) {
       return <Navigate to="/login" replace />;
     }
-    if (role === 'quality_control' || role === 'quality_manager' || role === 'admin') {
+    if (
+      role === 'quality_control' ||
+      role === 'quality_manager' ||
+      role === 'admin' ||
+      role === 'manager' ||
+      role === 'sub_admin'
+    ) {
       return page;
     }
     return <Navigate to="/dashboard" replace />;
@@ -84,6 +95,20 @@ function App() {
     return page;
   };
 
+  const redirectItStaff = (page: ReactElement) => {
+    if (role === 'it_staff') {
+      return <Navigate to="/it-portal" replace />;
+    }
+    return page;
+  };
+
+  const restrictToFounder = (page: ReactElement) => {
+    if (role !== 'founder') {
+      return <Navigate to="/dashboard" replace />;
+    }
+    return page;
+  };
+
   return (
     <BrowserRouter>
       <Routes>
@@ -92,17 +117,19 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route
           path="/dashboard"
-          element={redirectQualityDashboard(redirectSubAdminDashboard(<Dashboard />))}
+          element={redirectItStaff(redirectQualityDashboard(redirectSubAdminDashboard(<Dashboard />)))}
         />
         <Route path="/projects" element={restrictForStaff(<Projects />)} />
         <Route path="/projects/active" element={restrictForStaff(<ActiveProjectsPage />)} />
         <Route path="/projects/progress" element={restrictForStaff(<ProgressProjectsPage />)} />
+        <Route path="/projects/public" element={restrictForStaff(<PublicProjectsPage />)} />
         <Route path="/tasks" element={restrictForStaff(<TasksPage />)} />
         <Route path="/calendar" element={<CalendarPage />} />
-        <Route path="/team" element={restrictForStaff(<TeamPage />)} />
+        <Route path="/team" element={<TeamPage />} />
         <Route path="/teams" element={restrictForStaff(<TeamsPage />)} />
         <Route path="/teams/:id" element={restrictForStaff(<TeamDetailsPage />)} />
-        <Route path="/reports" element={restrictForStaff(<ReportsPage />)} />
+        <Route path="/portfolio/:userId" element={restrictForStaff(<PortfolioPage />)} />
+        <Route path="/reports" element={<ReportsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/taskmaster" element={restrictForSubAdminOnly(<TaskMasterDashboard />)} />
         <Route path="/subadmin" element={<SubAdminPortal />} />
@@ -110,12 +137,15 @@ function App() {
         <Route path="/create-task" element={<CreateTask />} />
         <Route path="/task-master" element={<TaskMasterDashboard />} />
         <Route path="/configuration" element={<ConfigurationPage />} />
+        <Route path="/session-logs" element={<SessionLogsPage />} />
+        <Route path="/it-portal" element={<ITPortal />} />
         <Route path="/my-projects" element={<StaffProjectsPage />} />
         <Route path="/staff-task" element={<StaffTaskDetail />} />
         <Route path="/quality-manager" element={restrictToQualityControl(<QCDashboard />)} />
         <Route path="/quality-control" element={restrictToQualityControl(<QCDashboard />)} />
         <Route path="/qc/dashboard" element={restrictToQualityControl(<QCDashboard />)} />
         <Route path="/quality-insights" element={restrictToQualityControl(<QualityInsights />)} />
+        <Route path="/founder" element={restrictToFounder(<FounderDashboard />)} />
       </Routes>
       {role && <ChatbotWidget />}
     </BrowserRouter>

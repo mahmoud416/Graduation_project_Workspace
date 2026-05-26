@@ -1025,12 +1025,29 @@ async def _online_analyze_task(
         rules_text = "No specific rules defined. Evaluate general quality."
 
     # Build file context
+    # PDFs with raw_b64 are sent as Gemini inline_data for native understanding.
+    # Extracted text is included in the prompt as supplementary context.
     file_context = ""
     files_analyzed = []
+    pdf_inline_parts: List[dict] = []
+    MAX_PDF_B64_LEN = 27_962_027  # ~20 MB decoded
     if file_texts:
         for ft in file_texts:
-            file_context += f"\n\nFile: {ft['file_name']}\nContent:\n{ft['content'][:3000]}"
-            files_analyzed.append({"file_name": ft["file_name"], "file_type": ft.get("file_type", "text")})
+            fname = ft["file_name"]
+            ftype = ft.get("file_type", "")
+            raw_b64 = ft.get("raw_b64")
+            if raw_b64 and len(raw_b64) <= MAX_PDF_B64_LEN:
+                pdf_inline_parts.append({"inline_data": {"mime_type": "application/pdf", "data": raw_b64}})
+                file_context += f"\n\nFile: {fname} (PDF attached below — analyse its full content)"
+                extracted = ft.get("content", "")
+                if extracted and not extracted.startswith("["):
+                    file_context += f"\n[Extracted text preview]\n{extracted[:2000]}"
+            elif raw_b64:
+                file_context += f"\n\nFile: {fname} (PDF too large for inline analysis, using extracted text)"
+                file_context += f"\n{ft.get('content', '[No text extracted]')}"
+            else:
+                file_context += f"\n\nFile: {fname}\nContent:\n{ft['content']}"
+            files_analyzed.append({"file_name": fname, "file_type": ftype or "text"})
 
     # Build image parts for Gemini vision
     from app.services.gemini_service import genai
@@ -1048,63 +1065,142 @@ async def _online_analyze_task(
     if has_pdf:
         extra_json_fields += ',\n  "formatting_compliance": {"formatting_score": 0-100, "cover_page": {...}, "table_of_contents": {...}, "introduction": {...}, "main_body": {...}, "conclusion": {...}, "recommendations": {...}, "appendices": {...}, "signatures_approvals": {...}, "language_quality": {...}, "visual_organization": {...}, "missing_sections": ["..."], "formatting_strengths": ["..."], "formatting_weaknesses": ["..."]}'
 
-    prompt_text = f"""You are a Quality Control AI assistant for Egyptian university accreditation and quality assurance.
-Your job is to evaluate whether submitted documents meet defined quality standards.
-You must respond ONLY with a valid JSON object. No markdown, no explanation outside JSON.
+    prompt_text = f"""You are a strict Quality Assurance (QA) AI system متخصص في مراجعة الملفات والـ documents بشكل احترافي جداً.
 
-JSON format:
-{{
-  "verdict": "ACCEPTED" or "NOT ACCEPTED",
-  "compliance_score": <number 0-100>,
-  "rejection_details": [
-    {{
-      "issue": "<clear description of the problem in English>",
-      "reason": "<why this makes the document non-compliant>",
-      "location": "<page number and paragraph/section reference, e.g. Page 3, Section 2.1 or Page 5, Paragraph 2>",
-      "how_to_fix": "<specific actionable instruction on how to correct this issue>"
-    }}
-  ],
-  "passed_standards": [
-    {{"rule": "<rule text>", "result": "<why it passed>"}}
-  ],
-  "failed_standards": [
-    {{"rule": "<rule text>", "reason": "<why it failed>", "location": "<page and paragraph reference if applicable>"}}
-  ],
-  "suggestions": [
-    "<actionable improvement tip>"
-  ],
-  "files_analyzed": [
-    {{"file_name": "<name>", "analysis_result": "<one sentence result>"}}
-  ]{extra_json_fields}
-}}
+Your job is to:
+1) Extract the STANDARD SPECIFICATIONS from the reference/template.
+2) Compare the uploaded file against these standards.
+3) Give a precise evaluation score (0% → 100%).
+4) Decide PASS or FAIL.
+5) Provide detailed, structured feedback.
+6) DO NOT accept imperfect submissions.
 
-VERDICT RULES:
-- Set verdict to "ACCEPTED" ONLY if compliance_score >= 70 AND no critical required elements are missing.
-- Set verdict to "NOT ACCEPTED" if compliance_score < 70 OR any critical standard is failed.
-- The "rejection_details" array MUST be populated with ALL issues when verdict is "NOT ACCEPTED".
-- For EACH issue in rejection_details, you MUST provide: the exact page number, the section/paragraph reference, a clear reason, and specific instructions on how to fix it.
-- If the document is ACCEPTED, rejection_details should be an empty array [].
-
-{learned_context}{report_type_context}{formatting_prompt}
-
-Quality Standards to check against:
+========================================
+INPUTS:
+========================================
+- Reference Template (Official Format):
 {rules_text}
-
-Task Title: {task_title}
-
-Task Description:
-{task_description or "(No description provided)"}
+- Submitted File (User Upload):
 {file_context}
 
-Evaluate this task against EACH quality standard listed above.
-Also apply any learned quality patterns from the trained model above.
-{('IMPORTANT: Also validate whether this task meets ALL required elements of the specified report type above. Add "report_type_compliance" to your JSON response.') if report_type_context else ''}
-{('IMPORTANT: Since a PDF is attached, you MUST also evaluate document formatting compliance and add "formatting_compliance" to your JSON response.') if has_pdf else ''}
-For EVERY failed standard, identify the exact page number and paragraph/section in the document.
-Be specific about which rules passed and which failed.
-Provide 2-5 actionable improvement suggestions."""
+========================================
+STEP 1: EXTRACT STANDARDS
+========================================
+From the reference template, extract ALL validation rules including:
+
+1) Structure:
+   - Required sections
+   - Order of sections
+   - Mandatory fields
+
+2) Content:
+   - Required data in each section
+   - Academic/professional writing style
+   - Language (English formal)
+
+3) Formatting:
+   - Headings
+   - Tables
+   - Alignment
+   - Consistency
+
+4) Data Quality:
+   - منطقيه الأرقام
+   - completeness
+   - no missing fields
+
+========================================
+STEP 2: VALIDATION
+========================================
+Compare submitted file vs standards:
+
+Check:
+- Missing sections
+- Wrong structure
+- Incomplete fields
+- Weak content
+- Formatting issues
+- Inconsistent data
+
+========================================
+STEP 3: SCORING SYSTEM
+========================================
+Calculate score based on:
+
+- Structure (30%)
+- Content Quality (30%)
+- Completeness (20%)
+- Formatting (10%)
+- Accuracy & Logic (10%)
+
+Return FINAL SCORE as percentage.
+
+========================================
+STEP 4: DECISION
+========================================
+- PASS → if score >= 85%
+- FAIL → if score < 85%
+
+========================================
+STEP 5: ERROR REPORT (VERY IMPORTANT)
+========================================
+For EACH issue, provide:
+- Error Type (e.g., Missing Section, Formatting Issue)
+- Location (section name)
+- Description (what is wrong exactly)
+- Expected Fix (how to correct it)
+Be VERY strict and detailed.
+
+========================================
+STEP 6: OUTPUT FORMAT
+========================================
+Return ONLY structured output in JSON format exactly like this:
+{{
+  "score": "87%",
+  "status": "PASS / FAIL",
+  "summary": "short explanation",
+  "errors": [
+    {{
+      "type": "error type",
+      "section": "section name",
+      "issue": "what is wrong",
+      "fix": "how to correct"
+    }}
+  ]
+}}
+
+========================================
+STEP 7: AUTO-RESUBMISSION LOGIC
+========================================
+- If FAIL:
+  → Clearly explain why rejected
+  → Provide exact corrections
+  → Make it easy to fix and resubmit
+
+- If corrected version matches standards:
+  → Immediately PASS without hesitation
+
+========================================
+STRICT RULES:
+========================================
+- Be harsh but fair
+- No vague feedback
+- No generic comments
+- Every rejection must have clear reasons
+- Think like ISO auditor / QA inspector
+
+GOAL:
+Build a fully automated document validation system with scoring and strict acceptance criteria.
+
+Task Title: {task_title}
+Task Description: {task_description or "(No description provided)"}
+{learned_context}{report_type_context}{formatting_prompt}"""
 
     content_parts.append(prompt_text)
+
+    # Attach PDFs as Gemini inline_data for native document understanding
+    for pdf_part in pdf_inline_parts:
+        content_parts.append(pdf_part)
 
     # Attach images for vision analysis
     if image_bytes_list:
@@ -1125,6 +1221,45 @@ Provide 2-5 actionable improvement suggestions."""
     raw = response.text or ""
     result = _parse_json_safe(raw)
 
+    # Map the user's requested JSON format to the system's expected format
+    if "score" in result:
+        # score could be "87%" or 87
+        score_val = str(result["score"]).replace('%', '').strip()
+        try:
+            result["compliance_score"] = float(score_val)
+        except ValueError:
+            result["compliance_score"] = 0.0
+
+    if "status" in result:
+        status_val = str(result["status"]).upper()
+        if "PASS" in status_val:
+            result["verdict"] = "ACCEPTED"
+        else:
+            result["verdict"] = "NOT ACCEPTED"
+
+    if "errors" in result and isinstance(result["errors"], list):
+        result["failed_standards"] = []
+        result["rejection_details"] = []
+        for err in result["errors"]:
+            issue_desc = err.get("issue", "")
+            fix_desc = err.get("fix", "")
+            err_type = err.get("type", "")
+            section = err.get("section", "")
+            result["failed_standards"].append({
+                "rule": err_type,
+                "reason": issue_desc,
+                "location": section
+            })
+            result["rejection_details"].append({
+                "issue": issue_desc,
+                "reason": err_type,
+                "location": section,
+                "how_to_fix": fix_desc
+            })
+
+    if "summary" in result:
+        result["suggestions"] = [result["summary"]]
+
     result.setdefault("compliance_score", 0.0)
     result.setdefault("passed_standards", [])
     result.setdefault("failed_standards", [])
@@ -1134,9 +1269,8 @@ Provide 2-5 actionable improvement suggestions."""
 
     result["compliance_score"] = max(0.0, min(100.0, float(result["compliance_score"])))
 
-    # Auto-compute verdict if AI didn't provide one
     if "verdict" not in result:
-        result["verdict"] = "ACCEPTED" if result["compliance_score"] >= 70 else "NOT ACCEPTED"
+        result["verdict"] = "ACCEPTED" if result["compliance_score"] >= 85 else "NOT ACCEPTED"
 
     result["_raw"] = raw
     result["_mode"] = "online"

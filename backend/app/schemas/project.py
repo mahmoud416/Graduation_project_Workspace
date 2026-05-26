@@ -24,10 +24,11 @@ class ProjectBase(BaseModel):
     description:  str          = Field("", max_length=2000)
     status:       ProjectStatus = Field(default=ProjectStatus.ACTIVE)
     progress:     int          = Field(0, ge=0, le=100)
-    sub_admin_id:  Optional[str] = Field(default=None, description="(Deprecated) Single sub-admin id")
+    sub_admin_id:  Optional[str] = Field(default=None, description="(Deprecated) Single sub-manager id")
     sub_admin_ids: List[str]   = Field(default_factory=list)
     staff_ids:     List[str]   = Field(default_factory=list)
     team_id:       Optional[str] = None
+    due_date:      Optional[str] = None
 
 
 class ProjectCreate(ProjectBase):
@@ -43,6 +44,7 @@ class ProjectUpdate(BaseModel):
     progress:      Optional[int]           = Field(default=None, ge=0, le=100)
     sub_admin_id:  Optional[str]           = None
     sub_admin_ids: Optional[List[str]]     = None
+    due_date:      Optional[str]           = None
 
 
 class ProjectTogglesUpdate(BaseModel):
@@ -74,6 +76,7 @@ class ProjectResponse(BaseModel):
     staff_initials:   List[str]               = Field(default_factory=list)
     created_at:       datetime
     updated_at:       datetime
+    due_date:         Optional[str]   = None
 
     class Config:
         populate_by_name = True

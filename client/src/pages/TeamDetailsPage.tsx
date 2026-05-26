@@ -35,12 +35,19 @@ const TeamDetailsPage = () => {
         const fetchTeamData = async () => {
             try {
                 const token = localStorage.getItem('token');
+                const userId = localStorage.getItem('userId');
                 const [teamRes, membersRes] = await Promise.all([
                     fetch(`${API_BASE}/teams/${id}`, {
-                        headers: { Authorization: `Bearer ${token ?? ''}` },
+                        headers: { 
+                            'Authorization': `Bearer ${token ?? ''}`,
+                            'X-User-Id': userId ?? ''
+                        },
                     }),
                     fetch(`${API_BASE}/teams/${id}/members`, {
-                        headers: { Authorization: `Bearer ${token ?? ''}` },
+                        headers: { 
+                            'Authorization': `Bearer ${token ?? ''}`,
+                            'X-User-Id': userId ?? ''
+                        },
                     })
                 ]);
 
@@ -97,7 +104,11 @@ const TeamDetailsPage = () => {
                                 {members.length > 0 ? (
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
                                         {members.map(member => (
-                                            <div key={member._id} className="flex items-center gap-4 p-4 rounded-xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 hover:border-gray-200 dark:hover:border-gray-600 transition-colors">
+                                            <div 
+                                                key={member._id} 
+                                                onClick={() => navigate(`/portfolio/${member.user_id}`)}
+                                                className="cursor-pointer flex items-center gap-4 p-4 rounded-xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 hover:border-gray-200 dark:hover:border-gray-600 transition-colors"
+                                            >
                                                 <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-900 dark:to-blue-800 flex items-center justify-center text-blue-700 dark:text-blue-300 font-bold text-lg">
                                                     {(member.user_full_name || member.user_email || 'U').substring(0, 1).toUpperCase()}
                                                 </div>
@@ -119,16 +130,7 @@ const TeamDetailsPage = () => {
                                     <p className="text-text-gray dark:text-gray-400 mb-8">No members found for this team.</p>
                                 )}
 
-                                <div className="border-t border-gray-100 dark:border-gray-700 pt-8">
-                                    <h2 className="text-lg font-bold text-text-dark dark:text-white mb-4">Team Hub</h2>
-                                    <p className="text-sm text-text-gray dark:text-gray-400 mb-6">
-                                        Connect and collaborate with your team here. Only team members have access to this internal workspace.
-                                    </p>
-                                    
-                                    <button className="bg-primary text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-blue-600 transition-colors shadow-lg shadow-primary/30">
-                                        Open Team Board
-                                    </button>
-                                </div>
+
                             </div>
                         </div>
                     ) : null}

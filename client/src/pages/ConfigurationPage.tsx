@@ -11,7 +11,7 @@ type CreateModalState = {
     email: string;
     password: string;
     phone: string;
-    role: 'admin' | 'subadmin' | 'manager' | 'staff';
+    role: 'admin' | 'subadmin' | 'manager' | 'staff' | 'it_staff';
     subAdminId?: string;
 };
 
@@ -95,7 +95,7 @@ const ConfigurationPage = () => {
         if (typeof window === 'undefined') return;
         const storedRole = localStorage.getItem('role');
         setRole(storedRole);
-        if (storedRole && storedRole !== 'admin') {
+        if (storedRole && storedRole !== 'admin' && storedRole !== 'it_staff') {
             navigate('/dashboard');
         }
     }, [navigate]);
@@ -314,7 +314,7 @@ const ConfigurationPage = () => {
                             <p className="text-xs font-semibold uppercase tracking-wide text-primary mb-2">Step 1</p>
                             <h2 className="text-2xl font-semibold text-text-dark dark:text-white mb-3">Create Account</h2>
                             <p className="text-sm text-text-gray dark:text-gray-400 mb-6">
-                                Choose the required role (admin / sub admin / staff) and create the account instantly.
+                                Choose the required role (admin / sub manager / staff) and create the account instantly.
                             </p>
                             <button
                                 type="button"
@@ -329,7 +329,7 @@ const ConfigurationPage = () => {
                             <p className="text-xs font-semibold uppercase tracking-wide text-primary mb-2">Step 2</p>
                             <h2 className="text-2xl font-semibold text-text-dark dark:text-white mb-3">Assign Staff</h2>
                             <p className="text-sm text-text-gray dark:text-gray-400 mb-6">
-                                Link staff to a sub admin right during creation or when editing later.
+                                Link staff to a sub manager right during creation or when editing later.
                             </p>
                             <button
                                 type="button"
@@ -477,11 +477,12 @@ const ConfigurationPage = () => {
                                     <option value="manager">Manager</option>
                                     <option value="subadmin">Sub Manager</option>
                                     <option value="staff">Staff</option>
+                                    <option value="it_staff">IT Staff</option>
                                 </select>
                             </div>
                             {createForm.role === 'staff' && (
                                 <div>
-                                    <label className="text-xs font-semibold text-text-gray dark:text-gray-300 uppercase">Assign to Sub Admin</label>
+                                    <label className="text-xs font-semibold text-text-gray dark:text-gray-300 uppercase">Assign to Sub Manager</label>
                                     <select
                                         value={createForm.subAdminId}
                                         onChange={(e) => setCreateForm({ ...createForm, subAdminId: e.target.value })}
@@ -584,6 +585,7 @@ const ConfigurationPage = () => {
                                         <option value="manager">Manager</option>
                                         <option value="subadmin">Sub Manager</option>
                                         <option value="staff">Staff</option>
+                                        <option value="it_staff">IT Staff</option>
                                     </select>
                                 </div>
                                 <div>

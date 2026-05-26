@@ -220,7 +220,7 @@ const StaffProjectsPage = () => {
                     ) : displayed.length === 0 ? (
                         <div className="rounded-2xl border border-dashed border-gray-300 dark:border-gray-700 p-12 text-center text-sm text-text-gray dark:text-gray-400">
                             {filter === 'ALL'
-                                ? 'No projects assigned to you yet. Ask your admin or sub-admin to add you to a project.'
+                                ? 'No projects assigned to you yet. Ask your admin or sub-manager to add you to a project.'
                                 : `No ${filter.toLowerCase()} projects.`}
                         </div>
                     ) : (

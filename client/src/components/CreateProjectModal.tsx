@@ -58,10 +58,12 @@ const CreateProjectModal = ({ onClose, onSuccess }: CreateProjectModalProps) => 
     const [description, setDescription] = useState('');
     const [status, setStatus] = useState('ACTIVE');
     const [progress, setProgress] = useState(0);
+    const [dueDate, setDueDate] = useState('');
     const [subAdmins, setSubAdmins] = useState<DirectoryUser[]>([]);
     const [staffDirectory, setStaffDirectory] = useState<DirectoryUser[]>([]);
     const [selectedSubAdmins, setSelectedSubAdmins] = useState<string[]>([]);
     const [selectedStaff, setSelectedStaff] = useState<string[]>([]);
+    const [selectedTeam, setSelectedTeam] = useState<string>('');
     const [directoryLoading, setDirectoryLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -79,26 +81,39 @@ const CreateProjectModal = ({ onClose, onSuccess }: CreateProjectModalProps) => 
 
             const headers = { 'X-User-Id': userId, 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') };
             try {
-                const [subResponse, staffResponse, managerResponse] = await Promise.all([
-                    fetch(`${API_BASE}/users?role=subadmin`, { headers }),
-                    fetch(`${API_BASE}/users?role=staff`, { headers }),
-                    fetch(`${API_BASE}/users?role=manager`, { headers }),
-                ]);
-
-                if (!subResponse.ok || !staffResponse.ok || !managerResponse.ok) {
-                    throw new Error('Failed to load directory data');
+                const teamsResponse = await fetch(`${API_BASE}/teams`, { headers });
+                if (!teamsResponse.ok) {
+                    throw new Error('Failed to load teams');
                 }
-
-                const [subData, staffData, managerData] = await Promise.all([
-                    subResponse.json(), 
-                    staffResponse.json(),
-                    managerResponse.json()
-                ]);
+                const teamsData = await teamsResponse.json();
+                if (!teamsData || teamsData.length === 0) {
+                    throw new Error('You do not belong to any team.');
+                }
                 
-                // Combine Sub-Admins and Managers into the same list for assignment
-                const combinedManagers = [...subData, ...managerData].map(normalizeDirectoryEntry);
-                setSubAdmins(combinedManagers);
-                setStaffDirectory(staffData.map(normalizeDirectoryEntry));
+                const team = teamsData[0];
+                const teamId = team.id || team._id;
+                setSelectedTeam(teamId);
+
+                const membersResponse = await fetch(`${API_BASE}/teams/${teamId}/members`, { headers });
+                if (!membersResponse.ok) {
+                    throw new Error('Failed to load team members');
+                }
+                const membersData = await membersResponse.json();
+
+                const normalizedMembers = membersData.map((m: any) => {
+                    const name = m.user_full_name || m.user_email || 'Team Member';
+                    return {
+                        id: m.user_id,
+                        name,
+                        email: m.user_email || 'unknown@hericle.com',
+                        initials: name.substring(0, 2).toUpperCase(),
+                        role: m.role
+                    };
+                });
+
+                setSubAdmins(normalizedMembers.filter((m: any) => m.role === 'sub_admin' || m.role === 'subadmin'));
+                setStaffDirectory(normalizedMembers.filter((m: any) => m.role === 'member' || m.role === 'staff'));
+
             } catch (err: unknown) {
                 const message = err instanceof Error ? err.message : 'Unable to load directory data';
                 setError(message);
@@ -138,8 +153,10 @@ const CreateProjectModal = ({ onClose, onSuccess }: CreateProjectModalProps) => 
                 description,
                 status,
                 progress,
+                due_date: dueDate || undefined,
                 sub_admin_ids: selectedSubAdmins.map((id) => id.trim()),
                 staff_ids: selectedStaff.map((id) => id.trim()),
+                ...(selectedTeam ? { team_id: selectedTeam } : {}),
             };
 
             const response = await fetch(`${API_BASE}/projects`, {
@@ -169,6 +186,7 @@ const CreateProjectModal = ({ onClose, onSuccess }: CreateProjectModalProps) => 
             setSelectedStaff([]);
             setStatus('ACTIVE');
             setProgress(0);
+            setDueDate('');
             onSuccess();
         } catch (err: unknown) {
             const message = err instanceof Error ? err.message : 'Unable to create project';
@@ -252,10 +270,13 @@ const CreateProjectModal = ({ onClose, onSuccess }: CreateProjectModalProps) => 
                             </div>
                         </div>
                         <div className="space-y-1.5">
-                            <label className="text-xs font-semibold text-text-gray uppercase">Timeline</label>
-                            <div className="h-12 rounded-xl border border-dashed border-gray-200 dark:border-gray-700 flex items-center justify-center text-xs text-text-gray">
-                                Auto-tracked via activity
-                            </div>
+                            <label className="text-xs font-semibold text-text-gray uppercase">Timeline (Due Date)</label>
+                            <input
+                                type="date"
+                                value={dueDate}
+                                onChange={(e) => setDueDate(e.target.value)}
+                                className="w-full h-12 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 text-sm focus:border-primary focus:ring-2 focus:ring-primary/10"
+                            />
                         </div>
                     </div>
 
@@ -263,8 +284,8 @@ const CreateProjectModal = ({ onClose, onSuccess }: CreateProjectModalProps) => 
                         <div className="space-y-1.5">
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <p className="text-xs font-semibold uppercase text-text-gray">Assigned Managers / Sub Managers</p>
-                                    <p className="text-xs text-text-gray">Select managers/sub-managers who will co-manage</p>
+                                    <p className="text-xs font-semibold uppercase text-text-gray">Sub Managers</p>
+                                    <p className="text-xs text-text-gray">Select sub-managers</p>
                                 </div>
                                 <span className="text-xs font-semibold text-text-gray">{selectedSubAdmins.length} selected</span>
                             </div>
@@ -272,7 +293,7 @@ const CreateProjectModal = ({ onClose, onSuccess }: CreateProjectModalProps) => 
                                 {directoryLoading ? (
                                     <p className="text-sm text-text-gray">Loading directory...</p>
                                 ) : subAdmins.length === 0 ? (
-                                    <p className="text-sm text-text-gray">No managers or sub managers available.</p>
+                                    <p className="text-sm text-text-gray">No sub-managers available.</p>
                                 ) : (
                                     subAdmins.map((member) => (
                                         <label
@@ -288,8 +309,8 @@ const CreateProjectModal = ({ onClose, onSuccess }: CreateProjectModalProps) => 
                                                 {member.initials}
                                             </div>
                                             <div>
-                                                <p className="text-sm font-semibold text-text-dark dark:text-white">{member.name}</p>
-                                                <p className="text-xs text-text-gray">{member.email}</p>
+                                                <p className="text-sm font-semibold text-text-dark dark:text-white truncate max-w-[120px]">{member.name}</p>
+                                                <p className="text-xs text-text-gray truncate max-w-[120px]">{member.email}</p>
                                             </div>
                                         </label>
                                     ))
@@ -299,8 +320,8 @@ const CreateProjectModal = ({ onClose, onSuccess }: CreateProjectModalProps) => 
                         <div className="space-y-1.5">
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <p className="text-xs font-semibold uppercase text-text-gray">Project Staff</p>
-                                    <p className="text-xs text-text-gray">Select the team members who will execute this project</p>
+                                    <p className="text-xs font-semibold uppercase text-text-gray">Project Teams (Staff)</p>
+                                    <p className="text-xs text-text-gray">Select team members (Staff)</p>
                                 </div>
                                 <span className="text-xs font-semibold text-text-gray">{selectedStaff.length} selected</span>
                             </div>
@@ -324,8 +345,8 @@ const CreateProjectModal = ({ onClose, onSuccess }: CreateProjectModalProps) => 
                                                 {member.initials}
                                             </div>
                                             <div>
-                                                <p className="text-sm font-semibold text-text-dark dark:text-white">{member.name}</p>
-                                                <p className="text-xs text-text-gray">{member.email}</p>
+                                                <p className="text-sm font-semibold text-text-dark dark:text-white truncate max-w-[120px]">{member.name}</p>
+                                                <p className="text-xs text-text-gray truncate max-w-[120px]">{member.email}</p>
                                             </div>
                                         </label>
                                     ))

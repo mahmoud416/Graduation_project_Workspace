@@ -66,7 +66,7 @@ const SubAdminPortal = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    const userName = localStorage.getItem('userName') || localStorage.getItem('name') || 'Sub Admin';
+    const userName = localStorage.getItem('userName') || localStorage.getItem('name') || 'Sub Manager';
     const today = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
     const fetchProjects = useCallback(async () => {
@@ -172,7 +172,7 @@ const SubAdminPortal = () => {
                             <div>
                                 <p className="text-white/65 text-xs font-semibold uppercase tracking-widest mb-1">{today}</p>
                                 <h1 className="text-2xl font-black text-white mb-1">Welcome back, {userName}</h1>
-                                <p className="text-white/70 text-sm">Sub-Admin · Manage your projects and coordinate your team</p>
+                                <p className="text-white/70 text-sm">Sub-Manager · Manage your projects and coordinate your team</p>
                             </div>
                             <button
                                 type="button"
@@ -304,7 +304,7 @@ const SubAdminPortal = () => {
                             </div>
                         ) : myProjects.length === 0 ? (
                             <div className="rounded-2xl border border-dashed border-gray-300 dark:border-gray-700 p-10 text-center text-sm text-text-gray dark:text-gray-400">
-                                No projects assigned yet. Ask your admin to assign you as sub-admin to a project.
+                                No projects assigned yet. Ask your admin to assign you as sub-manager to a project.
                             </div>
                         ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">

@@ -463,6 +463,10 @@ def _ensure_project_visibility(project: dict[str, Any], current_user: dict[str, 
         if user_id in (project.get("sub_admin_ids") or []) or project.get("owner_id") == user_id:
             return
 
+    if role == "manager":
+        if user_id in (project.get("sub_admin_ids") or []) or project.get("owner_id") == user_id:
+            return
+
     if user_id in (project.get("staff_ids") or []):
         return
 
@@ -497,7 +501,7 @@ def _ensure_member_privileges(project: dict[str, Any], current_user: dict[str, A
         allowed_ids = project.get("sub_admin_ids") or []
         if current_user.get("_id") == project.get("owner_id") or current_user.get("_id") in allowed_ids:
             return
-    raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Only admins or assigned sub-admins can manage members")
+    raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Only admins or assigned sub-managers can manage members")
 
 
 def _ensure_resource_access(resource: dict[str, Any], current_user: dict[str, Any]) -> None:
@@ -546,7 +550,7 @@ def _resolve_storage_path(relative_path: str) -> Path:
 def _ensure_task_privileges(project: dict[str, Any], current_user: dict[str, Any], board: dict[str, Any] = None) -> None:
     """Only admin, sub_admin, or board manager can manage tasks."""
     role = (current_user.get("role") or "").lower()
-    if role in {"admin", "sub_admin"}:
+    if role in {"admin", "sub_admin", "manager"}:
         return
         
     if board:
@@ -555,7 +559,7 @@ def _ensure_task_privileges(project: dict[str, Any], current_user: dict[str, Any
             if member.get("user_id") == user_id and member.get("role", "").lower() == "manager":
                 return
                 
-    raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Only admins, sub-admins, or managers can manage tasks")
+    raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Only admins, sub-managers, or managers can manage tasks")
 
 
 def _safe_delete_relative_path(relative_path: str) -> None:

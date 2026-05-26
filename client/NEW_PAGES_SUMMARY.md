@@ -33,7 +33,7 @@ Successfully created three new dashboard pages based on the provided UI screensh
 
 ---
 
-### 2. Sub-Admin Portal (`/subadmin`)
+### 2. Sub-Manager Portal (`/subadmin`)
 **File**: `src/pages/SubAdminPortal.tsx`
 
 **Features**:

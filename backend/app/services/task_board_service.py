@@ -79,7 +79,7 @@ class TaskBoardService:
 
     @staticmethod
     async def ensure_sub_admin_board(db) -> Dict[str, Any]:
-        """Guarantee the sub-admin board exists."""
+        """Guarantee the sub-manager board exists."""
         project = await db[PROJECTS_COLLECTION].find_one({"_id": TaskBoardService.SUBADMIN_PROJECT_ID})
         if not project:
             project = TaskBoardService._default_sub_admin_project_doc()
@@ -382,12 +382,12 @@ class TaskBoardService:
 
     @staticmethod
     def _default_sub_admin_project_doc() -> Dict[str, Any]:
-        """Fallback project payload for the sub-admin coordination channel."""
+        """Fallback project payload for the sub-manager coordination channel."""
         now = datetime.utcnow()
         return {
             "_id": TaskBoardService.SUBADMIN_PROJECT_ID,
             "title": "All_SubAdmin",
-            "description": "Dedicated group holding every sub-admin for oversight and control.",
+            "description": "Dedicated group holding every sub-manager for oversight and control.",
             "status": "ACTIVE",
             "progress": 100,
             "owner_id": None,

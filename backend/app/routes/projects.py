@@ -1,6 +1,6 @@
 """
 Project management API routes.
-Allows admins to create initiatives and assign sub-admins/staff.
+Allows admins to create initiatives and assign sub-managers/staff.
 """
 from typing import List, Optional
 
@@ -49,7 +49,7 @@ def _parse_user_id(value: Optional[str], label: str) -> Optional[str]:
 
 
 def _ensure_admin(current_user):
-    if current_user.get("role") != "admin":
+    if current_user.get("role") not in ["admin", "manager"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin privileges required for this action"
@@ -69,6 +69,15 @@ def _visibility_filter(current_user) -> dict:
                 {"owner_id": user_id}
             ])
         return {"$or": clauses}
+    
+    if role == "manager":
+        clauses = [{"_id": PUBLIC_GROUP_ID}]
+        if user_id is not None:
+            clauses.extend([
+                {"sub_admin_ids": user_id},
+                {"owner_id": user_id}
+            ])
+        return {"$or": clauses}
 
     clauses = [{"_id": PUBLIC_GROUP_ID}]
     if user_id is not None:
@@ -76,8 +85,10 @@ def _visibility_filter(current_user) -> dict:
     return {"$or": clauses}
 
 
-async def _ensure_user_exists(db, user_id: str, expected_role: str, label: str):
-    user = await db[USERS_COLLECTION].find_one({"_id": user_id, "role": expected_role})
+async def _ensure_user_exists(db, user_id: str, expected_role, label: str):
+    if isinstance(expected_role, str):
+        expected_role = [expected_role]
+    user = await db[USERS_COLLECTION].find_one({"_id": user_id, "role": {"$in": expected_role}})
     if not user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -103,7 +114,7 @@ async def create_project(
     current_user = Depends(get_current_user),
     db = Depends(get_database)
 ):
-    """Admins can create new projects and assign a sub-admin plus staff."""
+    """Admins can create new projects and assign a sub-manager plus staff."""
     _ensure_admin(current_user)
 
     sub_admin_ids: list[str] = []
@@ -130,12 +141,12 @@ async def create_project(
     if sub_admin_ids:
         sub_count = await db[USERS_COLLECTION].count_documents({
             "_id": {"$in": sub_admin_ids},
-            "role": "sub_admin"
+            "role": {"$in": ["sub_admin", "subadmin", "manager"]}
         })
         if sub_count != len(sub_admin_ids):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="One or more sub admins are invalid"
+                detail="One or more sub managers are invalid"
             )
 
     if staff_ids:
@@ -158,7 +169,8 @@ async def create_project(
         progress=project_data.progress,
         sub_admin_ids=sub_admin_ids,
         staff_ids=staff_ids,
-        team_id=_parse_user_id(project_data.team_id, "team_id")
+        team_id=_parse_user_id(project_data.team_id, "team_id"),
+        due_date=project_data.due_date
     )
 
     await TaskBoardService.ensure_board_for_project(db, project)
@@ -269,7 +281,7 @@ async def update_project(
     current_user = Depends(get_current_user),
     db = Depends(get_database)
 ):
-    """Allow admins or assigned sub-admins to update project metadata."""
+    """Allow admins or assigned sub-managers to update project metadata."""
     project_obj_id = _parse_user_id(project_id, "project_id")
     if project_obj_id is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid project id")
@@ -294,6 +306,8 @@ async def update_project(
         updates["status"] = update_data.status.value
     if update_data.progress is not None:
         updates["progress"] = update_data.progress
+    if update_data.due_date is not None:
+        updates["due_date"] = update_data.due_date
     if update_data.sub_admin_ids is not None:
         sub_list: List[str] = []
         for raw in update_data.sub_admin_ids:
@@ -304,18 +318,18 @@ async def update_project(
             sub_list = list(dict.fromkeys(sub_list))
             sub_count = await db[USERS_COLLECTION].count_documents({
                 "_id": {"$in": sub_list},
-                "role": "sub_admin"
+                "role": {"$in": ["sub_admin", "subadmin", "manager"]}
             })
             if sub_count != len(sub_list):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="One or more sub admins are invalid"
+                    detail="One or more sub managers are invalid"
                 )
         updates["sub_admin_ids"] = sub_list
     elif update_data.sub_admin_id is not None:
         sub_admin_id = _parse_user_id(update_data.sub_admin_id, "sub_admin_id")
         if sub_admin_id:
-            await _ensure_user_exists(db, sub_admin_id, "sub_admin", "Sub Admin")
+            await _ensure_user_exists(db, sub_admin_id, ["sub_admin", "subadmin", "manager"], "Sub Manager")
             updates["sub_admin_ids"] = [sub_admin_id]
         else:
             updates["sub_admin_ids"] = []
@@ -340,6 +354,15 @@ async def delete_project(
     if identifier_str in DEFAULT_GROUP_IDS:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Default workspace groups cannot be deleted")
 
+    # If manager, ensure they own or manage this project
+    if current_user.get("role") == "manager":
+        project = await ProjectService.get_project(db, project_obj_id)
+        if not project:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+        user_id = current_user.get("_id")
+        if project.get("owner_id") != user_id and user_id not in (project.get("sub_admin_ids") or []):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
+
     deleted = await ProjectService.delete_project(db, project_obj_id)
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
@@ -360,6 +383,15 @@ async def add_staff_to_project(
     project_obj_id = _parse_user_id(project_id, "project_id")
     if project_obj_id is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid project id")
+
+    # If manager, ensure they own or manage this project
+    if current_user.get("role") == "manager":
+        project = await ProjectService.get_project(db, project_obj_id)
+        if not project:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+        user_id = current_user.get("_id")
+        if project.get("owner_id") != user_id and user_id not in (project.get("sub_admin_ids") or []):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
 
     staff_ids: List[str] = []
     for staff_id in staff_payload.staff_ids:
@@ -405,6 +437,12 @@ async def toggle_project_settings(
     project = await ProjectService.get_project(db, project_obj_id)
     if not project:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+        
+    # If manager, ensure they own or manage this project
+    if current_user.get("role") == "manager":
+        user_id = current_user.get("_id")
+        if project.get("owner_id") != user_id and user_id not in (project.get("sub_admin_ids") or []):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
 
     updates = {}
     if payload.comments_enabled is not None:

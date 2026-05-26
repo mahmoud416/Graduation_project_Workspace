@@ -27,7 +27,8 @@ class ProjectService:
         progress: int,
         sub_admin_ids: List[Any],
         staff_ids: List[Any],
-        team_id: Optional[Any] = None
+        team_id: Optional[Any] = None,
+        due_date: Optional[str] = None
     ) -> Dict[str, Any]:
         """Insert a new project document."""
         project_doc = ProjectModel.create_document(
@@ -38,7 +39,8 @@ class ProjectService:
             progress=progress,
             sub_admin_ids=sub_admin_ids,
             staff_ids=staff_ids,
-            team_id=team_id
+            team_id=team_id,
+            due_date=due_date
         )
         result = await db[PROJECTS_COLLECTION].insert_one(project_doc)
         project_doc["_id"] = result.inserted_id
@@ -68,7 +70,7 @@ class ProjectService:
             {
                 "_id": "all-sub-admin",
                 "title": "All_SubAdmin",
-                "description": "Dedicated group holding every sub-admin for oversight and control.",
+                "description": "Dedicated group holding every sub-manager for oversight and control.",
                 "type": "all_subadmin",
                 "is_system_card": True,
                 "comments_enabled": True,
@@ -111,7 +113,8 @@ class ProjectService:
         if not updates:
             return await ProjectService.get_project(db, project_id)
 
-        updates["updated_at"] = datetime.utcnow()
+        if updates:
+            updates["updated_at"] = datetime.utcnow()
         return await db[PROJECTS_COLLECTION].find_one_and_update(
             {"_id": project_id},
             {"$set": updates},
@@ -188,11 +191,12 @@ class ProjectService:
             "comments_enabled": project.get("comments_enabled", True),
             "uploads_enabled":  project.get("uploads_enabled", True),
             "is_system_card":   project.get("is_system_card", False),
+            "due_date": project.get("due_date"),
             "created_at": project.get("created_at"),
             "updated_at": project.get("updated_at")
         }
 
-        # Sub-Admin profile
+        # Sub-Manager profile
         sub_admin_entries: List[Dict[str, Any]] = []
         sub_ids = project.get("sub_admin_ids") or []
         if not sub_ids and project.get("sub_admin_id"):
@@ -205,7 +209,7 @@ class ProjectService:
             person_initials = initials_from(user.get("name") or user.get("full_name"), user.get("email"))
             sub_admin_entries.append({
                 "_id": str(user["_id"]),
-                "name": user.get("name") or user.get("full_name", "Sub Admin"),
+                "name": user.get("name") or user.get("full_name", "Sub Manager"),
                 "email": user.get("email", ""),
                 "initials": person_initials
             })

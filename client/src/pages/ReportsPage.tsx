@@ -89,18 +89,46 @@ const ReportsPage = () => {
                 setIsLoading(true);
                 setError(null);
                 const token = localStorage.getItem('token') ?? '';
-                const headers = { Authorization: `Bearer ${token}` };
-                const [pRes, mRes] = await Promise.all([
-                    fetch(`${API_BASE}/projects`, { headers }),
-                    fetch(`${API_BASE}/users`,    { headers }),
-                ]);
+                const userId = localStorage.getItem('userId') ?? '';
+                const role = localStorage.getItem('role') ?? '';
+                const headers: Record<string, string> = {
+                    Authorization: `Bearer ${token}`,
+                    'X-User-Id': userId,
+                };
+
+                const pRes = await fetch(`${API_BASE}/projects`, { headers });
                 if (!pRes.ok) throw new Error(`Projects: ${pRes.status}`);
                 const pData: Project[] = await pRes.json();
                 setProjects(pData);
 
-                if (mRes.ok) {
-                    const mData: Member[] = await mRes.json();
-                    setMembers(mData);
+                // Admins can query /users; managers fetch team members instead
+                if (role === 'admin') {
+                    const mRes = await fetch(`${API_BASE}/users`, { headers });
+                    if (mRes.ok) {
+                        const mData: Member[] = await mRes.json();
+                        setMembers(mData);
+                    }
+                } else {
+                    // For managers: get teams, then members of first team
+                    const tRes = await fetch(`${API_BASE}/teams`, { headers });
+                    if (tRes.ok) {
+                        const teams = await tRes.json();
+                        if (teams.length > 0) {
+                            const teamId = teams[0].id || teams[0]._id;
+                            const mRes = await fetch(`${API_BASE}/teams/${teamId}/members`, { headers });
+                            if (mRes.ok) {
+                                const raw = await mRes.json();
+                                // Normalize to Member shape
+                                const normalized: Member[] = raw.map((m: any) => ({
+                                    _id: m.user_id,
+                                    name: m.user_full_name || m.user_email || 'Team Member',
+                                    email: m.user_email || '',
+                                    role: m.role,
+                                }));
+                                setMembers(normalized);
+                            }
+                        }
+                    }
                 }
             } catch (e: unknown) {
                 setError(e instanceof Error ? e.message : 'Failed to load data');
@@ -345,7 +373,7 @@ const ReportsPage = () => {
                                             <div className="space-y-3">
                                                 {[
                                                     { label: 'Total Members', value: totalMembers, color: 'text-text-dark dark:text-white' },
-                                                    { label: 'Sub-Admins',    value: subAdmins,    color: 'text-blue-600 dark:text-blue-400' },
+                                                    { label: 'Sub-Managers',    value: subAdmins,    color: 'text-blue-600 dark:text-blue-400' },
                                                     { label: 'Staff',         value: staffCount,   color: 'text-gray-600 dark:text-gray-400' },
                                                 ].map(row => (
                                                     <div key={row.label} className="flex items-center justify-between py-1 border-b border-gray-200 dark:border-gray-700 last:border-0">

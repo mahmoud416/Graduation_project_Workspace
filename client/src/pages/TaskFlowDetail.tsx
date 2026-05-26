@@ -3,7 +3,7 @@ import type { FormEvent, ChangeEvent, KeyboardEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
-import TaskAnalysisModal from '../components/TaskAnalysisModal';
+import TaskSubmitDrawer from '../components/TaskSubmitDrawer';
 import MultiAssigneePicker from '../components/MultiAssigneePicker';
 import type { TeamMember } from '../components/MultiAssigneePicker';
 
@@ -18,9 +18,9 @@ type ReportType = {
 };
 
 const DEFAULT_REPORT_TYPES: ReportType[] = [
-    { key: 'course_report',         name_ar: 'تقرير المقرر الدراسي',   name_en: 'Course Report' },
-    { key: 'program_report',        name_ar: 'تقرير البرنامج الدراسي', name_en: 'Program Report' },
-    { key: 'course_specification',  name_ar: 'توصيف المقرر الدراسي',   name_en: 'Course Specification' },
+    { key: 'course_report', name_ar: 'تقرير المقرر الدراسي', name_en: 'Course Report' },
+    { key: 'program_report', name_ar: 'تقرير البرنامج الدراسي', name_en: 'Program Report' },
+    { key: 'course_specification', name_ar: 'توصيف المقرر الدراسي', name_en: 'Course Specification' },
     { key: 'program_specification', name_ar: 'توصيف البرنامج الدراسي', name_en: 'Program Specification' },
 ];
 
@@ -158,7 +158,7 @@ const TaskFlowDetail = () => {
     const currentUserRole = typeof window !== 'undefined' ? localStorage.getItem('role') : null;
     const normalizedUserRole = (currentUserRole ?? '').toLowerCase();
     const currentUserGroupRole = groupMembers.find(m => m.user_id === currentUserId)?.role?.toLowerCase() || '';
-    const hasManagerRights = normalizedUserRole === 'admin' || normalizedUserRole === 'sub_admin' || currentUserGroupRole === 'manager';
+    const hasManagerRights = normalizedUserRole === 'admin' || normalizedUserRole === 'sub_admin' || normalizedUserRole === 'manager' || currentUserGroupRole === 'manager';
     const canModerateComments = hasManagerRights;
     const isSystemCard = projectId === 'public-group' || projectId === 'all-sub-admin';
     const canAddTask = hasManagerRights;
@@ -293,7 +293,7 @@ const TaskFlowDetail = () => {
         })
             .then((r) => r.ok ? r.json() : null)
             .then((data) => Array.isArray(data) && data.length > 0 ? setReportTypes(data) : undefined)
-            .catch(() => {});
+            .catch(() => { });
     }, []);
 
     const sendTaskBoardRequest = useCallback(
@@ -854,460 +854,470 @@ const TaskFlowDetail = () => {
                     <Header title={isSystemCard ? `# ${projectId === 'public-group' ? 'public' : 'all-sub-admin'}` : 'TaskFlow'} />
 
                     <main className="page-main p-8">
-                    {boardLoading && (
-                        <div className="mb-6 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-primary">
-                            Syncing latest board data...
-                        </div>
-                    )}
-                    {boardError && (
-                        <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                            {boardError}
-                        </div>
-                    )}
-                    <div className="grid grid-cols-3 gap-6">
-                        {/* Main Content - Left Column (2/3) */}
-                        <div className="col-span-2 space-y-6">
-                            {/* Project / Channel Header */}
-                            {isSystemCard ? (
-                                /* ── Channel gradient banner ── */
-                                <div
-                                    className="relative overflow-hidden rounded-2xl"
-                                    style={{
-                                        background: projectId === 'public-group'
-                                            ? 'linear-gradient(135deg, #6d28d9 0%, #4f46e5 45%, #2563eb 100%)'
-                                            : 'linear-gradient(135deg, #c2410c 0%, #ea580c 45%, #f59e0b 100%)',
-                                        boxShadow: projectId === 'public-group'
-                                            ? '0 8px 40px rgba(109,40,217,0.30)'
-                                            : '0 8px 40px rgba(194,65,12,0.30)',
-                                    }}
-                                >
-                                    {/* Radial light overlay */}
+                        {boardLoading && (
+                            <div className="mb-6 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-primary">
+                                Syncing latest board data...
+                            </div>
+                        )}
+                        {boardError && (
+                            <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                                {boardError}
+                            </div>
+                        )}
+                        <div className="grid grid-cols-3 gap-6">
+                            {/* Main Content - Left Column (2/3) */}
+                            <div className="col-span-2 space-y-6">
+                                {/* Project / Channel Header */}
+                                {isSystemCard ? (
+                                    /* ── Channel gradient banner ── */
                                     <div
-                                        className="pointer-events-none absolute inset-0"
-                                        style={{ background: 'radial-gradient(ellipse at 10% 25%, rgba(255,255,255,0.22) 0%, transparent 60%)' }}
-                                    />
-                                    {/* Watermark # */}
-                                    <div
-                                        className="pointer-events-none select-none absolute -right-4 -bottom-6 text-[180px] font-black leading-none"
-                                        style={{ color: 'rgba(255,255,255,0.06)', fontFamily: 'monospace' }}
-                                    >#</div>
+                                        className="relative overflow-hidden rounded-2xl"
+                                        style={{
+                                            background: projectId === 'public-group'
+                                                ? 'linear-gradient(135deg, #6d28d9 0%, #4f46e5 45%, #2563eb 100%)'
+                                                : 'linear-gradient(135deg, #c2410c 0%, #ea580c 45%, #f59e0b 100%)',
+                                            boxShadow: projectId === 'public-group'
+                                                ? '0 8px 40px rgba(109,40,217,0.30)'
+                                                : '0 8px 40px rgba(194,65,12,0.30)',
+                                        }}
+                                    >
+                                        {/* Radial light overlay */}
+                                        <div
+                                            className="pointer-events-none absolute inset-0"
+                                            style={{ background: 'radial-gradient(ellipse at 10% 25%, rgba(255,255,255,0.22) 0%, transparent 60%)' }}
+                                        />
+                                        {/* Watermark # */}
+                                        <div
+                                            className="pointer-events-none select-none absolute -right-4 -bottom-6 text-[180px] font-black leading-none"
+                                            style={{ color: 'rgba(255,255,255,0.06)', fontFamily: 'monospace' }}
+                                        >#</div>
 
-                                    <div className="relative z-10 p-7">
-                                        {/* Live badge row */}
-                                        <div className="flex items-center justify-between mb-5">
-                                            <div className="flex items-center gap-2">
-                                                <span className="relative flex h-2.5 w-2.5">
-                                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-60" />
-                                                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white/90" />
-                                                </span>
-                                                <span className="text-white/70 text-[11px] font-bold uppercase tracking-[0.15em]">
-                                                    {projectId === 'public-group' ? 'Public Channel' : 'Admin Channel'} · Live
+                                        <div className="relative z-10 p-7">
+                                            {/* Live badge row */}
+                                            <div className="flex items-center justify-between mb-5">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="relative flex h-2.5 w-2.5">
+                                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-60" />
+                                                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white/90" />
+                                                    </span>
+                                                    <span className="text-white/70 text-[11px] font-bold uppercase tracking-[0.15em]">
+                                                        {projectId === 'public-group' ? 'Public Channel' : 'Admin Channel'} · Live
+                                                    </span>
+                                                </div>
+                                                <span className="px-3 py-1 rounded-full bg-white/15 text-white/90 text-xs font-bold">
+                                                    {overviewStatus}
                                                 </span>
                                             </div>
-                                            <span className="px-3 py-1 rounded-full bg-white/15 text-white/90 text-xs font-bold">
+
+                                            {/* Channel name */}
+                                            <div className="flex items-end gap-1.5 mb-3">
+                                                <span className="text-white/35 text-6xl font-black leading-none" style={{ fontFamily: 'monospace' }}>#</span>
+                                                <h1 className="text-white text-3xl font-black tracking-tight leading-none mb-1">
+                                                    {projectId === 'public-group' ? 'public' : 'all-sub-admin'}
+                                                </h1>
+                                            </div>
+
+                                            {/* Description */}
+                                            <p className="text-white/65 text-sm leading-relaxed max-w-xl mb-5">
+                                                {overviewDescription}
+                                            </p>
+
+                                            {/* Footer stats row */}
+                                            <div className="flex items-center gap-5 pt-4 border-t border-white/15">
+                                                <div className="flex items-center gap-1.5">
+                                                    <svg className="w-4 h-4 text-white/60" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                                                        <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
+                                                    </svg>
+                                                    <span className="text-white/70 text-xs font-medium">
+                                                        {groupMembers.length} member{groupMembers.length !== 1 ? 's' : ''}
+                                                    </span>
+                                                </div>
+                                                <div className="flex items-center gap-1.5">
+                                                    <svg className="w-4 h-4 text-white/60" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                                                        <path d="M9 12l2 2 4-4M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                                    </svg>
+                                                    <span className="text-white/70 text-xs font-medium">
+                                                        {tasks.length > 0 ? `${completedTasks}/${tasks.length} tasks done` : 'No tasks yet'}
+                                                    </span>
+                                                </div>
+                                                {projectId === 'public-group' && (
+                                                    <div className="flex items-center gap-1.5">
+                                                        <svg className="w-4 h-4 text-white/60" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                                                            <circle cx="12" cy="12" r="10" /><path d="M2 12h20M12 2a15.3 15.3 0 010 20M12 2a15.3 15.3 0 000 20" />
+                                                        </svg>
+                                                        <span className="text-white/70 text-xs font-medium">Open to all workspace</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    /* ── Regular project header card ── */
+                                    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 transition-colors">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <div>
+                                                <div className="text-xs font-medium text-primary uppercase tracking-wide mb-2">
+                                                    {boardOverview ? `Project • ${overviewTitle}` : 'PROJECT A • SPRINT 4'}
+                                                </div>
+                                                <h1 className="text-2xl font-bold text-text-dark dark:text-gray-100 mb-2">
+                                                    {overviewTitle}
+                                                </h1>
+                                                <p className="text-sm text-text-gray dark:text-gray-400 leading-relaxed">
+                                                    {overviewDescription}
+                                                </p>
+                                            </div>
+                                            <span className="px-3 py-1.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-lg text-xs font-medium whitespace-nowrap">
                                                 {overviewStatus}
                                             </span>
                                         </div>
-
-                                        {/* Channel name */}
-                                        <div className="flex items-end gap-1.5 mb-3">
-                                            <span className="text-white/35 text-6xl font-black leading-none" style={{ fontFamily: 'monospace' }}>#</span>
-                                            <h1 className="text-white text-3xl font-black tracking-tight leading-none mb-1">
-                                                {projectId === 'public-group' ? 'public' : 'all-sub-admin'}
-                                            </h1>
-                                        </div>
-
-                                        {/* Description */}
-                                        <p className="text-white/65 text-sm leading-relaxed max-w-xl mb-5">
-                                            {overviewDescription}
-                                        </p>
-
-                                        {/* Footer stats row */}
-                                        <div className="flex items-center gap-5 pt-4 border-t border-white/15">
-                                            <div className="flex items-center gap-1.5">
-                                                <svg className="w-4 h-4 text-white/60" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-                                                    <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
-                                                </svg>
-                                                <span className="text-white/70 text-xs font-medium">
-                                                    {groupMembers.length} member{groupMembers.length !== 1 ? 's' : ''}
-                                                </span>
+                                        <div className="mt-6">
+                                            <div className="flex items-center justify-between mb-2">
+                                                <span className="text-sm font-medium text-text-dark dark:text-gray-200">Overall Progress</span>
+                                                <span className="text-sm font-bold text-primary">{overviewProgress}%</span>
                                             </div>
-                                            <div className="flex items-center gap-1.5">
-                                                <svg className="w-4 h-4 text-white/60" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-                                                    <path d="M9 12l2 2 4-4M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                                                </svg>
-                                                <span className="text-white/70 text-xs font-medium">
-                                                    {tasks.length > 0 ? `${completedTasks}/${tasks.length} tasks done` : 'No tasks yet'}
-                                                </span>
+                                            <div className="w-full h-2.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                                <div className="h-full bg-primary rounded-full" style={{ width: `${overviewProgress}%` }}></div>
                                             </div>
-                                            {projectId === 'public-group' && (
-                                                <div className="flex items-center gap-1.5">
-                                                    <svg className="w-4 h-4 text-white/60" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-                                                        <circle cx="12" cy="12" r="10" /><path d="M2 12h20M12 2a15.3 15.3 0 010 20M12 2a15.3 15.3 0 000 20" />
-                                                    </svg>
-                                                    <span className="text-white/70 text-xs font-medium">Open to all workspace</span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                            ) : (
-                                /* ── Regular project header card ── */
-                                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 transition-colors">
-                                    <div className="flex items-center justify-between mb-4">
-                                        <div>
-                                            <div className="text-xs font-medium text-primary uppercase tracking-wide mb-2">
-                                                {boardOverview ? `Project • ${overviewTitle}` : 'PROJECT A • SPRINT 4'}
-                                            </div>
-                                            <h1 className="text-2xl font-bold text-text-dark dark:text-gray-100 mb-2">
-                                                {overviewTitle}
-                                            </h1>
-                                            <p className="text-sm text-text-gray dark:text-gray-400 leading-relaxed">
-                                                {overviewDescription}
-                                            </p>
-                                        </div>
-                                        <span className="px-3 py-1.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-lg text-xs font-medium whitespace-nowrap">
-                                            {overviewStatus}
-                                        </span>
-                                    </div>
-                                    <div className="mt-6">
-                                        <div className="flex items-center justify-between mb-2">
-                                            <span className="text-sm font-medium text-text-dark dark:text-gray-200">Overall Progress</span>
-                                            <span className="text-sm font-bold text-primary">{overviewProgress}%</span>
-                                        </div>
-                                        <div className="w-full h-2.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                                            <div className="h-full bg-primary rounded-full" style={{ width: `${overviewProgress}%` }}></div>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* To-do Tracker */}
-                            <div className={`rounded-xl border p-6 transition-colors ${
-                                isSystemCard
-                                    ? `bg-white dark:bg-gray-800 border-l-4 ${projectId === 'public-group' ? 'border-l-violet-500 border-gray-200 dark:border-gray-700' : 'border-l-orange-500 border-gray-200 dark:border-gray-700'}`
-                                    : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
-                            }`}>
-                                <div className="flex items-center gap-4 mb-6">
-                                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${
-                                        isSystemCard
-                                            ? projectId === 'public-group'
-                                                ? 'bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400'
-                                                : 'bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400'
-                                            : 'bg-blue-50 dark:bg-blue-900/20 text-primary'
-                                    }`}>
-                                        <svg className="w-6 h-6" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path d="M9 12l2 2 4-4" />
-                                            <path d="M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                                        </svg>
-                                    </div>
-                                    <div className="flex-1">
-                                        <p className={`text-xs font-semibold uppercase tracking-wide ${
-                                            isSystemCard
-                                                ? projectId === 'public-group' ? 'text-violet-600 dark:text-violet-400' : 'text-orange-600 dark:text-orange-400'
-                                                : 'text-primary'
-                                        }`}>
-                                            {isSystemCard ? 'Channel Tasks' : 'Sprint Checklist'}
-                                        </p>
-                                        <h2 className="text-xl font-bold text-text-dark dark:text-gray-100">
-                                            {isSystemCard ? 'Task Board' : 'To-do Tracker'}
-                                        </h2>
-                                        <p className="text-sm text-text-gray dark:text-gray-400">
-                                            {isSystemCard ? 'Track and coordinate tasks across the channel.' : 'Mark items as you complete them to keep TaskFlow aligned.'}
-                                        </p>
-                                    </div>
-                                    <div className="flex items-center gap-4">
-                                        {canAddTask && (
-                                        <button
-                                            type="button"
-                                            onClick={() => openTaskForm()}
-                                            className="flex h-10 w-10 items-center justify-center rounded-full border border-primary text-primary hover:bg-primary/10"
-                                            aria-label="Add or edit tasks"
-                                        >
-                                            <span className="text-2xl leading-none">+</span>
-                                        </button>
-                                        )}
-                                        <div className="text-right">
-                                        <div className="text-2xl font-bold text-text-dark dark:text-gray-100">{completedTasks}/{tasks.length}</div>
-                                        <div className="text-xs text-text-gray dark:text-gray-400">Tasks done</div>
-                                    </div>
-                                    </div>
-                                </div>
-
-                                {tasks.length > 0 && (
-                                    <div className="mb-5">
-                                        <div className="flex items-center justify-between text-xs font-medium text-text-gray dark:text-gray-400 mb-2">
-                                            <span>Progress</span>
-                                            <span className={progressPercent === 100 ? 'text-green-600 dark:text-green-400 font-bold' : ''}>
-                                                {progressPercent === 100 ? '✓ Done!' : `${progressPercent}%`}
-                                            </span>
-                                        </div>
-                                        <div className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                                            <div
-                                                className={`h-full rounded-full transition-all ${progressPercent === 100 ? 'bg-green-500' : 'bg-gradient-to-r from-primary to-blue-400'}`}
-                                                style={{ width: `${progressPercent}%` }}
-                                            ></div>
                                         </div>
                                     </div>
                                 )}
 
-                                {isTaskFormOpen && (
-                                    <form onSubmit={handleTaskFormSubmit} className="mb-5 rounded-2xl border border-dashed border-primary/40 bg-blue-50/40 dark:bg-blue-900/10 p-4 space-y-3">
-                                        <div className="flex items-center justify-between">
-                                            <p className="text-sm font-semibold text-text-dark dark:text-gray-100">
-                                                {editingTaskId ? 'Edit Task' : 'Add New Task'}
+                                {/* To-do Tracker */}
+                                <div className={`rounded-xl border p-6 transition-colors ${isSystemCard
+                                        ? `bg-white dark:bg-gray-800 border-l-4 ${projectId === 'public-group' ? 'border-l-violet-500 border-gray-200 dark:border-gray-700' : 'border-l-orange-500 border-gray-200 dark:border-gray-700'}`
+                                        : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
+                                    }`}>
+                                    <div className="flex items-center gap-4 mb-6">
+                                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${isSystemCard
+                                                ? projectId === 'public-group'
+                                                    ? 'bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400'
+                                                    : 'bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400'
+                                                : 'bg-blue-50 dark:bg-blue-900/20 text-primary'
+                                            }`}>
+                                            <svg className="w-6 h-6" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path d="M9 12l2 2 4-4" />
+                                                <path d="M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                            </svg>
+                                        </div>
+                                        <div className="flex-1">
+                                            <p className={`text-xs font-semibold uppercase tracking-wide ${isSystemCard
+                                                    ? projectId === 'public-group' ? 'text-violet-600 dark:text-violet-400' : 'text-orange-600 dark:text-orange-400'
+                                                    : 'text-primary'
+                                                }`}>
+                                                {isSystemCard ? 'Channel Tasks' : 'Sprint Checklist'}
                                             </p>
-                                            <button type="button" onClick={handleCancelTaskEdit} className="text-xs text-text-gray hover:text-text-dark">Close</button>
-                                        </div>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                            <div>
-                                                <label className="text-xs font-semibold text-text-gray dark:text-gray-300 uppercase">Title</label>
-                                                <input
-                                                    type="text"
-                                                    value={taskDraft.title}
-                                                    onChange={(e) => handleTaskDraftChange('title', e.target.value)}
-                                                    className="mt-1 w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-text-dark dark:text-gray-100 focus:border-primary focus:outline-none"
-                                                    required
-                                                />
-                                            </div>
-                                            <div className="col-span-1 md:col-span-2">
-                                                <label className="text-xs font-semibold text-text-gray dark:text-gray-300 uppercase">Assignees &amp; Visibility</label>
-                                                {isSystemCard ? (
-                                                    <div className="mt-2">
-                                                        <MultiAssigneePicker
-                                                            members={groupMembers
-                                                                .filter((m): m is typeof m & { user_id: string } => !!m.user_id)
-                                                                .map((m): TeamMember => ({
-                                                                    id: m.user_id!,
-                                                                    name: m.name,
-                                                                    email: m.email,
-                                                                    role: m.role,
-                                                                }))}
-                                                            selectedIds={taskAssignees}
-                                                            onChange={setTaskAssignees}
-                                                            visibility={taskVisibility}
-                                                            onVisibilityChange={setTaskVisibility}
-                                                        />
-                                                    </div>
-                                                ) : (
-                                                    <input
-                                                        type="text"
-                                                        value={taskDraft.assignee}
-                                                        onChange={(e) => handleTaskDraftChange('assignee', e.target.value)}
-                                                        className="mt-1 w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-text-dark dark:text-gray-100 focus:border-primary focus:outline-none"
-                                                        placeholder="Who is responsible?"
-                                                    />
-                                                )}
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <label className="text-xs font-semibold text-text-gray dark:text-gray-300 uppercase">نوع التقرير / Report Type</label>
-                                            <select
-                                                value={taskDraft.report_type ?? ''}
-                                                onChange={(e) => handleTaskDraftChange('report_type', e.target.value)}
-                                                className="mt-1 w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-text-dark dark:text-gray-100 focus:border-primary focus:outline-none"
-                                            >
-                                                <option value="">— بدون تصنيف —</option>
-                                                {reportTypes.map((rt) => (
-                                                    <option key={rt.key} value={rt.key}>
-                                                        {rt.name_ar} — {rt.name_en}
-                                                    </option>
-                                                ))}
-                                            </select>
+                                            <h2 className="text-xl font-bold text-text-dark dark:text-gray-100">
+                                                {isSystemCard ? 'Task Board' : 'To-do Tracker'}
+                                            </h2>
+                                            <p className="text-sm text-text-gray dark:text-gray-400">
+                                                {isSystemCard ? 'Track and coordinate tasks across the channel.' : 'Mark items as you complete them to keep TaskFlow aligned.'}
+                                            </p>
                                         </div>
                                         <div className="flex items-center gap-4">
-                                            <div className="flex-1">
-                                                <label className="text-xs font-semibold text-text-gray dark:text-gray-300 uppercase">Deadline</label>
-                                                <input
-                                                    type="date"
-                                                    value={taskDraft.due}
-                                                    onChange={(e) => handleTaskDraftChange('due', e.target.value)}
-                                                    className="mt-1 w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-text-dark dark:text-gray-100 focus:border-primary focus:outline-none"
-                                                />
+                                            {canAddTask && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => openTaskForm()}
+                                                    className="flex h-10 w-10 items-center justify-center rounded-full border border-primary text-primary hover:bg-primary/10"
+                                                    aria-label="Add or edit tasks"
+                                                >
+                                                    <span className="text-2xl leading-none">+</span>
+                                                </button>
+                                            )}
+                                            <div className="text-right">
+                                                <div className="text-2xl font-bold text-text-dark dark:text-gray-100">{completedTasks}/{tasks.length}</div>
+                                                <div className="text-xs text-text-gray dark:text-gray-400">Tasks done</div>
                                             </div>
-                                            <label className="inline-flex items-center gap-2 text-sm font-medium text-text-dark dark:text-gray-100">
+                                        </div>
+                                    </div>
+
+                                    {tasks.length > 0 && (
+                                        <div className="mb-5">
+                                            <div className="flex items-center justify-between text-xs font-medium text-text-gray dark:text-gray-400 mb-2">
+                                                <span>Progress</span>
+                                                <span className={progressPercent === 100 ? 'text-green-600 dark:text-green-400 font-bold' : ''}>
+                                                    {progressPercent === 100 ? '✓ Done!' : `${progressPercent}%`}
+                                                </span>
+                                            </div>
+                                            <div className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                                <div
+                                                    className={`h-full rounded-full transition-all ${progressPercent === 100 ? 'bg-green-500' : 'bg-gradient-to-r from-primary to-blue-400'}`}
+                                                    style={{ width: `${progressPercent}%` }}
+                                                ></div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {isTaskFormOpen && (
+                                        <form onSubmit={handleTaskFormSubmit} className="mb-5 rounded-2xl border border-dashed border-primary/40 bg-blue-50/40 dark:bg-blue-900/10 p-4 space-y-3">
+                                            <div className="flex items-center justify-between">
+                                                <p className="text-sm font-semibold text-text-dark dark:text-gray-100">
+                                                    {editingTaskId ? 'Edit Task' : 'Add New Task'}
+                                                </p>
+                                                <button type="button" onClick={handleCancelTaskEdit} className="text-xs text-text-gray hover:text-text-dark">Close</button>
+                                            </div>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                <div>
+                                                    <label className="text-xs font-semibold text-text-gray dark:text-gray-300 uppercase">Title</label>
+                                                    <input
+                                                        type="text"
+                                                        value={taskDraft.title}
+                                                        onChange={(e) => handleTaskDraftChange('title', e.target.value)}
+                                                        className="mt-1 w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-text-dark dark:text-gray-100 focus:border-primary focus:outline-none"
+                                                        required
+                                                    />
+                                                </div>
+                                                <div className="col-span-1 md:col-span-2">
+                                                    <label className="text-xs font-semibold text-text-gray dark:text-gray-300 uppercase">Assignees &amp; Visibility</label>
+                                                    {groupMembers.length > 0 ? (
+                                                        <div className="mt-2">
+                                                            <MultiAssigneePicker
+                                                                members={groupMembers
+                                                                    .filter((m): m is typeof m & { user_id: string } => !!m.user_id)
+                                                                    .map((m): TeamMember => ({
+                                                                        id: m.user_id!,
+                                                                        name: m.name,
+                                                                        email: m.email,
+                                                                        role: m.role,
+                                                                    }))}
+                                                                selectedIds={taskAssignees}
+                                                                onChange={setTaskAssignees}
+                                                                visibility={taskVisibility}
+                                                                onVisibilityChange={setTaskVisibility}
+                                                            />
+                                                        </div>
+                                                    ) : (
+                                                        <input
+                                                            type="text"
+                                                            value={taskDraft.assignee}
+                                                            onChange={(e) => handleTaskDraftChange('assignee', e.target.value)}
+                                                            className="mt-1 w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-text-dark dark:text-gray-100 focus:border-primary focus:outline-none"
+                                                            placeholder="Who is responsible?"
+                                                        />
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label className="text-xs font-semibold text-text-gray dark:text-gray-300 uppercase">نوع التقرير / Report Type</label>
+                                                <select
+                                                    value={taskDraft.report_type ?? ''}
+                                                    onChange={(e) => handleTaskDraftChange('report_type', e.target.value)}
+                                                    className="mt-1 w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-text-dark dark:text-gray-100 focus:border-primary focus:outline-none"
+                                                >
+                                                    <option value="">— بدون تصنيف —</option>
+                                                    {reportTypes.map((rt) => (
+                                                        <option key={rt.key} value={rt.key}>
+                                                            {rt.name_ar} — {rt.name_en}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            <div className="flex items-center gap-4">
+                                                <div className="flex-1">
+                                                    <label className="text-xs font-semibold text-text-gray dark:text-gray-300 uppercase">Deadline</label>
+                                                    <input
+                                                        type="date"
+                                                        value={taskDraft.due}
+                                                        onChange={(e) => handleTaskDraftChange('due', e.target.value)}
+                                                        className="mt-1 w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-text-dark dark:text-gray-100 focus:border-primary focus:outline-none"
+                                                    />
+                                                </div>
+                                                <label className="inline-flex items-center gap-2 text-sm font-medium text-text-dark dark:text-gray-100">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={taskDraft.done}
+                                                        onChange={(e) => handleTaskDraftChange('done', e.target.checked)}
+                                                        className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                                                    />
+                                                    Mark as done
+                                                </label>
+                                            </div>
+                                            <div className="flex items-center justify-between gap-3 pt-2">
+                                                {editingTaskId ? (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => void handleDeleteTask(editingTaskId)}
+                                                        disabled={isSavingTask}
+                                                        className="h-10 px-4 rounded-lg bg-red-50 dark:bg-red-900/20 text-danger text-sm font-semibold hover:bg-red-100 disabled:opacity-60"
+                                                    >
+                                                        Delete Task
+                                                    </button>
+                                                ) : (
+                                                    <span />
+                                                )}
+                                                <div className="flex items-center gap-3">
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleCancelTaskEdit}
+                                                        className="h-10 px-4 rounded-lg border border-gray-200 text-sm font-semibold text-text-gray"
+                                                    >
+                                                        Cancel
+                                                    </button>
+                                                    <button
+                                                        type="submit"
+                                                        disabled={isSavingTask}
+                                                        className="h-10 px-5 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-blue-600 disabled:opacity-60"
+                                                    >
+                                                        {isSavingTask ? 'Saving...' : editingTaskId ? 'Update Task' : 'Add Task'}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </form>
+                                    )}
+
+                                    <div className="space-y-3">
+                                        {tasks.map((task) => (
+                                            <div
+                                                key={task.id}
+                                                className="flex items-center gap-3 p-3 border border-gray-200 dark:border-gray-700 rounded-xl hover:border-primary/30 dark:hover:border-primary/40 transition-colors"
+                                            >
                                                 <input
                                                     type="checkbox"
-                                                    checked={taskDraft.done}
-                                                    onChange={(e) => handleTaskDraftChange('done', e.target.checked)}
-                                                    className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                                                    checked={task.done}
+                                                    onChange={() => handleToggleTask(task.id)}
+                                                    className="h-5 w-5 rounded-md border-gray-300 dark:border-gray-600 text-primary focus:ring-primary"
                                                 />
-                                                Mark as done
-                                            </label>
-                                        </div>
-                                        <div className="flex items-center justify-between gap-3 pt-2">
-                                            {editingTaskId ? (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => void handleDeleteTask(editingTaskId)}
-                                                    disabled={isSavingTask}
-                                                    className="h-10 px-4 rounded-lg bg-red-50 dark:bg-red-900/20 text-danger text-sm font-semibold hover:bg-red-100 disabled:opacity-60"
-                                                >
-                                                    Delete Task
-                                                </button>
-                                            ) : (
-                                                <span />
-                                            )}
-                                            <div className="flex items-center gap-3">
-                                            <button
-                                                type="button"
-                                                onClick={handleCancelTaskEdit}
-                                                className="h-10 px-4 rounded-lg border border-gray-200 text-sm font-semibold text-text-gray"
-                                            >
-                                                Cancel
-                                            </button>
-                                            <button
-                                                type="submit"
-                                                disabled={isSavingTask}
-                                                className="h-10 px-5 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-blue-600 disabled:opacity-60"
-                                            >
-                                                {isSavingTask ? 'Saving...' : editingTaskId ? 'Update Task' : 'Add Task'}
-                                            </button>
-                                            </div>
-                                        </div>
-                                    </form>
-                                )}
-
-                                <div className="space-y-3">
-                                    {tasks.map((task) => (
-                                        <div
-                                            key={task.id}
-                                            className="flex items-center gap-3 p-3 border border-gray-200 dark:border-gray-700 rounded-xl hover:border-primary/30 dark:hover:border-primary/40 transition-colors"
-                                        >
-                                            <input
-                                                type="checkbox"
-                                                checked={task.done}
-                                                onChange={() => handleToggleTask(task.id)}
-                                                className="h-5 w-5 rounded-md border-gray-300 dark:border-gray-600 text-primary focus:ring-primary"
-                                            />
-                                            <div className="flex-1">
-                                                <div className="flex items-center justify-between flex-wrap gap-2">
-                                                    <div className="flex items-center gap-2 flex-wrap">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setAnalysisTask(task)}
-                                                            className={`text-sm font-semibold text-left hover:underline hover:text-primary transition-colors ${task.done ? 'text-primary' : 'text-text-dark dark:text-gray-200'}`}
-                                                        >
-                                                            {task.title}
-                                                        </button>
-                                                        {isSystemCard && task.assignee && task.assignee !== 'Unassigned' && (
-                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/30 text-xs font-medium text-primary dark:text-blue-300 border border-blue-200 dark:border-blue-700">
-                                                                <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-                                                                    <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
-                                                                    <circle cx="12" cy="7" r="4" />
-                                                                </svg>
-                                                                {task.assignee}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    <span className="text-xs text-text-gray dark:text-gray-400">Due {task.due}</span>
-                                                </div>
-                                                {!isSystemCard && (
-                                                    <p className="text-xs text-text-gray dark:text-gray-400">{task.assignee}</p>
-                                                )}
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                {task.done && (
-                                                    <span className="text-green-600 dark:text-green-400 text-xs font-semibold flex items-center gap-1">
-                                                        <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                                                            <path d="M9 12l2 2 4-4" />
-                                                        </svg>
-                                                        Done
-                                                    </span>
-                                                )}
-                                                {canAddTask && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => openTaskForm(task)}
-                                                    className="text-xs font-semibold text-primary hover:underline"
-                                                >
-                                                    Edit
-                                                </button>
-                                                )}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Team Discussion / Channel Feed */}
-                            <div className={`rounded-xl border p-6 transition-colors ${
-                                isSystemCard
-                                    ? `bg-white dark:bg-gray-800 border-l-4 ${projectId === 'public-group' ? 'border-l-violet-500 border-gray-200 dark:border-gray-700' : 'border-l-orange-500 border-gray-200 dark:border-gray-700'}`
-                                    : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
-                            }`}>
-                                <div className="flex items-center gap-2 mb-6">
-                                    {isSystemCard ? (
-                                        <span
-                                            className={`text-2xl font-black leading-none ${projectId === 'public-group' ? 'text-violet-500' : 'text-orange-500'}`}
-                                            style={{ fontFamily: 'monospace' }}
-                                        >#</span>
-                                    ) : (
-                                        <svg className="w-5 h-5 text-text-gray dark:text-gray-400" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                                        </svg>
-                                    )}
-                                    <h2 className="text-base font-bold text-text-dark dark:text-gray-100">
-                                        {isSystemCard ? 'Channel Feed' : 'Team Discussion'}
-                                    </h2>
-                                    <span className="ml-auto text-xs text-text-gray dark:text-gray-400">{comments.length} {isSystemCard ? 'Messages' : 'Comments'}</span>
-                                </div>
-
-                                <input
-                                    type="file"
-                                    ref={commentFileInputRef}
-                                    className="hidden"
-                                    multiple
-                                    onChange={handleCommentFileChange}
-                                />
-
-                                <div className="space-y-5 max-h-[420px] overflow-y-auto pr-2">
-                                    {comments.map((comment) => {
-                                        const commentKey = comment.id ?? comment._id ?? `${comment.user_name}-${comment.created_at}`;
-                                        const timestamp = comment.created_at ? new Date(comment.created_at).toLocaleString() : 'Just now';
-                                        const avatarLabel = comment.user_avatar || comment.user_name.slice(0, 2).toUpperCase();
-                                        const attachments = comment.attachments ?? [];
-                                        const resolvedCommentId = comment.id ?? comment._id;
-                                        const showDelete = resolvedCommentId ? canDeleteComment(comment) : false;
-                                        return (
-                                            <div key={commentKey} className="flex gap-3">
-                                                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-white text-sm font-medium flex-shrink-0">
-                                                    {avatarLabel}
-                                                </div>
                                                 <div className="flex-1">
-                                                    <div className="mb-2 flex flex-wrap items-center gap-2 justify-between">
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="text-sm font-semibold text-text-dark dark:text-gray-200">{comment.user_name}</span>
-                                                            <span className="text-xs text-text-gray dark:text-gray-500">{timestamp}</span>
-                                                        </div>
-                                                        {showDelete && (
+                                                    <div className="flex items-center justify-between flex-wrap gap-2">
+                                                        <div className="flex items-center gap-2 flex-wrap">
                                                             <button
                                                                 type="button"
-                                                                onClick={() => handleDeleteComment(resolvedCommentId)}
-                                                                className="text-xs font-semibold text-danger hover:text-red-600"
+                                                                onClick={() => setAnalysisTask(task)}
+                                                                className={`text-sm font-semibold text-left hover:underline hover:text-primary transition-colors ${task.done ? 'text-primary' : 'text-text-dark dark:text-gray-200'}`}
                                                             >
-                                                                {deletingCommentId === resolvedCommentId ? 'Removing...' : 'Delete'}
+                                                                {task.title}
                                                             </button>
-                                                        )}
-                                                    </div>
-                                                    {comment.message && (
-                                                        <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 text-sm text-text-dark dark:text-gray-200">
-                                                            {comment.message}
+                                                            {isSystemCard && task.assignee && task.assignee !== 'Unassigned' && (
+                                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/30 text-xs font-medium text-primary dark:text-blue-300 border border-blue-200 dark:border-blue-700">
+                                                                    <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                                                                        <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+                                                                        <circle cx="12" cy="7" r="4" />
+                                                                    </svg>
+                                                                    {task.assignee}
+                                                                </span>
+                                                            )}
                                                         </div>
+                                                        <span className="text-xs text-text-gray dark:text-gray-400">Due {task.due}</span>
+                                                    </div>
+                                                    {!isSystemCard && (
+                                                        <p className="text-xs text-text-gray dark:text-gray-400">{task.assignee}</p>
                                                     )}
-                                                    {attachments.length > 0 && (
-                                                        <div className="mt-3 flex flex-wrap gap-2">
-                                                            {attachments.map((attachment) => {
-                                                                const attachmentKey = attachment.id ?? attachment._id ?? attachment.file_name;
-                                                                const downloadHref = attachment.download_url ? `${API_BASE}${attachment.download_url}` : undefined;
-                                                                if (downloadHref) {
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    {task.done && (
+                                                        <span className="text-green-600 dark:text-green-400 text-xs font-semibold flex items-center gap-1">
+                                                            <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path d="M9 12l2 2 4-4" />
+                                                            </svg>
+                                                            Done
+                                                        </span>
+                                                    )}
+                                                    {canAddTask && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => openTaskForm(task)}
+                                                            className="text-xs font-semibold text-primary hover:underline"
+                                                        >
+                                                            Edit
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Team Discussion / Channel Feed */}
+                                <div className={`rounded-xl border p-6 transition-colors ${isSystemCard
+                                        ? `bg-white dark:bg-gray-800 border-l-4 ${projectId === 'public-group' ? 'border-l-violet-500 border-gray-200 dark:border-gray-700' : 'border-l-orange-500 border-gray-200 dark:border-gray-700'}`
+                                        : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
+                                    }`}>
+                                    <div className="flex items-center gap-2 mb-6">
+                                        {isSystemCard ? (
+                                            <span
+                                                className={`text-2xl font-black leading-none ${projectId === 'public-group' ? 'text-violet-500' : 'text-orange-500'}`}
+                                                style={{ fontFamily: 'monospace' }}
+                                            >#</span>
+                                        ) : (
+                                            <svg className="w-5 h-5 text-text-gray dark:text-gray-400" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                            </svg>
+                                        )}
+                                        <h2 className="text-base font-bold text-text-dark dark:text-gray-100">
+                                            {isSystemCard ? 'Channel Feed' : 'Team Discussion'}
+                                        </h2>
+                                        <span className="ml-auto text-xs text-text-gray dark:text-gray-400">{comments.length} {isSystemCard ? 'Messages' : 'Comments'}</span>
+                                    </div>
+
+                                    <input
+                                        type="file"
+                                        ref={commentFileInputRef}
+                                        className="hidden"
+                                        multiple
+                                        onChange={handleCommentFileChange}
+                                    />
+
+                                    <div className="space-y-5 max-h-[420px] overflow-y-auto pr-2">
+                                        {comments.map((comment) => {
+                                            const commentKey = comment.id ?? comment._id ?? `${comment.user_name}-${comment.created_at}`;
+                                            const timestamp = comment.created_at ? new Date(comment.created_at).toLocaleString() : 'Just now';
+                                            const avatarLabel = comment.user_avatar || comment.user_name.slice(0, 2).toUpperCase();
+                                            const attachments = comment.attachments ?? [];
+                                            const resolvedCommentId = comment.id ?? comment._id;
+                                            const showDelete = resolvedCommentId ? canDeleteComment(comment) : false;
+                                            return (
+                                                <div key={commentKey} className="flex gap-3">
+                                                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-white text-sm font-medium flex-shrink-0">
+                                                        {avatarLabel}
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <div className="mb-2 flex flex-wrap items-center gap-2 justify-between">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-sm font-semibold text-text-dark dark:text-gray-200">{comment.user_name}</span>
+                                                                <span className="text-xs text-text-gray dark:text-gray-500">{timestamp}</span>
+                                                            </div>
+                                                            {showDelete && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleDeleteComment(resolvedCommentId)}
+                                                                    className="text-xs font-semibold text-danger hover:text-red-600"
+                                                                >
+                                                                    {deletingCommentId === resolvedCommentId ? 'Removing...' : 'Delete'}
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                        {comment.message && (
+                                                            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 text-sm text-text-dark dark:text-gray-200">
+                                                                {comment.message}
+                                                            </div>
+                                                        )}
+                                                        {attachments.length > 0 && (
+                                                            <div className="mt-3 flex flex-wrap gap-2">
+                                                                {attachments.map((attachment) => {
+                                                                    const attachmentKey = attachment.id ?? attachment._id ?? attachment.file_name;
+                                                                    const downloadHref = attachment.download_url ? `${API_BASE}${attachment.download_url}` : undefined;
+                                                                    if (downloadHref) {
+                                                                        return (
+                                                                            <a
+                                                                                key={attachmentKey}
+                                                                                href={downloadHref}
+                                                                                target="_blank"
+                                                                                rel="noreferrer"
+                                                                                className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-xs font-semibold text-text-dark dark:text-gray-200 hover:border-primary"
+                                                                            >
+                                                                                <svg className="w-4 h-4 text-primary" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                                                                                    <path d="M15 13l-3 3-3-3" />
+                                                                                    <path d="M12 4v12" />
+                                                                                    <path d="M5 19h14" />
+                                                                                </svg>
+                                                                                <span>{attachment.file_name}</span>
+                                                                            </a>
+                                                                        );
+                                                                    }
                                                                     return (
-                                                                        <a
+                                                                        <div
                                                                             key={attachmentKey}
-                                                                            href={downloadHref}
-                                                                            target="_blank"
-                                                                            rel="noreferrer"
-                                                                            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-xs font-semibold text-text-dark dark:text-gray-200 hover:border-primary"
+                                                                            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-xs font-semibold text-text-dark dark:text-gray-200"
                                                                         >
                                                                             <svg className="w-4 h-4 text-primary" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
                                                                                 <path d="M15 13l-3 3-3-3" />
@@ -1315,304 +1325,288 @@ const TaskFlowDetail = () => {
                                                                                 <path d="M5 19h14" />
                                                                             </svg>
                                                                             <span>{attachment.file_name}</span>
-                                                                        </a>
+                                                                        </div>
                                                                     );
-                                                                }
-                                                                return (
-                                                                    <div
-                                                                        key={attachmentKey}
-                                                                        className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-xs font-semibold text-text-dark dark:text-gray-200"
-                                                                    >
-                                                                        <svg className="w-4 h-4 text-primary" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                                                                            <path d="M15 13l-3 3-3-3" />
-                                                                            <path d="M12 4v12" />
-                                                                            <path d="M5 19h14" />
-                                                                        </svg>
-                                                                        <span>{attachment.file_name}</span>
-                                                                    </div>
-                                                                );
-                                                            })}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                    {comments.length === 0 && (
-                                        <p className="text-sm text-text-gray dark:text-gray-400">
-                                            {isSystemCard ? 'No messages yet. Start the conversation.' : 'No comments yet. Be the first to post an update.'}
-                                        </p>
-                                    )}
-                                </div>
-
-                                <div className="mt-6">
-                                    <div className="relative">
-                                        <input
-                                            type="text"
-                                            value={newComment}
-                                            onChange={(e) => setNewComment(e.target.value)}
-                                            onKeyDown={handleKeyDown}
-                                            placeholder={isSystemCard ? `Message #${projectId === 'public-group' ? 'public' : 'all-sub-admin'}...` : 'Share an update with the team...'}
-                                            disabled={isPostingComment}
-                                            className="w-full pl-4 pr-28 py-3 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 rounded-lg text-sm text-text-dark dark:text-gray-200 placeholder:text-text-gray dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-60"
-                                        />
-                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                            <button
-                                                type="button"
-                                                onClick={triggerCommentFilePicker}
-                                                className="text-text-gray dark:text-gray-400 hover:text-primary"
-                                                aria-label="Attach files"
-                                            >
-                                                <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path d="M21 16V5a3 3 0 00-3-3H8a3 3 0 00-3 3v11a4 4 0 004 4h9a4 4 0 004-4z" />
-                                                    <path d="M17 8l-6 6-3-3" />
-                                                </svg>
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => void handleSendComment()}
-                                                disabled={isPostingComment || (!newComment.trim() && commentFiles.length === 0)}
-                                                className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-white hover:bg-blue-600 disabled:opacity-50"
-                                                aria-label="Send comment"
-                                            >
-                                                {isPostingComment ? (
-                                                    <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24">
-                                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
-                                                    </svg>
-                                                ) : (
-                                                    <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                                                    </svg>
-                                                )}
-                                            </button>
-                                        </div>
-                                    </div>
-                                    {commentFiles.length > 0 && (
-                                        <div className="mt-3 flex flex-wrap gap-2">
-                                            {commentFiles.map((file, index) => (
-                                                <span key={`${file.name}-${index}`} className="inline-flex items-center gap-2 rounded-full border border-primary/40 bg-primary/5 px-3 py-1 text-xs font-medium text-primary">
-                                                    {file.name}
-                                                    <button type="button" onClick={() => removeCommentFile(index)} className="text-primary/80 hover:text-primary">&times;</button>
-                                                </span>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Right Sidebar */}
-                        <div className="space-y-6">
-                            {/* Task Resources */}
-                            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 transition-colors">
-                                <div className="flex items-center gap-2 mb-6">
-                                    <svg className="w-5 h-5 text-text-gray dark:text-gray-400" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                    </svg>
-                                    <h3 className="text-base font-bold text-text-dark dark:text-gray-100">Task Resources</h3>
-                                </div>
-
-                                {/* Hidden File Input */}
-                                <input
-                                    type="file"
-                                    ref={fileInputRef}
-                                    className="hidden"
-                                    onChange={handleFileChange}
-                                />
-
-                                {/* Uploaded Resources */}
-                                {resources.length > 0 && (
-                                    <div className="space-y-2 mb-4">
-                                        {resources.map((resource) => {
-                                            const key = resource.id || resource._id || resource.file_name;
-                                            const uploadedAt = resource.created_at
-                                                ? new Date(resource.created_at).toLocaleString()
-                                                : null;
-                                            const downloadHref = buildDownloadUrl(resource);
-                                            const resolvedResourceId = resource.id ?? resource._id;
-                                            const canRemoveResource = resolvedResourceId ? canDeleteResource(resource) : false;
-                                            return (
-                                                <div key={key} className="flex items-center justify-between gap-3 text-sm text-text-dark dark:text-gray-200 bg-gray-50 dark:bg-gray-700/50 p-3 rounded">
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="flex items-center gap-2">
-                                                            <svg className="w-4 h-4 text-primary" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                                                            <span className="truncate font-semibold">{resource.file_name}</span>
-                                                        </div>
-                                                        <p className="text-xs text-text-gray dark:text-gray-400 mt-0.5 truncate">
-                                                            Uploaded by {resource.uploader_name || 'Workspace member'}
-                                                            {` · ${resource.uploader_role}`}
-                                                            {uploadedAt ? ` · ${uploadedAt}` : ''}
-                                                        </p>
-                                                    </div>
-                                                    <div className="flex items-center gap-3 shrink-0">
-                                                        {downloadHref && (
-                                                            <a
-                                                                href={downloadHref}
-                                                                target="_blank"
-                                                                rel="noreferrer"
-                                                                className="text-xs font-semibold text-primary hover:underline"
-                                                            >
-                                                                Download
-                                                            </a>
-                                                        )}
-                                                        {canRemoveResource && resolvedResourceId && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => handleDeleteResource(resolvedResourceId)}
-                                                                disabled={deletingResourceId === resolvedResourceId}
-                                                                className={`text-xs font-semibold text-danger hover:text-red-600 ${deletingResourceId === resolvedResourceId ? 'opacity-60 cursor-not-allowed' : ''}`}
-                                                            >
-                                                                {deletingResourceId === resolvedResourceId ? 'Removing...' : 'Delete'}
-                                                            </button>
+                                                                })}
+                                                            </div>
                                                         )}
                                                     </div>
                                                 </div>
                                             );
                                         })}
+                                        {comments.length === 0 && (
+                                            <p className="text-sm text-text-gray dark:text-gray-400">
+                                                {isSystemCard ? 'No messages yet. Start the conversation.' : 'No comments yet. Be the first to post an update.'}
+                                            </p>
+                                        )}
                                     </div>
-                                )}
-                                {resources.length === 0 && (
-                                    <p className="text-sm text-text-gray dark:text-gray-400 mb-4">No shared files yet. Upload a document to kick things off.</p>
-                                )}
 
-                                {/* Image Preview Placeholder */}
-                                <div className="mb-4">
-                                    <div className="w-full h-32 bg-gradient-to-br from-green-100 to-green-200 dark:from-green-900/30 dark:to-green-800/30 rounded-lg flex items-center justify-center mb-3">
-                                        <svg className="w-12 h-12 text-green-600 dark:text-green-400" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                        </svg>
+                                    <div className="mt-6">
+                                        <div className="relative">
+                                            <input
+                                                type="text"
+                                                value={newComment}
+                                                onChange={(e) => setNewComment(e.target.value)}
+                                                onKeyDown={handleKeyDown}
+                                                placeholder={isSystemCard ? `Message #${projectId === 'public-group' ? 'public' : 'all-sub-admin'}...` : 'Share an update with the team...'}
+                                                disabled={isPostingComment}
+                                                className="w-full pl-4 pr-28 py-3 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 rounded-lg text-sm text-text-dark dark:text-gray-200 placeholder:text-text-gray dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-60"
+                                            />
+                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={triggerCommentFilePicker}
+                                                    className="text-text-gray dark:text-gray-400 hover:text-primary"
+                                                    aria-label="Attach files"
+                                                >
+                                                    <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path d="M21 16V5a3 3 0 00-3-3H8a3 3 0 00-3 3v11a4 4 0 004 4h9a4 4 0 004-4z" />
+                                                        <path d="M17 8l-6 6-3-3" />
+                                                    </svg>
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => void handleSendComment()}
+                                                    disabled={isPostingComment || (!newComment.trim() && commentFiles.length === 0)}
+                                                    className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-white hover:bg-blue-600 disabled:opacity-50"
+                                                    aria-label="Send comment"
+                                                >
+                                                    {isPostingComment ? (
+                                                        <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24">
+                                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                                                        </svg>
+                                                    ) : (
+                                                        <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                                                        </svg>
+                                                    )}
+                                                </button>
+                                            </div>
+                                        </div>
+                                        {commentFiles.length > 0 && (
+                                            <div className="mt-3 flex flex-wrap gap-2">
+                                                {commentFiles.map((file, index) => (
+                                                    <span key={`${file.name}-${index}`} className="inline-flex items-center gap-2 rounded-full border border-primary/40 bg-primary/5 px-3 py-1 text-xs font-medium text-primary">
+                                                        {file.name}
+                                                        <button type="button" onClick={() => removeCommentFile(index)} className="text-primary/80 hover:text-primary">&times;</button>
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
+                                </div>
+                            </div>
+
+                            {/* Right Sidebar */}
+                            <div className="space-y-6">
+                                {/* Task Resources */}
+                                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 transition-colors">
+                                    <div className="flex items-center gap-2 mb-6">
+                                        <svg className="w-5 h-5 text-text-gray dark:text-gray-400" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                        </svg>
+                                        <h3 className="text-base font-bold text-text-dark dark:text-gray-100">Task Resources</h3>
+                                    </div>
+
+                                    {/* Hidden File Input */}
+                                    <input
+                                        type="file"
+                                        ref={fileInputRef}
+                                        className="hidden"
+                                        onChange={handleFileChange}
+                                    />
+
+                                    {/* Uploaded Resources */}
+                                    {resources.length > 0 && (
+                                        <div className="space-y-2 mb-4">
+                                            {resources.map((resource) => {
+                                                const key = resource.id || resource._id || resource.file_name;
+                                                const uploadedAt = resource.created_at
+                                                    ? new Date(resource.created_at).toLocaleString()
+                                                    : null;
+                                                const downloadHref = buildDownloadUrl(resource);
+                                                const resolvedResourceId = resource.id ?? resource._id;
+                                                const canRemoveResource = resolvedResourceId ? canDeleteResource(resource) : false;
+                                                return (
+                                                    <div key={key} className="flex items-center justify-between gap-3 text-sm text-text-dark dark:text-gray-200 bg-gray-50 dark:bg-gray-700/50 p-3 rounded">
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="flex items-center gap-2">
+                                                                <svg className="w-4 h-4 text-primary" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                                                                <span className="truncate font-semibold">{resource.file_name}</span>
+                                                            </div>
+                                                            <p className="text-xs text-text-gray dark:text-gray-400 mt-0.5 truncate">
+                                                                Uploaded by {resource.uploader_name || 'Workspace member'}
+                                                                {` · ${resource.uploader_role}`}
+                                                                {uploadedAt ? ` · ${uploadedAt}` : ''}
+                                                            </p>
+                                                        </div>
+                                                        <div className="flex items-center gap-3 shrink-0">
+                                                            {downloadHref && (
+                                                                <a
+                                                                    href={downloadHref}
+                                                                    target="_blank"
+                                                                    rel="noreferrer"
+                                                                    className="text-xs font-semibold text-primary hover:underline"
+                                                                >
+                                                                    Download
+                                                                </a>
+                                                            )}
+                                                            {canRemoveResource && resolvedResourceId && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleDeleteResource(resolvedResourceId)}
+                                                                    disabled={deletingResourceId === resolvedResourceId}
+                                                                    className={`text-xs font-semibold text-danger hover:text-red-600 ${deletingResourceId === resolvedResourceId ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                                                >
+                                                                    {deletingResourceId === resolvedResourceId ? 'Removing...' : 'Delete'}
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                    {resources.length === 0 && (
+                                        <p className="text-sm text-text-gray dark:text-gray-400 mb-4">No shared files yet. Upload a document to kick things off.</p>
+                                    )}
+
+                                    {/* Image Preview Placeholder */}
+                                    <div className="mb-4">
+                                        <div className="w-full h-32 bg-gradient-to-br from-green-100 to-green-200 dark:from-green-900/30 dark:to-green-800/30 rounded-lg flex items-center justify-center mb-3">
+                                            <svg className="w-12 h-12 text-green-600 dark:text-green-400" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                            </svg>
+                                        </div>
+                                        <button
+                                            onClick={handleUploadClick}
+                                            disabled={isUploadingResource}
+                                            className={`w-full py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors ${isUploadingResource ? 'text-gray-400 dark:text-gray-500 cursor-not-allowed' : 'text-text-gray dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+                                        >
+                                            <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                            </svg>
+                                            {isUploadingResource ? 'Uploading...' : 'Upload Photo'}
+                                        </button>
+                                    </div>
+
                                     <button
                                         onClick={handleUploadClick}
                                         disabled={isUploadingResource}
-                                        className={`w-full py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors ${isUploadingResource ? 'text-gray-400 dark:text-gray-500 cursor-not-allowed' : 'text-text-gray dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+                                        className={`w-full py-3 rounded-lg text-sm font-medium flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20 transition-colors ${isUploadingResource ? 'bg-blue-300 cursor-not-allowed' : 'bg-primary hover:bg-blue-600 text-white'}`}
                                     >
                                         <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                            <path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                                         </svg>
-                                        {isUploadingResource ? 'Uploading...' : 'Upload Photo'}
+                                        {isUploadingResource ? 'Uploading...' : 'Upload Documents'}
                                     </button>
                                 </div>
 
-                                <button
-                                    onClick={handleUploadClick}
-                                    disabled={isUploadingResource}
-                                    className={`w-full py-3 rounded-lg text-sm font-medium flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20 transition-colors ${isUploadingResource ? 'bg-blue-300 cursor-not-allowed' : 'bg-primary hover:bg-blue-600 text-white'}`}
-                                >
-                                    <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                                    </svg>
-                                    {isUploadingResource ? 'Uploading...' : 'Upload Documents'}
-                                </button>
-                            </div>
-
-                            {/* Group / Channel Members */}
-                            <div className={`rounded-xl border p-6 transition-colors ${
-                                isSystemCard
-                                    ? `bg-white dark:bg-gray-800 border-l-4 ${projectId === 'public-group' ? 'border-l-violet-500 border-gray-200 dark:border-gray-700' : 'border-l-orange-500 border-gray-200 dark:border-gray-700'}`
-                                    : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
-                            }`}>
-                                <div className="flex items-center justify-between mb-6">
-                                    <div className="flex items-center gap-2">
-                                        {isSystemCard && (
-                                            <span
-                                                className={`text-lg font-black leading-none ${projectId === 'public-group' ? 'text-violet-500' : 'text-orange-500'}`}
-                                                style={{ fontFamily: 'monospace' }}
-                                            >#</span>
-                                        )}
-                                        <h3 className="text-base font-bold text-text-dark dark:text-gray-100">
-                                            {isSystemCard ? 'Channel Members' : 'Group Members'}
-                                        </h3>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={handleAddMemberClick}
-                                        className="text-sm text-primary font-medium hover:underline"
-                                    >
-                                        Add New
-                                    </button>
-                                </div>
-
-                                <div className="space-y-4 max-h-72 overflow-y-auto pr-2">
-                                    {groupMembers.map((member, index) => (
-                                        <div key={member.user_id ?? index} className="flex items-center justify-between">
-                                            <div className="flex items-center gap-3">
-                                                <div className="relative">
-                                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-medium bg-gradient-to-br ${
-                                                        isSystemCard
-                                                            ? projectId === 'public-group' ? 'from-violet-500 to-indigo-500' : 'from-orange-500 to-amber-400'
-                                                            : 'from-blue-400 to-purple-400'
-                                                    }`}>
-                                                        {member.avatar}
-                                                    </div>
-                                                    {member.online && (
-                                                        <div className="absolute bottom-0 right-0 w-3 h-3 bg-success border-2 border-white dark:border-gray-800 rounded-full"></div>
-                                                    )}
-                                                </div>
-                                                <div>
-                                                    <div className="text-sm font-semibold text-text-dark dark:text-gray-200">{member.name}</div>
-                                                    <div className="text-xs text-text-gray dark:text-gray-500">
-                                                        {member.role}
-                                                        {member.responsibility ? ` · ${member.responsibility}` : ''}
-                                                    </div>
-                                                    {member.email && (
-                                                        <div className="text-[11px] text-text-gray/70 dark:text-gray-500">{member.email}</div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                            <div className="relative">
-                                                <button
-                                                    type="button"
-                                                    className="text-text-gray dark:text-gray-500 hover:text-text-dark dark:hover:text-gray-300"
-                                                    onClick={() => toggleMemberMenu(member)}
-                                                >
-                                                    <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                                                    </svg>
-                                                </button>
-                                                {activeMemberMenu?.user_id === member.user_id && (
-                                                    <div className="absolute right-0 mt-2 w-36 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-lg z-10">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleConfigureMember(member)}
-                                                            className="block w-full px-4 py-2 text-left text-sm text-text-dark dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
-                                                        >
-                                                            Configure
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleRemoveMember(member)}
-                                                            className="block w-full px-4 py-2 text-left text-sm text-danger hover:bg-red-50 dark:hover:bg-red-900/30"
-                                                        >
-                                                            Remove
-                                                        </button>
-                                                    </div>
-                                                )}
-                                            </div>
+                                {/* Group / Channel Members */}
+                                <div className={`rounded-xl border p-6 transition-colors ${isSystemCard
+                                        ? `bg-white dark:bg-gray-800 border-l-4 ${projectId === 'public-group' ? 'border-l-violet-500 border-gray-200 dark:border-gray-700' : 'border-l-orange-500 border-gray-200 dark:border-gray-700'}`
+                                        : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
+                                    }`}>
+                                    <div className="flex items-center justify-between mb-6">
+                                        <div className="flex items-center gap-2">
+                                            {isSystemCard && (
+                                                <span
+                                                    className={`text-lg font-black leading-none ${projectId === 'public-group' ? 'text-violet-500' : 'text-orange-500'}`}
+                                                    style={{ fontFamily: 'monospace' }}
+                                                >#</span>
+                                            )}
+                                            <h3 className="text-base font-bold text-text-dark dark:text-gray-100">
+                                                {isSystemCard ? 'Channel Members' : 'Group Members'}
+                                            </h3>
                                         </div>
-                                    ))}
-                                </div>
-                                {groupMembers.length === 0 && (
-                                    <p className="mt-4 text-sm text-text-gray dark:text-gray-500">No members have been linked to this board yet.</p>
-                                )}
-                            </div>
-
-                            {/* Task Details */}
-                            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 transition-colors">
-                                <div className="space-y-4">
-                                    <div className="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-gray-700">
-                                        <span className="text-sm font-medium text-text-gray dark:text-gray-400">DUE DATE</span>
-                                        <span className="text-sm font-semibold text-text-dark dark:text-gray-200">Oct 24, 2023</span>
+                                        <button
+                                            type="button"
+                                            onClick={handleAddMemberClick}
+                                            className="text-sm text-primary font-medium hover:underline"
+                                        >
+                                            Add New
+                                        </button>
                                     </div>
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-sm font-medium text-text-gray dark:text-gray-400">PRIORITY</span>
-                                        <span className="px-2.5 py-1 bg-red-100 dark:bg-red-900/30 text-danger dark:text-red-400 rounded text-xs font-semibold">! High</span>
+
+                                    <div className="space-y-4 max-h-72 overflow-y-auto pr-2">
+                                        {groupMembers.map((member, index) => (
+                                            <div key={member.user_id ?? index} className="flex items-center justify-between">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="relative">
+                                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-medium bg-gradient-to-br ${isSystemCard
+                                                                ? projectId === 'public-group' ? 'from-violet-500 to-indigo-500' : 'from-orange-500 to-amber-400'
+                                                                : 'from-blue-400 to-purple-400'
+                                                            }`}>
+                                                            {member.avatar}
+                                                        </div>
+                                                        {member.online && (
+                                                            <div className="absolute bottom-0 right-0 w-3 h-3 bg-success border-2 border-white dark:border-gray-800 rounded-full"></div>
+                                                        )}
+                                                    </div>
+                                                    <div>
+                                                        <div className="text-sm font-semibold text-text-dark dark:text-gray-200">{member.name}</div>
+                                                        <div className="text-xs text-text-gray dark:text-gray-500">
+                                                            {member.role}
+                                                            {member.responsibility ? ` · ${member.responsibility}` : ''}
+                                                        </div>
+                                                        {member.email && (
+                                                            <div className="text-[11px] text-text-gray/70 dark:text-gray-500">{member.email}</div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <div className="relative">
+                                                    <button
+                                                        type="button"
+                                                        className="text-text-gray dark:text-gray-500 hover:text-text-dark dark:hover:text-gray-300"
+                                                        onClick={() => toggleMemberMenu(member)}
+                                                    >
+                                                        <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                                                        </svg>
+                                                    </button>
+                                                    {activeMemberMenu?.user_id === member.user_id && (
+                                                        <div className="absolute right-0 mt-2 w-36 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-lg z-10">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleConfigureMember(member)}
+                                                                className="block w-full px-4 py-2 text-left text-sm text-text-dark dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
+                                                            >
+                                                                Configure
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleRemoveMember(member)}
+                                                                className="block w-full px-4 py-2 text-left text-sm text-danger hover:bg-red-50 dark:hover:bg-red-900/30"
+                                                            >
+                                                                Remove
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    {groupMembers.length === 0 && (
+                                        <p className="mt-4 text-sm text-text-gray dark:text-gray-500">No members have been linked to this board yet.</p>
+                                    )}
+                                </div>
+
+                                {/* Task Details */}
+                                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 transition-colors">
+                                    <div className="space-y-4">
+                                        <div className="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-gray-700">
+                                            <span className="text-sm font-medium text-text-gray dark:text-gray-400">DUE DATE</span>
+                                            <span className="text-sm font-semibold text-text-dark dark:text-gray-200">Oct 24, 2023</span>
+                                        </div>
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-sm font-medium text-text-gray dark:text-gray-400">PRIORITY</span>
+                                            <span className="px-2.5 py-1 bg-red-100 dark:bg-red-900/30 text-danger dark:text-red-400 rounded text-xs font-semibold">! High</span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
                     </main>
                 </div>
             </div>
@@ -1885,13 +1879,14 @@ const TaskFlowDetail = () => {
             )}
 
             {analysisTask && (
-                <TaskAnalysisModal
+                <TaskSubmitDrawer
                     isOpen={true}
                     taskId={analysisTask.id}
                     taskTitle={analysisTask.title}
                     projectId={projectId}
                     reportType={analysisTask.report_type}
                     onClose={() => setAnalysisTask(null)}
+                    onSuccess={fetchBoard}
                 />
             )}
         </>

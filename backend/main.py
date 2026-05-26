@@ -29,6 +29,9 @@ from app.routes import (
     analytics,
     entities,
     ai,
+    system,
+    frameworks,
+    founder,
 )
 
 
@@ -94,6 +97,9 @@ app.include_router(profile.router, prefix="/api/v1")
 app.include_router(analytics.router, prefix="/api/v1")
 app.include_router(entities.router, prefix="/api/v1")
 app.include_router(ai.router, prefix="/api/v1")
+app.include_router(system.router, prefix="/api/v1")
+app.include_router(frameworks.router, prefix="/api/v1/frameworks")
+app.include_router(founder.router, prefix="/api/v1")
 
 
 @app.get("/")

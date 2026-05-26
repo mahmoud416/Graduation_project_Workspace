@@ -83,7 +83,7 @@ async def list_standards(
     current_user=Depends(get_current_user),
     db=Depends(get_database),
 ):
-    ensure_roles(current_user, ["quality_control", "admin", "sub_admin"])
+    ensure_roles(current_user, ["quality_control", "admin", "sub_admin", "manager"])
     normalized_status = status_filter if status_filter not in (None, "", "all") else None
     docs = await QualityStandardService.list_standards(
         db,
@@ -169,6 +169,7 @@ async def analyze_task_with_ai(
     task_description: str = Form(""),
     description_override: Optional[str] = Form(None),
     standard_ids: Optional[str] = Form(None, description="Comma-separated or JSON array of standard IDs"),
+    report_type: Optional[str] = Form(None, description="Report type key from REPORT_TYPES"),
     document_files: Annotated[Optional[List[UploadFile]], File(description="Optional document uploads")]
     = None,
     image_files: Annotated[Optional[List[UploadFile]], File(description="Optional image uploads")]
@@ -176,6 +177,13 @@ async def analyze_task_with_ai(
     current_user=Depends(get_current_user),
     db=Depends(get_database),
 ):
+    from app.services import qc_service as _qc_svc
+    if report_type and report_type not in _qc_svc.REPORT_TYPES:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="Unknown report type. Use GET /quality/report-types for valid keys.",
+        )
+
     parsed_standard_ids = _parse_standard_ids(standard_ids)
     text_payloads = await _read_documents(document_files)
     image_payloads = await _read_images(image_files)
@@ -187,6 +195,7 @@ async def analyze_task_with_ai(
         task_description=task_description,
         description_override=description_override,
         standard_ids=parsed_standard_ids,
+        report_type=report_type,
     )
 
     try:
@@ -362,11 +371,15 @@ async def _read_documents(files: Optional[List[UploadFile]]) -> List[dict]:
                 text = content_bytes.decode("latin-1", errors="ignore")
             file_type = content_type or "document"
 
-        texts.append({
+        import base64 as _b64
+        entry: Dict[str, Any] = {
             "file_name": file_name,
-            "content": text[:8000],
+            "content": text,
             "file_type": file_type,
-        })
+        }
+        if is_pdf:
+            entry["raw_b64"] = _b64.b64encode(content_bytes).decode("utf-8")
+        texts.append(entry)
     return texts
 
 

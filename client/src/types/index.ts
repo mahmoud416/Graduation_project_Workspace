@@ -113,6 +113,12 @@ export interface QualityOverview {
     projectScores: QualityProjectScore[];
     aiHistory: QualityAIHistoryEntry[];
     todoStats: QualityTodoStats;
+    adminInsights?: {
+        globalRejectionRate: number;
+        burnoutRiskUsers: number;
+        bottlenecks: { name: string; avgHours: number }[];
+        globalIssues: string[];
+    };
 }
 
 export interface QualityRuleEvaluation {

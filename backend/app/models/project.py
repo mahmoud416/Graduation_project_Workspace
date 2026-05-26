@@ -18,7 +18,7 @@ class ProjectType(str, Enum):
     """
     Card types:
       public       — workspace-wide channel (all registered users)
-      all_subadmin — sub-admin coordination channel
+      all_subadmin — sub-manager coordination channel
       custom       — regular project card created by admin
     """
     PUBLIC       = "public"
@@ -40,6 +40,7 @@ class ProjectModel:
         sub_admin_ids: Optional[List[Any]] = None,
         staff_ids: Optional[List[Any]] = None,
         team_id: Optional[Any] = None,
+        due_date: Optional[str] = None,
         comments_enabled: bool = True,
         uploads_enabled: bool = True,
     ) -> dict:
@@ -59,6 +60,7 @@ class ProjectModel:
             "uploads_enabled":  uploads_enabled,
             "is_system_card":   is_system,
             "team_id":          team_id,
+            "due_date":         due_date,
             "created_at":       now,
             "updated_at":       now,
         }

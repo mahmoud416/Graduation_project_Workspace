@@ -16,6 +16,22 @@ from app.db.collections import ENTITIES_COLLECTION, USERS_COLLECTION
 router = APIRouter(prefix="/entities", tags=["Entities"])
 
 
+@router.get("", response_model=List[EntityResponse])
+async def get_entities(
+    current_user=Depends(require_founder),
+    db=Depends(get_database)
+):
+    """Get all entities. ONLY Founders can do this."""
+    entities = await db[ENTITIES_COLLECTION].find().to_list(length=None)
+    for ent in entities:
+        ent["_id"] = str(ent["_id"])
+        ent["founder_id"] = str(ent["founder_id"])
+        ent["it_staff_ids"] = [str(uid) for uid in ent.get("it_staff_ids", [])]
+        ent["team_ids"] = [str(tid) for tid in ent.get("team_ids", [])]
+        ent["quality_framework_ids"] = [str(qid) for qid in ent.get("quality_framework_ids", [])]
+    return entities
+
+
 @router.post("", response_model=EntityResponse, status_code=status.HTTP_201_CREATED)
 async def create_entity(
     entity_data: EntityCreate,
@@ -34,10 +50,22 @@ async def create_entity(
             detail="Entity with this name already exists"
         )
     
+    qf_ids = []
+    if entity_data.quality_framework_ids:
+        for qid in entity_data.quality_framework_ids:
+            try:
+                qf_ids.append(ObjectId(qid))
+            except:
+                pass
+
     doc = EntityModel.create_document(
         name=entity_data.name,
         founder_id=current_user["_id"],
-        description=entity_data.description or ""
+        description=entity_data.description or "",
+        quality_framework_ids=qf_ids,
+        subscription_tier=entity_data.subscription_tier or "Basic",
+        max_teams=50 if entity_data.subscription_tier == "Enterprise" else (15 if entity_data.subscription_tier == "Pro" else 5),
+        ai_quota=50000 if entity_data.subscription_tier == "Enterprise" else (10000 if entity_data.subscription_tier == "Pro" else 1000)
     )
     
     result = await db[ENTITIES_COLLECTION].insert_one(doc)
@@ -45,6 +73,7 @@ async def create_entity(
     doc["founder_id"] = str(doc["founder_id"])
     doc["it_staff_ids"] = [str(uid) for uid in doc["it_staff_ids"]]
     doc["team_ids"] = [str(tid) for tid in doc["team_ids"]]
+    doc["quality_framework_ids"] = [str(qid) for qid in doc["quality_framework_ids"]]
     
     return doc
 

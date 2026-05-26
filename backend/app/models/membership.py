@@ -25,14 +25,14 @@ class MembershipModel:
         user_id: Reference to User ObjectId
         team_id: Reference to Team ObjectId
         role: User's role in the team (admin, subadmin, member)
-        managed_by: Optional ObjectId of Sub-Admin managing this member
+        managed_by: Optional ObjectId of Sub-Manager managing this member
         joined_at: Timestamp when user joined the team
         
     Business Rules:
         - A user can only have one membership per team (unique constraint)
         - Admin: Full permissions across the team
-        - Sub-Admin: Manages specific members (tracked via managed_by)
-        - Member: Regular team member, may be managed by a Sub-Admin
+        - Sub-Manager: Manages specific members (tracked via managed_by)
+        - Member: Regular team member, may be managed by a Sub-Manager
     """
     
     @staticmethod
@@ -49,7 +49,7 @@ class MembershipModel:
             user_id: ObjectId of the user
             team_id: ObjectId of the team
             role: User's role in the team
-            managed_by: Optional ObjectId of Sub-Admin managing this member
+            managed_by: Optional ObjectId of Sub-Manager managing this member
             
         Returns:
             Dictionary representing the membership document

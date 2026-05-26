@@ -47,8 +47,8 @@ def ensure_roles(user: Dict[str, Any], allowed_roles: List[str]) -> None:
 async def require_quality_control_user(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
-    """Dependency that ensures the caller is a QC user or admin."""
-    ensure_roles(current_user, [QC_ROLE, LEGACY_QM_ROLE, "admin"])
+    """Dependency that ensures the caller is a QC user, admin, manager, or sub_admin."""
+    ensure_roles(current_user, [QC_ROLE, LEGACY_QM_ROLE, "admin", "manager", "sub_admin"])
     return current_user
 
 
@@ -160,7 +160,7 @@ async def can_manage_user(
     Check if current user can manage the target user.
     
     Admin can manage anyone.
-    Sub-Admin can manage only their assigned members.
+    Sub-Manager can manage only their assigned members.
     
     Args:
         team_id: Team ID
@@ -190,7 +190,7 @@ async def can_manage_user(
     if current_membership["role"] == Role.ADMIN:
         return True
     
-    # Sub-Admins can only manage their assigned members
+    # Sub-Managers can only manage their assigned members
     if current_membership["role"] == Role.SUBADMIN:
         target_membership = await db[MEMBERSHIPS_COLLECTION].find_one({
             "user_id": target_obj_id,
@@ -203,7 +203,7 @@ async def can_manage_user(
                 detail="Target user is not a member of this team"
             )
         
-        # Check if this member is managed by the current sub-admin
+        # Check if this member is managed by the current sub-manager
         if target_membership.get("managed_by") == current_user["_id"]:
             return True
     
@@ -222,7 +222,7 @@ async def filter_visible_tasks(
     Build MongoDB filter for tasks visible to the current user based on their role.
     
     - Admin: All tasks in the team
-    - Sub-Admin: Tasks assigned to users they manage
+    - Sub-Manager: Tasks assigned to users they manage
     - Member: Only their own tasks
     
     Args:
@@ -250,9 +250,9 @@ async def filter_visible_tasks(
     if membership["role"] in (Role.ADMIN, Role.MANAGER):
         return base_filter
     
-    # Sub-Admin sees tasks of users they manage
+    # Sub-Manager sees tasks of users they manage
     if membership["role"] == Role.SUBADMIN:
-        # Find all members managed by this sub-admin
+        # Find all members managed by this sub-manager
         managed_memberships = await db[MEMBERSHIPS_COLLECTION].find({
             "team_id": team_obj_id,
             "managed_by": current_user["_id"]
@@ -304,7 +304,7 @@ async def require_team_manager_admin_or_subadmin(
     current_user: Dict[str, Any],
     db,
 ) -> Dict[str, Any]:
-    """Allow Manager, Admin, or Sub-Admin."""
+    """Allow Manager, Admin, or Sub-Manager."""
     membership = await get_user_membership(team_id, current_user, db)
 
     if membership["role"] not in (Role.ADMIN, Role.MANAGER, Role.SUBADMIN):

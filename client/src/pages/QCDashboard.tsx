@@ -38,7 +38,7 @@ interface ProjectOption {
 
 const DEFAULT_PROJECT_OPTIONS: ProjectOption[] = [
     { id: 'public-group', name: 'Public Group (workspace default)', isSystem: true },
-    { id: 'all-sub-admin', name: 'All Sub Admin (system group)', isSystem: true },
+    { id: 'all-sub-admin', name: 'All Sub Manager (system group)', isSystem: true },
 ];
 
 const buildAuthHeaders = () => ({
@@ -284,7 +284,7 @@ const QCDashboard = () => {
         <div className="flex min-h-screen bg-[#020617] text-white font-display">
             <Sidebar />
             <div className="flex-1 ml-[var(--sidebar-width)] transition-[margin] duration-200">
-                <Header title="Quality Control Lab" subtitle="AI oversight · Standards · Reports" />
+                <Header title="Reports" subtitle="AI oversight · Standards · Reports" />
                 <main className="page-main px-6 lg:px-10 pb-16 space-y-8">
                     <section
                         className="rounded-3xl p-8 relative overflow-hidden border border-white/5 shadow-2xl"
@@ -323,6 +323,42 @@ const QCDashboard = () => {
                             </div>
                         </div>
                     </section>
+
+                    {/* ═══ GLOBAL ADMIN INSIGHTS ═══ */}
+                    {overview?.adminInsights && (
+                        <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                            {/* Global Rejection Rate */}
+                            <div className="bg-white/5 border border-white/10 rounded-3xl p-6 relative overflow-hidden group">
+                                <div className="absolute inset-0 bg-gradient-to-br from-rose-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                                <p className="text-xs uppercase tracking-[0.2em] text-white/50 mb-2">Global Rejection</p>
+                                <p className="text-3xl font-semibold text-rose-400">{overview.adminInsights.globalRejectionRate}%</p>
+                                <p className="text-xs text-white/40 mt-2">Workspace-wide average</p>
+                            </div>
+
+                            {/* Burnout Risk Users */}
+                            <div className="bg-white/5 border border-white/10 rounded-3xl p-6 relative overflow-hidden group">
+                                <div className="absolute inset-0 bg-gradient-to-br from-orange-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                                <p className="text-xs uppercase tracking-[0.2em] text-white/50 mb-2">Burnout Risk</p>
+                                <p className="text-3xl font-semibold text-orange-400">{overview.adminInsights.burnoutRiskUsers}</p>
+                                <p className="text-xs text-white/40 mt-2">Users with high workload</p>
+                            </div>
+
+                            {/* Global Bottlenecks */}
+                            <div className="bg-white/5 border border-white/10 rounded-3xl p-6 relative overflow-hidden group">
+                                <div className="absolute inset-0 bg-gradient-to-br from-amber-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                                <p className="text-xs uppercase tracking-[0.2em] text-white/50 mb-2 flex items-center gap-2"><span>⚠️</span> Top Bottleneck</p>
+                                <p className="text-lg font-semibold text-amber-300 truncate">{overview.adminInsights.bottlenecks[0]?.name || 'None'}</p>
+                                <p className="text-xs text-white/40 mt-1">{overview.adminInsights.bottlenecks[0]?.avgHours || 0}h avg turnaround</p>
+                            </div>
+
+                            {/* Global Issues */}
+                            <div className="bg-gradient-to-br from-indigo-900/50 to-purple-900/50 border border-indigo-500/30 rounded-3xl p-6 relative overflow-hidden group">
+                                <p className="text-xs uppercase tracking-[0.2em] text-indigo-200/50 mb-2 flex items-center gap-2"><span>🤖</span> Top AI Issue</p>
+                                <p className="text-sm font-semibold text-indigo-200 line-clamp-2 leading-relaxed">{overview.adminInsights.globalIssues[0] || 'No frequent issues'}</p>
+                                <p className="text-xs text-indigo-300/40 mt-2">Workspace-wide</p>
+                            </div>
+                        </section>
+                    )}
 
                     <section className="bg-[#0f172a] border border-white/5 rounded-3xl p-6 shadow-xl">
                         <div className="flex flex-wrap items-center justify-between gap-4 mb-6">

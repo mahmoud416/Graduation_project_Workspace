@@ -13,6 +13,7 @@ interface TeamMember {
     is_active: boolean;
     phone?: string | null;
     created_at?: string | null;
+    last_seen?: string | null;
 }
 
 const ROLES_ORDER: Record<string, number> = { admin: 0, sub_admin: 1, staff: 2 };
@@ -50,28 +51,57 @@ const ROLE_BADGE: Record<string, string> = {
 
 const PAGE_SIZE = 10;
 
+const ONLINE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
+
+const isOnline = (last_seen?: string | null): boolean => {
+    if (!last_seen) return false;
+    return Date.now() - new Date(last_seen).getTime() < ONLINE_THRESHOLD_MS;
+};
+
 const TeamPage = () => {
     const [members, setMembers] = useState<TeamMember[]>([]);
+    const [teamMembers, setTeamMembers] = useState<string[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [roleFilter, setRoleFilter] = useState<string>('all');
+    const [teamFilter, setTeamFilter] = useState<'all' | 'myteam'>('all');
     const [page, setPage] = useState(1);
     const [isCreateTeamOpen, setIsCreateTeamOpen] = useState(false);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
+    const role = localStorage.getItem('role');
+    const userId = localStorage.getItem('userId') ?? '';
+    const token = localStorage.getItem('token') ?? '';
 
     const fetchUsers = async () => {
         try {
             setIsLoading(true);
             setError(null);
-            const token = localStorage.getItem('token');
-            const res = await fetch(`${API_BASE}/users`, {
-                headers: { Authorization: `Bearer ${token ?? ''}` },
-            });
+            const headers = {
+                Authorization: `Bearer ${token}`,
+                'X-User-Id': userId,
+            };
+            const res = await fetch(`${API_BASE}/users`, { headers });
             if (!res.ok) throw new Error(`Failed to load team members (${res.status})`);
             const data: TeamMember[] = await res.json();
             data.sort((a, b) => (ROLES_ORDER[a.role] ?? 9) - (ROLES_ORDER[b.role] ?? 9));
             setMembers(data);
+
+            // For managers, sub-admins, and staff, also fetch their team members to enable "My Team" filter
+            if (role === 'manager' || role === 'sub_admin' || role === 'staff') {
+                const tRes = await fetch(`${API_BASE}/teams`, { headers });
+                if (tRes.ok) {
+                    const teams = await tRes.json();
+                    if (teams.length > 0) {
+                        const teamId = teams[0].id || teams[0]._id;
+                        const mRes = await fetch(`${API_BASE}/teams/${teamId}/members`, { headers });
+                        if (mRes.ok) {
+                            const raw = await mRes.json();
+                            setTeamMembers(raw.map((m: any) => m.user_id));
+                        }
+                    }
+                }
+            }
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : 'Failed to load team members');
         } finally {
@@ -83,12 +113,30 @@ const TeamPage = () => {
         void fetchUsers();
     }, []);
 
+    // Heartbeat: update current user's last_seen every 30 seconds
+    useEffect(() => {
+        const sendHeartbeat = () => {
+            fetch(`${API_BASE}/users/me/heartbeat`, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'X-User-Id': userId,
+                },
+            }).catch(() => {});
+        };
+        sendHeartbeat(); // immediate
+        const interval = setInterval(sendHeartbeat, 30_000);
+        return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     const filtered = members.filter((m) => {
         const matchesSearch =
             m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
             m.email.toLowerCase().includes(searchQuery.toLowerCase());
         const matchesRole = roleFilter === 'all' || m.role === roleFilter;
-        return matchesSearch && matchesRole;
+        const matchesTeam = teamFilter === 'all' || teamMembers.includes(m._id);
+        return matchesSearch && matchesRole && matchesTeam;
     });
 
     const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -97,7 +145,7 @@ const TeamPage = () => {
 
     const stats = {
         total: members.length,
-        admins: members.filter((m) => m.role === 'admin').length,
+        online: members.filter((m) => isOnline(m.last_seen)).length,
         subAdmins: members.filter((m) => m.role === 'sub_admin').length,
         staff: members.filter((m) => m.role === 'staff').length,
     };
@@ -118,6 +166,7 @@ const TeamPage = () => {
                                 Review your team's directory and manage member information.
                             </p>
                         </div>
+                        {role === 'admin' && (
                         <button
                             onClick={() => setIsCreateTeamOpen(true)}
                             className="bg-primary hover:bg-primary-hover text-white px-5 py-2.5 rounded-xl text-sm font-semibold shadow-lg shadow-primary/30 transition-all flex items-center gap-2"
@@ -127,6 +176,7 @@ const TeamPage = () => {
                             </svg>
                             Add Team
                         </button>
+                        )}
                     </div>
 
                     {successMessage && (
@@ -149,16 +199,16 @@ const TeamPage = () => {
                                 ),
                             },
                             {
-                                label: 'Admins',
-                                value: stats.admins,
+                                label: 'Online Now',
+                                value: stats.online,
                                 icon: (
                                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                                     </svg>
                                 ),
                             },
                             {
-                                label: 'Sub-Admins',
+                                label: 'Sub-Managers',
                                 value: stats.subAdmins,
                                 icon: (
                                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -194,7 +244,7 @@ const TeamPage = () => {
                     </div>
 
                     {/* Filters */}
-                    <div className="flex items-center gap-3 mb-4">
+                    <div className="flex items-center gap-3 mb-4 flex-wrap">
                         <div className="relative flex-1 max-w-xs">
                             <svg
                                 className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-gray dark:text-gray-400"
@@ -220,10 +270,35 @@ const TeamPage = () => {
                             className="h-9 px-3 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-800 text-text-dark dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                         >
                             <option value="all">All Roles</option>
-                            <option value="admin">Admin</option>
-                            <option value="sub_admin">Sub Admin</option>
+                            <option value="manager">Manager</option>
+                            <option value="sub_admin">Sub Manager</option>
                             <option value="staff">Staff</option>
                         </select>
+
+                        {['manager', 'sub_admin', 'staff'].includes(role || '') && (
+                            <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
+                                <button
+                                    onClick={() => { setTeamFilter('all'); setPage(1); }}
+                                    className={`h-9 px-4 text-sm font-medium transition-colors ${
+                                        teamFilter === 'all'
+                                            ? 'bg-primary text-white'
+                                            : 'bg-white dark:bg-gray-800 text-text-dark dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'
+                                    }`}
+                                >
+                                    All Members
+                                </button>
+                                <button
+                                    onClick={() => { setTeamFilter('myteam'); setPage(1); }}
+                                    className={`h-9 px-4 text-sm font-medium transition-colors border-l border-gray-300 dark:border-gray-600 ${
+                                        teamFilter === 'myteam'
+                                            ? 'bg-primary text-white'
+                                            : 'bg-white dark:bg-gray-800 text-text-dark dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'
+                                    }`}
+                                >
+                                    My Team
+                                </button>
+                            </div>
+                        )}
 
                         <span className="ml-auto text-sm text-text-gray dark:text-gray-400">
                             {filtered.length} member{filtered.length !== 1 ? 's' : ''}
@@ -299,14 +374,35 @@ const TeamPage = () => {
 
                                 {/* Status */}
                                 <div className="col-span-2 flex items-center gap-2">
-                                    <div
-                                        className={`w-2 h-2 rounded-full flex-shrink-0 ${member.is_active ? 'bg-success' : 'bg-gray-400'}`}
-                                    />
-                                    <span
-                                        className={`text-xs font-medium ${member.is_active ? 'text-success' : 'text-text-gray dark:text-gray-400'}`}
-                                    >
-                                        {member.is_active ? 'Active' : 'Inactive'}
-                                    </span>
+                                    {(() => {
+                                        const online = isOnline(member.last_seen);
+                                        const lastSeenDate = member.last_seen ? new Date(member.last_seen) : null;
+                                        const minutesAgo = lastSeenDate
+                                            ? Math.floor((Date.now() - lastSeenDate.getTime()) / 60000)
+                                            : null;
+                                        return (
+                                            <>
+                                                <div
+                                                    className={`w-2 h-2 rounded-full flex-shrink-0 ${online ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`}
+                                                />
+                                                <span
+                                                    className={`text-xs font-medium ${online ? 'text-green-500' : 'text-text-gray dark:text-gray-400'}`}
+                                                    title={lastSeenDate ? `Last seen: ${lastSeenDate.toLocaleString()}` : 'Never seen'}
+                                                >
+                                                    {online
+                                                        ? 'Online'
+                                                        : minutesAgo !== null
+                                                            ? minutesAgo < 60
+                                                                ? `${minutesAgo}m ago`
+                                                                : minutesAgo < 1440
+                                                                    ? `${Math.floor(minutesAgo / 60)}h ago`
+                                                                    : `${Math.floor(minutesAgo / 1440)}d ago`
+                                                            : 'Offline'
+                                                    }
+                                                </span>
+                                            </>
+                                        );
+                                    })()}
                                 </div>
 
                                 {/* Phone */}
