@@ -11,6 +11,12 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
     return btoa(parts.join(''));
 }
 
+function fmtSize(b: number) {
+    if (b < 1024) return `${b} B`;
+    if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
+    return `${(b / 1024 / 1024).toFixed(1)} MB`;
+}
+
 interface Props {
     isOpen: boolean;
     taskId: string;
@@ -19,31 +25,29 @@ interface Props {
     reportType?: string;
     onClose: () => void;
     onSuccess?: () => void;
+    onEvaluated?: (result: EvaluationResult, taskId: string) => void;
 }
 
-const TaskSubmitDrawer = ({ isOpen, taskId, taskTitle, projectId, reportType, onClose, onSuccess }: Props) => {
-    const [description, setDescription] = useState(taskTitle);
+const TaskSubmitDrawer = ({ isOpen, taskId, taskTitle, reportType, onClose, onSuccess, onEvaluated }: Props) => {
+    const [description, setDescription]       = useState(taskTitle);
     const [submissionNotes, setSubmissionNotes] = useState('');
-    const [attachments, setAttachments] = useState<File[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [result, setResult] = useState<EvaluationResult | null>(null);
-    const [error, setError] = useState<string | null>(null);
-    const [isDragging, setIsDragging] = useState(false);
+    const [attachments, setAttachments]        = useState<File[]>([]);
+    const [loading, setLoading]                = useState(false);
+    const [result, setResult]                  = useState<EvaluationResult | null>(null);
+    const [error, setError]                    = useState<string | null>(null);
+    const [isDragging, setIsDragging]          = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleFiles = useCallback((files: FileList | null) => {
         if (!files) return;
-        setAttachments((prev) => [...prev, ...Array.from(files)]);
+        setAttachments(prev => [...prev, ...Array.from(files)]);
     }, []);
 
-    const handleDrop = useCallback(
-        (e: React.DragEvent) => {
-            e.preventDefault();
-            setIsDragging(false);
-            handleFiles(e.dataTransfer.files);
-        },
-        [handleFiles],
-    );
+    const handleDrop = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragging(false);
+        handleFiles(e.dataTransfer.files);
+    }, [handleFiles]);
 
     const handleAnalyzeAndSubmit = async () => {
         setLoading(true);
@@ -52,21 +56,13 @@ const TaskSubmitDrawer = ({ isOpen, taskId, taskTitle, projectId, reportType, on
         try {
             const imageFiles: string[] = [];
             const docFiles: { file_name: string; content: string; file_type: string }[] = [];
-
-            await Promise.all(
-                attachments.map((file) =>
-                    file.arrayBuffer().then((buf) => {
-                        const base64 = arrayBufferToBase64(buf);
-                        if (file.type.startsWith('image/')) {
-                            imageFiles.push(base64);
-                        } else {
-                            docFiles.push({ file_name: file.name, content: base64, file_type: file.type });
-                        }
-                    }),
-                ),
-            );
-
-            // This will evaluate and if >= 85, backend will submit the task automatically.
+            await Promise.all(attachments.map(file =>
+                file.arrayBuffer().then(buf => {
+                    const base64 = arrayBufferToBase64(buf);
+                    if (file.type.startsWith('image/')) imageFiles.push(base64);
+                    else docFiles.push({ file_name: file.name, content: base64, file_type: file.type });
+                })
+            ));
             const data = await evaluateTask({
                 task_title: description,
                 task_description: description,
@@ -76,15 +72,10 @@ const TaskSubmitDrawer = ({ isOpen, taskId, taskTitle, projectId, reportType, on
                 image_base64: imageFiles,
                 submission_notes: submissionNotes,
             });
-
             setResult(data);
-
-            if (data.compliance_score >= 85 && onSuccess) {
-                // If it passes, we might want to notify the parent to refresh or close after a delay
-                setTimeout(() => {
-                    onSuccess();
-                    onClose();
-                }, 3000);
+            onEvaluated?.(data, taskId);
+            if (data.compliance_score >= 70 && onSuccess) {
+                setTimeout(() => { onSuccess(); onClose(); }, 3000);
             }
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Analysis failed');
@@ -104,183 +95,235 @@ const TaskSubmitDrawer = ({ isOpen, taskId, taskTitle, projectId, reportType, on
 
     if (!isOpen) return null;
 
-    const score = result?.compliance_score ?? 0;
-    const isPassed = score >= 85;
+    const score    = result?.compliance_score ?? 0;
+    const isPassed = score >= 70;
+    const circ     = 2 * Math.PI * 28; // r=28
 
     return (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/60 transition-opacity">
-            <div className="w-full max-w-lg h-full bg-[#1a1a2e] border-l border-white/10 shadow-2xl flex flex-col transform transition-transform duration-300 ease-in-out translate-x-0">
-                {/* Header */}
-                <div className="flex items-center justify-between px-6 py-5 border-b border-white/10 bg-white/5">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400">
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                        </div>
-                        <div>
-                            <h2 className="text-lg font-bold text-white">Submit Task</h2>
-                            <p className="text-xs text-gray-400">AI Quality Check & Submission</p>
-                        </div>
-                    </div>
-                    <button type="button" onClick={handleClose} className="text-gray-400 hover:text-white transition-colors">
-                        <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                    </button>
-                </div>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', justifyContent: 'flex-end', background: 'rgba(0,0,0,.55)', backdropFilter: 'blur(2px)' }}>
+            <div style={{ width: '100%', maxWidth: 460, height: '100%', background: '#0e1117', borderLeft: '1px solid rgba(255,255,255,.07)', display: 'flex', flexDirection: 'column', boxShadow: '-8px 0 40px rgba(0,0,0,.6)' }}>
 
-                {/* Body */}
-                <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
-                    {/* Left/Top: Input */}
-                    <div className="flex flex-col gap-4">
-                        <div>
-                            <p className="text-xs font-semibold tracking-widest text-gray-400 mb-2">TASK TITLE</p>
-                            <input
-                                value={description}
-                                onChange={(e) => setDescription(e.target.value)}
-                                className="w-full rounded-xl bg-white/5 border border-white/10 text-sm text-gray-200 px-3 py-2.5 focus:outline-none focus:border-blue-500"
-                            />
-                        </div>
-
-                        <div>
-                            <p className="text-xs font-semibold tracking-widest text-gray-400 mb-2">SUBMISSION NOTES (Optional)</p>
-                            <textarea
-                                value={submissionNotes}
-                                onChange={(e) => setSubmissionNotes(e.target.value)}
-                                rows={2}
-                                placeholder="Any comments for the reviewers..."
-                                className="w-full rounded-xl bg-white/5 border border-white/10 text-sm text-gray-200 placeholder-gray-500 px-3 py-2 focus:outline-none focus:border-blue-500 resize-none"
-                            />
-                        </div>
-
-                        <div>
-                            <p className="text-xs font-semibold tracking-widest text-gray-400 mb-2">ATTACHMENTS (Required)</p>
-                            <div
-                                onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-                                onDragLeave={() => setIsDragging(false)}
-                                onDrop={handleDrop}
-                                onClick={() => fileInputRef.current?.click()}
-                                className={`rounded-xl border-2 border-dashed flex flex-col items-center justify-center py-8 cursor-pointer transition-colors ${isDragging ? 'border-blue-500 bg-blue-500/10' : 'border-white/15 hover:border-blue-500/50'}`}
-                            >
-                                <svg className="w-8 h-8 text-gray-500 mb-3" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.338-2.325A4.5 4.5 0 0118 19.5H6.75z" />
+                {/* ── Header ── */}
+                <div style={{ padding: '20px 22px 18px', borderBottom: '1px solid rgba(255,255,255,.07)', background: 'linear-gradient(135deg,rgba(99,102,241,.12) 0%,rgba(14,17,23,0) 60%)', flexShrink: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                            <div style={{ width: 38, height: 38, borderRadius: 10, background: 'linear-gradient(135deg,#6366f1,#4f46e5)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 14px rgba(99,102,241,.4)' }}>
+                                <svg width="18" height="18" fill="none" stroke="white" strokeWidth="2.2" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                                 </svg>
-                                <p className="text-sm text-gray-400 text-center px-4">
-                                    {attachments.length > 0 ? `${attachments.length} file(s) selected` : 'Drop your report files (PDF/Word) here'}
-                                </p>
-                                <input ref={fileInputRef} type="file" multiple className="hidden" onChange={(e) => handleFiles(e.target.files)} />
                             </div>
-                            {attachments.length > 0 && (
-                                <div className="mt-3 flex flex-wrap gap-2">
-                                    {attachments.map((f, i) => (
-                                        <span key={i} className="inline-flex items-center gap-1.5 text-xs font-medium bg-white/10 text-gray-300 rounded-md px-2.5 py-1.5 border border-white/5 shadow-sm">
-                                            {f.name}
-                                            <button type="button" onClick={(e) => { e.stopPropagation(); setAttachments((prev) => prev.filter((_, j) => j !== i)); }} className="text-gray-400 hover:text-red-400 ml-1">
-                                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                                            </button>
-                                        </span>
-                                    ))}
-                                </div>
-                            )}
+                            <div>
+                                <div style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9', letterSpacing: '-.01em' }}>Submit Task</div>
+                                <div style={{ fontSize: 11, color: '#6366f1', fontWeight: 500, marginTop: 1 }}>AI Quality Check & Submission</div>
+                            </div>
                         </div>
-
-                        <button
-                            type="button"
-                            onClick={handleAnalyzeAndSubmit}
-                            disabled={loading || !description.trim() || attachments.length === 0}
-                            className="w-full h-12 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-sm font-bold tracking-wide flex items-center justify-center gap-2 disabled:opacity-50 transition-all shadow-lg shadow-blue-900/20 mt-2"
-                        >
-                            {loading ? (
-                                <><div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Analyzing & Evaluating...</>
-                            ) : (
-                                <><svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> Evaluate & Submit</>
-                            )}
+                        <button type="button" onClick={handleClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: 4, borderRadius: 6, lineHeight: 1, transition: 'color .15s' }}
+                            onMouseEnter={e => (e.currentTarget.style.color = '#f1f5f9')}
+                            onMouseLeave={e => (e.currentTarget.style.color = '#64748b')}>
+                            <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
                         </button>
                     </div>
+                </div>
 
-                    {/* Results Section */}
+                {/* ── Body ── */}
+                <div style={{ flex: 1, overflowY: 'auto', padding: '20px 22px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+                    {/* Task Title */}
+                    <div>
+                        <label style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.08em', color: '#475569', textTransform: 'uppercase', display: 'block', marginBottom: 7 }}>Task Title</label>
+                        <input value={description} onChange={e => setDescription(e.target.value)}
+                            style={{ width: '100%', borderRadius: 10, background: 'rgba(255,255,255,.05)', border: '1px solid rgba(255,255,255,.1)', color: '#e2e8f0', fontSize: 13, padding: '9px 12px', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', transition: 'border-color .15s' }}
+                            onFocus={e => (e.currentTarget.style.borderColor = '#6366f1')}
+                            onBlur={e  => (e.currentTarget.style.borderColor = 'rgba(255,255,255,.1)')}
+                        />
+                    </div>
+
+                    {/* Notes */}
+                    <div>
+                        <label style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.08em', color: '#475569', textTransform: 'uppercase', display: 'block', marginBottom: 7 }}>Notes <span style={{ fontWeight: 400, color: '#334155' }}>(optional)</span></label>
+                        <textarea value={submissionNotes} onChange={e => setSubmissionNotes(e.target.value)} rows={2}
+                            placeholder="Any comments for the reviewers…"
+                            style={{ width: '100%', borderRadius: 10, background: 'rgba(255,255,255,.05)', border: '1px solid rgba(255,255,255,.1)', color: '#e2e8f0', fontSize: 13, padding: '9px 12px', outline: 'none', fontFamily: 'inherit', resize: 'none', boxSizing: 'border-box', transition: 'border-color .15s' }}
+                            onFocus={e => (e.currentTarget.style.borderColor = '#6366f1')}
+                            onBlur={e  => (e.currentTarget.style.borderColor = 'rgba(255,255,255,.1)')}
+                        />
+                    </div>
+
+                    {/* Drop zone */}
+                    <div>
+                        <label style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.08em', color: '#475569', textTransform: 'uppercase', display: 'block', marginBottom: 7 }}>Attachments <span style={{ color: '#ef4444' }}>*</span></label>
+                        <div
+                            onDragOver={e  => { e.preventDefault(); setIsDragging(true); }}
+                            onDragLeave={() => setIsDragging(false)}
+                            onDrop={handleDrop}
+                            onClick={() => fileInputRef.current?.click()}
+                            style={{ borderRadius: 12, border: `2px dashed ${isDragging ? '#6366f1' : 'rgba(255,255,255,.12)'}`, background: isDragging ? 'rgba(99,102,241,.08)' : 'rgba(255,255,255,.02)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '28px 16px', cursor: 'pointer', transition: 'border-color .2s, background .2s', userSelect: 'none' }}>
+                            <div style={{ width: 40, height: 40, borderRadius: 10, background: isDragging ? 'rgba(99,102,241,.2)' : 'rgba(255,255,255,.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10, transition: 'background .2s' }}>
+                                <svg width="20" height="20" fill="none" stroke={isDragging ? '#818cf8' : '#64748b'} strokeWidth="1.6" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.338-2.325A4.5 4.5 0 0118 19.5H6.75z"/>
+                                </svg>
+                            </div>
+                            <div style={{ fontSize: 13, color: isDragging ? '#818cf8' : '#94a3b8', fontWeight: 500, textAlign: 'center' }}>
+                                {attachments.length > 0 ? `${attachments.length} file(s) ready` : 'Drop PDF / Word files here'}
+                            </div>
+                            <div style={{ fontSize: 11, color: '#475569', marginTop: 4 }}>or click to browse</div>
+                            <input ref={fileInputRef} type="file" multiple className="hidden" style={{ display: 'none' }} onChange={e => handleFiles(e.target.files)} />
+                        </div>
+
+                        {/* File chips */}
+                        {attachments.length > 0 && (
+                            <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                {attachments.map((f, i) => (
+                                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,.05)', border: '1px solid rgba(255,255,255,.08)', borderRadius: 8, padding: '7px 10px' }}>
+                                        <div style={{ width: 28, height: 28, borderRadius: 6, background: 'rgba(99,102,241,.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                            <svg width="14" height="14" fill="none" stroke="#818cf8" strokeWidth="1.8" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                            </svg>
+                                        </div>
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <div style={{ fontSize: 12, color: '#cbd5e1', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</div>
+                                            <div style={{ fontSize: 10, color: '#475569', marginTop: 1 }}>{fmtSize(f.size)}</div>
+                                        </div>
+                                        <button type="button" onClick={e => { e.stopPropagation(); setAttachments(prev => prev.filter((_, j) => j !== i)); }}
+                                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#475569', padding: 2, lineHeight: 1, transition: 'color .15s', borderRadius: 4 }}
+                                            onMouseEnter={e => (e.currentTarget.style.color = '#f87171')}
+                                            onMouseLeave={e => (e.currentTarget.style.color = '#475569')}>
+                                            <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                                            </svg>
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Error */}
                     {error && (
-                        <div className="rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-sm px-4 py-3 shadow-inner">{error}</div>
+                        <div style={{ borderRadius: 10, background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.25)', color: '#fca5a5', fontSize: 13, padding: '10px 14px' }}>{error}</div>
                     )}
 
+                    {/* Loading state */}
                     {loading && (
-                        <div className="flex flex-col items-center justify-center py-10 text-center text-gray-400 bg-white/5 rounded-xl border border-white/5">
-                            <div className="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mb-4" />
-                            <p className="text-sm font-medium">Running strict quality evaluation against ministry standards…</p>
+                        <div style={{ borderRadius: 12, background: 'rgba(255,255,255,.03)', border: '1px solid rgba(255,255,255,.07)', padding: '32px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
+                            <div style={{ position: 'relative', width: 48, height: 48 }}>
+                                <svg width="48" height="48" style={{ transform: 'rotate(-90deg)' }}>
+                                    <circle cx="24" cy="24" r="20" fill="none" stroke="rgba(99,102,241,.2)" strokeWidth="3"/>
+                                    <circle cx="24" cy="24" r="20" fill="none" stroke="#6366f1" strokeWidth="3"
+                                        strokeDasharray="125.6" strokeDashoffset="0" strokeLinecap="round"
+                                        style={{ animation: 'drawer-spin 1.2s linear infinite' }}/>
+                                </svg>
+                                <style>{`@keyframes drawer-spin { to { stroke-dashoffset: -125.6 } }`}</style>
+                            </div>
+                            <div style={{ textAlign: 'center' }}>
+                                <div style={{ fontSize: 13, fontWeight: 600, color: '#cbd5e1' }}>Evaluating against standards…</div>
+                                <div style={{ fontSize: 11, color: '#475569', marginTop: 4 }}>This may take a few seconds</div>
+                            </div>
                         </div>
                     )}
 
+                    {/* Result */}
                     {result && !loading && (
-                        <div className={`rounded-xl border p-5 transition-all ${isPassed ? 'bg-green-500/10 border-green-500/30' : 'bg-red-500/10 border-red-500/30'}`}>
-                            {/* Quality Score */}
-                            <div className="flex items-center justify-between mb-4 pb-4 border-b border-white/10">
-                                <div>
-                                    <p className="text-xs font-bold tracking-widest text-gray-400">QUALITY SCORE</p>
-                                    <div className="flex items-center gap-2 mt-1">
-                                        <span className={`text-4xl font-extrabold ${isPassed ? 'text-green-400' : 'text-red-400'}`}>{score}%</span>
-                                        <span className={`text-xs px-2 py-1 rounded-md font-bold ${isPassed ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>
-                                            {isPassed ? 'PASSED (≥85%)' : 'FAILED (<85%)'}
-                                        </span>
-                                    </div>
+                        <div style={{ borderRadius: 14, border: `1px solid ${isPassed ? 'rgba(74,222,128,.2)' : 'rgba(248,113,113,.2)'}`, background: isPassed ? 'rgba(74,222,128,.05)' : 'rgba(248,113,113,.05)', padding: '18px 18px 14px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+                            {/* Score row */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 16, paddingBottom: 14, borderBottom: '1px solid rgba(255,255,255,.07)' }}>
+                                {/* Circular score */}
+                                <div style={{ position: 'relative', width: 68, height: 68, flexShrink: 0 }}>
+                                    <svg width="68" height="68" style={{ transform: 'rotate(-90deg)' }}>
+                                        <circle cx="34" cy="34" r="28" fill="none" stroke="rgba(255,255,255,.07)" strokeWidth="5"/>
+                                        <circle cx="34" cy="34" r="28" fill="none"
+                                            stroke={isPassed ? '#4ade80' : '#f87171'} strokeWidth="5"
+                                            strokeDasharray={circ}
+                                            strokeDashoffset={circ * (1 - score / 100)}
+                                            strokeLinecap="round"
+                                            style={{ transition: 'stroke-dashoffset .8s ease' }}/>
+                                    </svg>
+                                    <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 800, color: isPassed ? '#4ade80' : '#f87171' }}>{score}%</div>
                                 </div>
-                                <div className="w-16 h-16 rounded-full flex items-center justify-center border-4" style={{ borderColor: isPassed ? '#4ade80' : '#f87171' }}>
-                                    {isPassed ? (
-                                        <svg className="w-8 h-8 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                                    ) : (
-                                        <svg className="w-8 h-8 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-                                    )}
+                                <div style={{ flex: 1 }}>
+                                    <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.08em', color: '#475569', textTransform: 'uppercase', marginBottom: 5 }}>Quality Score</div>
+                                    <div style={{ fontSize: 18, fontWeight: 800, color: '#f1f5f9' }}>{isPassed ? 'Passed' : 'Failed'}</div>
+                                    <div style={{ marginTop: 4, display: 'inline-block', fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 20, background: isPassed ? 'rgba(74,222,128,.15)' : 'rgba(248,113,113,.15)', color: isPassed ? '#86efac' : '#fca5a5' }}>
+                                        {isPassed ? '≥ 70% — Auto-submitted to QC' : `< 70% — ${70 - score}% needed to pass`}
+                                    </div>
                                 </div>
                             </div>
 
-                            {isPassed ? (
-                                <div className="text-sm text-green-300 mb-4 bg-green-500/10 p-3 rounded-lg border border-green-500/20 font-medium">
-                                    🎉 Great job! The task has been submitted successfully to QC Review.
-                                </div>
-                            ) : (
-                                <div className="text-sm text-red-300 mb-6 bg-red-500/10 p-3 rounded-lg border border-red-500/20">
-                                    <p className="font-bold mb-1">Submission Blocked</p>
-                                    You must fix the critical errors below and reach at least 85% to submit this task.
+                            {/* Pass banner */}
+                            {isPassed && (
+                                <div style={{ borderRadius: 8, background: 'rgba(74,222,128,.1)', border: '1px solid rgba(74,222,128,.2)', padding: '10px 12px', fontSize: 13, color: '#86efac', fontWeight: 500 }}>
+                                    Task submitted successfully to QC Review.
                                 </div>
                             )}
 
-                            {/* Failed Standards (Detailed view for fixing) */}
+                            {/* Fail banner */}
+                            {!isPassed && (
+                                <div style={{ borderRadius: 8, background: 'rgba(248,113,113,.08)', border: '1px solid rgba(248,113,113,.2)', padding: '10px 12px' }}>
+                                    <div style={{ fontSize: 12, fontWeight: 700, color: '#f87171', marginBottom: 2 }}>Submission Blocked</div>
+                                    <div style={{ fontSize: 12, color: '#fca5a5', lineHeight: 1.6 }}>Fix the issues below and resubmit to reach 70%.</div>
+                                </div>
+                            )}
+
+                            {/* Failed standards */}
                             {result.failed_standards.length > 0 && (
-                                <div className="mb-5">
-                                    <p className="text-xs font-bold tracking-widest text-red-400 mb-3 flex items-center gap-1.5">
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-                                        CRITICAL ISSUES TO FIX
-                                    </p>
-                                    <div className="space-y-2.5">
+                                <div>
+                                    <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.08em', color: '#f87171', textTransform: 'uppercase', marginBottom: 8 }}>Critical Issues</div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                                         {result.failed_standards.map((s, i) => (
-                                            <div key={i} className="rounded-lg bg-red-500/10 border border-red-500/20 p-3">
-                                                <p className="text-sm font-semibold text-gray-200 mb-1">{s.rule}</p>
-                                                <p className="text-sm text-red-300/90 leading-relaxed">{s.reason}</p>
+                                            <div key={i} style={{ borderRadius: 8, background: 'rgba(248,113,113,.08)', border: '1px solid rgba(248,113,113,.15)', padding: '9px 11px' }}>
+                                                <div style={{ fontSize: 12, fontWeight: 600, color: '#e2e8f0', marginBottom: 3 }}>{s.rule}</div>
+                                                <div style={{ fontSize: 12, color: '#fca5a5', lineHeight: 1.55 }}>{s.reason}</div>
                                             </div>
                                         ))}
                                     </div>
                                 </div>
                             )}
 
-                            {/* Recommendations */}
+                            {/* Suggestions */}
                             {result.suggestions.length > 0 && !isPassed && (
                                 <div>
-                                    <p className="text-xs font-bold tracking-widest text-yellow-400 mb-3">HOW TO IMPROVE</p>
-                                    <div className="rounded-lg bg-yellow-500/10 border border-yellow-500/20 p-3">
-                                        <ul className="space-y-2">
-                                            {result.suggestions.map((s, i) => (
-                                                <li key={i} className="flex items-start gap-2 text-sm text-yellow-200/90 leading-relaxed">
-                                                    <span className="text-yellow-400 mt-0.5 shrink-0">❖</span>
-                                                    {s}
-                                                </li>
-                                            ))}
-                                        </ul>
+                                    <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.08em', color: '#fbbf24', textTransform: 'uppercase', marginBottom: 8 }}>How to Improve</div>
+                                    <div style={{ borderRadius: 8, background: 'rgba(251,191,36,.06)', border: '1px solid rgba(251,191,36,.15)', padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                        {result.suggestions.map((s, i) => (
+                                            <div key={i} style={{ display: 'flex', gap: 8, fontSize: 12, color: '#fde68a', lineHeight: 1.55 }}>
+                                                <span style={{ color: '#fbbf24', flexShrink: 0, marginTop: 1 }}>▸</span>
+                                                {s}
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
                             )}
                         </div>
                     )}
                 </div>
+
+                {/* ── Footer / CTA ── */}
+                <div style={{ padding: '14px 22px 18px', borderTop: '1px solid rgba(255,255,255,.07)', flexShrink: 0, background: 'rgba(0,0,0,.2)' }}>
+                    <button type="button" onClick={handleAnalyzeAndSubmit}
+                        disabled={loading || !description.trim() || attachments.length === 0}
+                        style={{ width: '100%', height: 44, borderRadius: 11, border: 'none', background: loading || !description.trim() || attachments.length === 0 ? 'rgba(99,102,241,.3)' : 'linear-gradient(135deg,#6366f1,#4f46e5)', color: 'white', fontSize: 13, fontWeight: 700, cursor: loading || !description.trim() || attachments.length === 0 ? 'not-allowed' : 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: '0 4px 14px rgba(99,102,241,.35)', transition: 'opacity .15s, transform .15s' }}
+                        onMouseEnter={e => { if (!loading && description.trim() && attachments.length > 0) (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-1px)'; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.transform = ''; }}>
+                        {loading ? (
+                            <>
+                                <div style={{ width: 14, height: 14, border: '2px solid rgba(255,255,255,.3)', borderTopColor: 'white', borderRadius: '50%', animation: 'drawer-btn-spin .8s linear infinite' }}/>
+                                <style>{`@keyframes drawer-btn-spin { to { transform: rotate(360deg) } }`}</style>
+                                Analyzing…
+                            </>
+                        ) : (
+                            <>
+                                <svg width="16" height="16" fill="none" stroke="white" strokeWidth="2.2" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                </svg>
+                                Evaluate &amp; Submit
+                            </>
+                        )}
+                    </button>
+                </div>
+
             </div>
         </div>
     );

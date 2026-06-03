@@ -225,6 +225,50 @@ export const evaluateTask = async (payload: EvaluateTaskPayload): Promise<Evalua
     return handleResponse<EvaluationResult>(response);
 };
 
+export interface EvaluationRecord {
+    _id: string;
+    task_id?: string;
+    task_title?: string;
+    project_id?: string;
+    compliance_score: number;
+    status: string;
+    report_type?: string;
+    passed_standards?: { rule: string; result: string }[];
+    failed_standards?: { rule: string; reason: string }[];
+    suggestions?: string[];
+    created_at?: string;
+}
+
+export const fetchEvaluations = async (params: { limit?: number; skip?: number } = {}): Promise<EvaluationRecord[]> => {
+    const query = new URLSearchParams();
+    if (params.limit) query.set('limit', String(params.limit));
+    if (params.skip)  query.set('skip', String(params.skip));
+    const url = `${QC_BASE}/analyses${query.toString() ? `?${query.toString()}` : ''}`;
+    const response = await fetch(url, { headers: authHeaders() });
+    const payload = await handleResponse<any[]>(response);
+    return payload.map(r => ({
+        _id:              r._id ?? r.id ?? '',
+        task_id:          r.task_id,
+        task_title:       r.task_title ?? r.title,
+        project_id:       r.project_id,
+        compliance_score: r.compliance_score ?? r.score ?? 0,
+        status:           r.status ?? 'completed',
+        report_type:      r.report_type,
+        passed_standards: r.passed_standards ?? r.passed_rules ?? [],
+        failed_standards: r.failed_standards ?? r.failed_rules ?? [],
+        suggestions:      r.suggestions ?? [],
+        created_at:       r.created_at,
+    }));
+};
+
+export const archiveQualityStandard = async (standardId: string): Promise<void> => {
+    const response = await fetch(`${QC_BASE}/standards/${standardId}`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+    });
+    if (!response.ok) await handleResponse(response);
+};
+
 export const downloadQualityReport = async (format: 'csv' | 'pdf', params: PlainObject = {}) => {
     const query = new URLSearchParams({ format });
     Object.entries(params).forEach(([key, value]) => {

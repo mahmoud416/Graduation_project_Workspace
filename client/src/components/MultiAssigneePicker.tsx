@@ -24,8 +24,8 @@ interface MultiAssigneePickerProps {
     members: TeamMember[];
     selectedIds: string[];
     onChange: (ids: string[]) => void;
-    visibility: 'team' | 'private';
-    onVisibilityChange: (v: 'team' | 'private') => void;
+    visibility?: 'team' | 'private';
+    onVisibilityChange?: (v: 'team' | 'private') => void;
 }
 
 export default function MultiAssigneePicker({
@@ -177,7 +177,7 @@ export default function MultiAssigneePicker({
             </div>
 
             {/* ── Visibility Toggle ── */}
-            <div className="rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+            {onVisibilityChange && <div className="rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
                 <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide px-4 pt-3 pb-1">
                     Task Visibility
                 </p>
@@ -222,7 +222,7 @@ export default function MultiAssigneePicker({
                         </button>
                     ))}
                 </div>
-            </div>
+            </div>}
         </div>
     );
 }

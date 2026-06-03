@@ -54,6 +54,8 @@ class TaskBoardModel:
             "assignee": assignee,
             "due": due,
             "done": done,
+            "status": "done" if done else "todo",
+            "priority": "medium",
             "submitted_by": submitted_by,
             "submitted_by_name": submitted_by_name,
         }

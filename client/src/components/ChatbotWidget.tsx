@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 
 interface Message {
     id: number;
@@ -7,84 +8,83 @@ interface Message {
     time: string;
 }
 
-const BOT_NAME = 'Workspace Assistant';
-
-const now = () =>
-    new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+const API_BASE = (import.meta.env.VITE_API_BASE ?? 'http://localhost:8000/api/v1').replace(/\/$/, '');
+const now = () => new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
 
 const GREETING: Message = {
     id: 0,
     from: 'bot',
-    text: "Hi there! 👋 I'm your Workspace Assistant. Ask me about projects, tasks, team members, calendar, or anything else you need help with.",
+    text: "Hi! I'm the Orbit AI assistant. Ask me about projects, tasks, team members, quality reports, or anything in your workspace.",
     time: now(),
 };
 
-const getBotReply = (input: string): string => {
-    const t = input.toLowerCase().trim();
+/* ─── Bold **text** formatter ─────────────────────────────────────────────── */
+function BoldText({ text }: { text: string }) {
+    const parts = text.split(/\*\*(.+?)\*\*/g);
+    return (
+        <>
+            {parts.map((part, i) =>
+                i % 2 === 1
+                    ? <strong key={i} style={{ fontWeight: 700, color: 'rgba(255,255,255,.95)' }}>{part}</strong>
+                    : <span key={i}>{part}</span>
+            )}
+        </>
+    );
+}
 
-    if (/^(hi|hello|hey|good\s*(morning|afternoon|evening)|مرحبا|أهلا|سلام)/.test(t))
-        return "Hello! 👋 How can I help you today?";
+/* ─── Orbit wordmark (small) ──────────────────────────────────────────────── */
+function OrbitAIBrand() {
+    return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {/* Logo mark */}
+            <div style={{
+                width: 32, height: 32, borderRadius: 9,
+                background: 'rgba(29,110,245,.2)',
+                border: '1px solid rgba(29,110,245,.4)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                flexShrink: 0,
+                boxShadow: '0 0 12px rgba(29,110,245,.25)',
+            }}>
+                <span style={{
+                    fontFamily: '"Space Grotesk","Inter",sans-serif',
+                    fontWeight: 900, fontSize: 14, color: 'white',
+                    position: 'relative', display: 'inline-block',
+                }}>
+                    O
+                    <span style={{
+                        position: 'absolute', top: 1, right: 0,
+                        width: 4, height: 4, borderRadius: '50%',
+                        background: '#1d6ef5',
+                        boxShadow: '0 0 6px rgba(29,110,245,1)',
+                    }} />
+                </span>
+            </div>
+            <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'white', lineHeight: 1.2 }}>Orbit AI</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 2 }}>
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981', boxShadow: '0 0 6px rgba(16,185,129,.8)', display: 'inline-block', flexShrink: 0 }} />
+                    <span style={{ fontSize: 10, color: 'rgba(255,255,255,.5)' }}>Online · AI Powered</span>
+                </div>
+            </div>
+        </div>
+    );
+}
 
-    if (/(thank|شكر)/.test(t))
-        return "You're welcome! Is there anything else I can help with? 😊";
-
-    if (/(project|مشروع)/.test(t))
-        return "📁 Projects are managed from the **Projects** page. Each card shows the project status, your team, and progress. Click any card to open its TaskFlow board.";
-
-    if (/(task|todo|to-do|مهمة|تاسك)/.test(t))
-        return "✅ Tasks live inside each project's **TaskFlow** board. You can add to-do items, mark them done, assign team members, and track progress. Completing tasks automatically updates the project progress.";
-
-    if (/(calendar|تقويم|موعد)/.test(t))
-        return "📅 The **Calendar** page shows your tasks and deadlines in a monthly/weekly view. It's great for planning upcoming work.";
-
-    if (/(team|member|staff|colleague|فريق|موظف)/.test(t))
-        return "👥 The **Team** page lists all workspace members with their roles. Admins can manage assignments and access levels from there.";
-
-    if (/(report|analytic|stat|progress|تقرير)/.test(t))
-        return "📊 Head to the **Reports** page for project analytics, progress charts, and completion statistics across all your projects.";
-
-    if (/(setting|profile|account|password|notification|إعدادات)/.test(t))
-        return "⚙️ Visit **Settings** to update your profile, change your password, configure notifications, and switch between light and dark mode.";
-
-    if (/(dashboard|home|الرئيسية)/.test(t))
-        return "🏠 Your **Dashboard** gives you a quick overview of all assigned projects, recent activity, and key stats at a glance.";
-
-    if (/(channel|public|#public|شانل)/.test(t))
-        return "📢 **Channels** are workspace-wide spaces. **#public** is open to everyone. Click on a channel card from the Projects page to join the conversation.";
-
-    if (/(admin|sub.?admin|role|صلاحية)/.test(t))
-        return "🔑 Roles control access: **Admins** create projects and manage users. **Sub-admins** lead project teams. **Staff** work on assigned projects. Contact your admin to change roles.";
-
-    if (/(login|logout|sign)/.test(t))
-        return "🔐 You can log out from the bottom of the sidebar. To log in again, navigate to the login page.";
-
-    if (/(help|assist|مساعدة)/.test(t))
-        return "💡 I can help you navigate the workspace! Ask me about: **projects**, **tasks**, **calendar**, **team**, **reports**, **settings**, or **channels**.";
-
-    if (/(bye|goodbye|see you|مع السلامة)/.test(t))
-        return "Goodbye! 👋 Feel free to ask me anything anytime.";
-
-    return "🤔 I'm not sure about that one. Try asking me about **projects**, **tasks**, **team**, **calendar**, or **reports** — or contact your admin for more specific help.";
-};
-
-// ─── ChatbotWidget ────────────────────────────────────────────────────────────
-
+/* ─── ChatbotWidget ───────────────────────────────────────────────────────── */
 const ChatbotWidget = () => {
-    const [open, setOpen]           = useState(false);
-    const [messages, setMessages]   = useState<Message[]>([GREETING]);
-    const [input, setInput]         = useState('');
-    const [typing, setTyping]       = useState(false);
-    const [unread, setUnread]       = useState(1);
-    const bottomRef                 = useRef<HTMLDivElement>(null);
-    const inputRef                  = useRef<HTMLInputElement>(null);
-    const idRef                     = useRef(1);
+    const location = useLocation();
+    const [open,     setOpen]     = useState(false);
+    const [messages, setMessages] = useState<Message[]>([GREETING]);
+    const [input,    setInput]    = useState('');
+    const [typing,   setTyping]   = useState(false);
+    const [unread,   setUnread]   = useState(1);
 
-    // Auto-scroll to latest message
-    useEffect(() => {
-        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages, typing]);
+    const bottomRef = useRef<HTMLDivElement>(null);
+    const inputRef  = useRef<HTMLInputElement>(null);
+    const idRef     = useRef(1);
 
-    // Focus input when panel opens
+    useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, typing]);
+
     useEffect(() => {
         if (open) {
             setUnread(0);
@@ -102,128 +102,144 @@ const ChatbotWidget = () => {
         setTyping(true);
 
         try {
-            const API_BASE = (import.meta.env.VITE_API_BASE ?? 'http://localhost:8000/api/v1').replace(/\/$/, '');
             const token = localStorage.getItem('token') ?? '';
-            
-            const response = await fetch(`${API_BASE}/chat`, {
+            const res = await fetch(`${API_BASE}/chat`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({ message: text })
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ message: text }),
             });
-            
-            if (!response.ok) {
-                throw new Error('Failed to get response from AI');
-            }
-            
-            const data = await response.json();
-            const botMsg: Message = { id: idRef.current++, from: 'bot', text: data.reply, time: now() };
-            setMessages(prev => [...prev, botMsg]);
-        } catch (error) {
-            console.error('Chat error:', error);
-            const errorMsg: Message = { 
-                id: idRef.current++, 
-                from: 'bot', 
-                text: "Sorry, I'm having trouble connecting right now. Please try again later.", 
-                time: now() 
-            };
-            setMessages(prev => [...prev, errorMsg]);
+            if (!res.ok) throw new Error('API error');
+            const data = await res.json();
+            setMessages(prev => [...prev, { id: idRef.current++, from: 'bot', text: data.reply, time: now() }]);
+        } catch {
+            setMessages(prev => [...prev, {
+                id: idRef.current++, from: 'bot',
+                text: "I'm having trouble connecting right now. Please try again in a moment.",
+                time: now(),
+            }]);
         } finally {
             setTyping(false);
             if (!open) setUnread(n => n + 1);
         }
     }, [input, open]);
 
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            sendMessage();
-        }
+    const handleKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
     };
 
-    const formatText = (text: string) => {
-        // Bold **text**
-        const parts = text.split(/\*\*(.+?)\*\*/g);
-        return parts.map((part, i) =>
-            i % 2 === 1
-                ? <strong key={i} className="font-semibold">{part}</strong>
-                : <span key={i}>{part}</span>
-        );
-    };
+    /* Hide on project workspace — sidebar already has team chat */
+    if (location.pathname.startsWith('/workspace')) return null;
 
     return (
         <>
-            {/* ── Chat panel ─────────────────────────────────────────────── */}
+
+            {/* ══ Chat panel ══════════════════════════════════════════════════ */}
             {open && (
                 <div
-                    className="fixed bottom-24 right-6 z-50 w-[360px] max-w-[calc(100vw-3rem)] flex flex-col rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-2xl overflow-hidden"
-                    style={{ height: '500px' }}
+                    style={{
+                        position: 'fixed', bottom: 88, right: 24, zIndex: 50,
+                        width: 370, maxWidth: 'calc(100vw - 3rem)',
+                        height: 520,
+                        display: 'flex', flexDirection: 'column',
+                        borderRadius: 18,
+                        background: 'rgba(10,12,20,0.96)',
+                        border: '1px solid rgba(29,110,245,.16)',
+                        boxShadow: '0 32px 80px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.04)',
+                        backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)',
+                        overflow: 'hidden',
+                        animation: 'cbFadeUp .25s ease-out both',
+                    }}
                 >
+                    {/* Top accent line */}
+                    <div style={{ height: 2, background: 'linear-gradient(to right, transparent, #1d6ef5, #8b5cf6, transparent)', flexShrink: 0 }} />
+
                     {/* Header */}
-                    <div
-                        className="flex items-center justify-between px-5 py-4 text-white flex-shrink-0"
-                        style={{ background: 'linear-gradient(135deg, #1d7bf4 0%, #4f46e5 100%)' }}
-                    >
-                        <div className="flex items-center gap-3">
-                            <div className="relative w-9 h-9 bg-white/20 rounded-full flex items-center justify-center">
-                                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-                                    <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
-                                </svg>
-                                <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-400 rounded-full border-2 border-white" />
-                            </div>
-                            <div>
-                                <p className="text-sm font-bold leading-tight">{BOT_NAME}</p>
-                                <p className="text-white/70 text-[10px]">Online · Ready to help</p>
-                            </div>
-                        </div>
+                    <div style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        padding: '14px 16px 12px',
+                        borderBottom: '1px solid rgba(255,255,255,.06)',
+                        flexShrink: 0,
+                        background: 'rgba(29,110,245,.04)',
+                    }}>
+                        <OrbitAIBrand />
                         <button
                             type="button"
                             onClick={() => setOpen(false)}
-                            className="w-8 h-8 flex items-center justify-center rounded-xl bg-white/15 hover:bg-white/25 transition-colors"
-                            aria-label="Close chat"
+                            style={{
+                                width: 28, height: 28, borderRadius: 8,
+                                background: 'rgba(255,255,255,.06)',
+                                border: '1px solid rgba(255,255,255,.08)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                cursor: 'pointer', color: 'rgba(255,255,255,.5)',
+                                transition: 'all .15s',
+                            }}
                         >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-                                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                             </svg>
                         </button>
                     </div>
 
                     {/* Messages */}
-                    <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 scrollbar-thin">
+                    <div className="cb-scroll" style={{ flex: 1, overflowY: 'auto', padding: '14px 14px 8px', display: 'flex', flexDirection: 'column', gap: 10 }}>
                         {messages.map(msg => (
-                            <div key={msg.id} className={`flex ${msg.from === 'user' ? 'justify-end' : 'justify-start'}`}>
+                            <div key={msg.id} style={{ display: 'flex', justifyContent: msg.from === 'user' ? 'flex-end' : 'flex-start', alignItems: 'flex-end', gap: 8 }}>
+                                {/* Bot avatar */}
                                 {msg.from === 'bot' && (
-                                    <div className="w-7 h-7 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white text-[9px] font-bold mr-2 mt-1 flex-shrink-0">
-                                        AI
-                                    </div>
+                                    <div style={{
+                                        width: 26, height: 26, borderRadius: 8, flexShrink: 0,
+                                        background: 'rgba(29,110,245,.2)',
+                                        border: '1px solid rgba(29,110,245,.35)',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        fontSize: 9, fontWeight: 900, color: '#1d6ef5',
+                                        fontFamily: 'monospace', marginBottom: 2,
+                                    }}>AI</div>
                                 )}
-                                <div className={`max-w-[78%] flex flex-col gap-0.5 ${msg.from === 'user' ? 'items-end' : 'items-start'}`}>
-                                    <div className={`px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed ${
-                                        msg.from === 'user'
-                                            ? 'bg-primary text-white rounded-br-sm'
-                                            : 'bg-gray-100 dark:bg-gray-800 text-text-dark dark:text-gray-100 rounded-bl-sm'
-                                    }`}>
-                                        {formatText(msg.text)}
+                                <div style={{ maxWidth: '78%', display: 'flex', flexDirection: 'column', gap: 3, alignItems: msg.from === 'user' ? 'flex-end' : 'flex-start' }}>
+                                    <div style={{
+                                        padding: '9px 13px',
+                                        borderRadius: msg.from === 'user' ? '14px 14px 3px 14px' : '14px 14px 14px 3px',
+                                        fontSize: 13, lineHeight: 1.6,
+                                        ...(msg.from === 'user' ? {
+                                            background: 'linear-gradient(135deg, #1d6ef5, #0ea5e9)',
+                                            color: 'white',
+                                            boxShadow: '0 2px 12px rgba(29,110,245,.3)',
+                                        } : {
+                                            background: 'rgba(255,255,255,.05)',
+                                            border: '1px solid rgba(255,255,255,.07)',
+                                            color: 'rgba(255,255,255,.82)',
+                                        }),
+                                    }}>
+                                        <BoldText text={msg.text} />
                                     </div>
-                                    <span className="text-[10px] text-text-gray dark:text-gray-500 px-1">{msg.time}</span>
+                                    <span style={{ fontSize: 9, color: 'rgba(255,255,255,.22)', paddingInline: 3, fontFamily: 'monospace' }}>{msg.time}</span>
                                 </div>
                             </div>
                         ))}
 
                         {/* Typing indicator */}
                         {typing && (
-                            <div className="flex justify-start">
-                                <div className="w-7 h-7 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white text-[9px] font-bold mr-2 mt-1 flex-shrink-0">
-                                    AI
-                                </div>
-                                <div className="bg-gray-100 dark:bg-gray-800 px-4 py-3 rounded-2xl rounded-bl-sm">
-                                    <div className="flex gap-1 items-center h-4">
-                                        <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                                        <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                                        <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                                    </div>
+                            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
+                                <div style={{
+                                    width: 26, height: 26, borderRadius: 8, flexShrink: 0,
+                                    background: 'rgba(29,110,245,.2)', border: '1px solid rgba(29,110,245,.35)',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    fontSize: 9, fontWeight: 900, color: '#1d6ef5', fontFamily: 'monospace',
+                                }}>AI</div>
+                                <div style={{
+                                    padding: '10px 14px', borderRadius: '14px 14px 14px 3px',
+                                    background: 'rgba(255,255,255,.05)',
+                                    border: '1px solid rgba(255,255,255,.07)',
+                                    display: 'flex', gap: 4, alignItems: 'center',
+                                }}>
+                                    {[0, 150, 300].map(d => (
+                                        <span key={d} style={{
+                                            width: 5, height: 5, borderRadius: '50%',
+                                            background: 'rgba(29,110,245,.7)',
+                                            animation: `cbBounce 1.2s ease-in-out ${d}ms infinite`,
+                                            display: 'block',
+                                        }} />
+                                    ))}
                                 </div>
                             </div>
                         )}
@@ -231,64 +247,104 @@ const ChatbotWidget = () => {
                     </div>
 
                     {/* Input */}
-                    <div className="flex-shrink-0 border-t border-gray-200 dark:border-gray-700 px-4 py-3 flex items-center gap-3 bg-white dark:bg-gray-900">
+                    <div style={{
+                        flexShrink: 0,
+                        borderTop: '1px solid rgba(255,255,255,.06)',
+                        padding: '10px 12px',
+                        display: 'flex', alignItems: 'center', gap: 8,
+                        background: 'rgba(255,255,255,.02)',
+                    }}>
                         <input
                             ref={inputRef}
+                            className="cb-input"
                             type="text"
                             value={input}
                             onChange={e => setInput(e.target.value)}
-                            onKeyDown={handleKeyDown}
-                            placeholder="Type a message..."
-                            className="flex-1 text-sm bg-gray-100 dark:bg-gray-800 text-text-dark dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 px-4 py-2.5 rounded-xl border-none outline-none focus:ring-2 focus:ring-primary/20"
+                            onKeyDown={handleKey}
+                            placeholder="Ask Orbit AI…"
+                            style={{
+                                flex: 1, fontSize: 13,
+                                background: 'rgba(255,255,255,.04)',
+                                border: '1px solid rgba(255,255,255,.08)',
+                                borderRadius: 10, padding: '9px 13px',
+                                color: 'white', fontFamily: 'inherit',
+                                transition: 'border-color .2s, box-shadow .2s',
+                            }}
                         />
                         <button
                             type="button"
                             onClick={sendMessage}
                             disabled={!input.trim()}
-                            className="w-10 h-10 flex-shrink-0 flex items-center justify-center rounded-xl bg-primary text-white hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                            aria-label="Send message"
+                            className="cb-send"
+                            style={{
+                                width: 38, height: 38, flexShrink: 0,
+                                borderRadius: 10, border: 'none', cursor: 'pointer',
+                                background: 'rgba(29,110,245,.7)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                color: 'white', transition: 'all .18s',
+                                boxShadow: '0 2px 10px rgba(29,110,245,.25)',
+                            }}
                         >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-                                <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
                             </svg>
                         </button>
                     </div>
                 </div>
             )}
 
-            {/* ── Floating bubble button ──────────────────────────────────── */}
+            {/* ══ Floating trigger button ══════════════════════════════════════ */}
             <button
                 type="button"
                 onClick={() => setOpen(o => !o)}
-                className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full shadow-2xl text-white flex items-center justify-center transition-all duration-200 hover:scale-110 active:scale-95"
-                style={{ background: 'linear-gradient(135deg, #1d7bf4 0%, #4f46e5 100%)' }}
-                aria-label={open ? 'Close chat' : 'Open chat assistant'}
+                style={{
+                    position: 'fixed', bottom: 24, right: 24, zIndex: 50,
+                    width: 52, height: 52, borderRadius: '50%',
+                    background: open
+                        ? 'rgba(29,110,245,.2)'
+                        : 'linear-gradient(135deg, #1d6ef5 0%, #0ea5e9 100%)',
+                    border: open ? '1px solid rgba(29,110,245,.4)' : 'none',
+                    cursor: 'pointer', color: 'white',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    boxShadow: open ? 'none' : '0 8px 28px rgba(29,110,245,.5)',
+                    transition: 'all .22s cubic-bezier(.25,.46,.45,.94)',
+                    transform: open ? 'rotate(45deg)' : 'rotate(0)',
+                }}
+                aria-label={open ? 'Close Orbit AI' : 'Open Orbit AI'}
             >
-                {/* Pulse ring */}
+                {/* Pulse ring when closed and unread */}
                 {!open && unread > 0 && (
-                    <span className="absolute inset-0 rounded-full animate-ping bg-primary/40" />
+                    <span style={{
+                        position: 'absolute', inset: 0, borderRadius: '50%',
+                        background: 'rgba(29,110,245,.4)',
+                        animation: 'cbPing 1.5s ease-in-out infinite',
+                    }} />
                 )}
 
                 {/* Unread badge */}
                 {!open && unread > 0 && (
-                    <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow">
-                        {unread}
-                    </span>
+                    <span style={{
+                        position: 'absolute', top: -3, right: -3,
+                        width: 18, height: 18, borderRadius: '50%',
+                        background: '#ef4444', color: 'white',
+                        fontSize: 10, fontWeight: 700,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        border: '2px solid #05060f',
+                    }}>{unread}</span>
                 )}
 
-                {/* Icon toggle */}
-                <span className={`transition-all duration-200 ${open ? 'rotate-90 scale-90' : 'rotate-0 scale-100'}`}>
-                    {open ? (
-                        <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-                            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                        </svg>
-                    ) : (
-                        <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-                            <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
-                        </svg>
-                    )}
-                </span>
+                {/* Icon */}
+                {open ? (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                ) : (
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+                    </svg>
+                )}
             </button>
+
         </>
     );
 };

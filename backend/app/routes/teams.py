@@ -22,11 +22,12 @@ async def create_team(
     current_user = Depends(get_current_user),
     db = Depends(get_database)
 ):
-    """
-    Create a new team.
-    
-    The creating user automatically becomes the team Admin.
-    """
+    """Create a new team. Only founder, admin, and manager can create teams."""
+    if current_user.get("role") not in ["founder", "admin", "manager"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only Admins and Founders can create teams."
+        )
     team = await TeamService.create_team(
         db,
         name=team_data.name,
@@ -68,9 +69,9 @@ async def create_team(
         await db[MEMBERSHIPS_COLLECTION].insert_many(memberships_to_add)
     
     # Convert ObjectIds to strings
-    team["_id"] = str(team["_id"])
+    team["id"] = str(team.pop("_id"))
     team["created_by"] = str(team["created_by"])
-    
+
     return team
 
 
@@ -88,9 +89,9 @@ async def list_my_teams(
     
     # Convert ObjectIds to strings
     for team in teams:
-        team["_id"] = str(team["_id"])
+        team["id"] = str(team.pop("_id"))
         team["created_by"] = str(team["created_by"])
-    
+
     return teams
 
 
@@ -122,9 +123,9 @@ async def get_team(
         )
     
     # Convert ObjectIds to strings
-    team["_id"] = str(team["_id"])
+    team["id"] = str(team.pop("_id"))
     team["created_by"] = str(team["created_by"])
-    
+
     return team
 
 
@@ -132,14 +133,20 @@ async def get_team(
 async def update_team(
     team_id: str,
     team_data: TeamUpdate,
+    current_user = Depends(get_current_user),
     membership = Depends(require_team_admin),
     db = Depends(get_database)
 ):
     """
     Update team information.
-    
-    Requires: Admin role in the team.
+
+    Requires: Admin role in the team and global role of founder/admin/manager.
     """
+    if current_user.get("role") not in ["founder", "admin", "manager"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only Admins and Founders can edit teams."
+        )
     try:
         team_obj_id = ObjectId(team_id)
     except Exception:
@@ -162,25 +169,31 @@ async def update_team(
         )
     
     # Convert ObjectIds to strings
-    team["_id"] = str(team["_id"])
+    team["id"] = str(team.pop("_id"))
     team["created_by"] = str(team["created_by"])
-    
+
     return team
 
 
 @router.delete("/{team_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_team(
     team_id: str,
+    current_user = Depends(get_current_user),
     membership = Depends(require_team_admin),
     db = Depends(get_database)
 ):
     """
     Delete a team and all related data (memberships and tasks).
-    
-    Requires: Admin role in the team.
-    
+
+    Requires: Admin role in the team and global role of founder/admin/manager.
+
     **Warning**: This action is irreversible!
     """
+    if current_user.get("role") not in ["founder", "admin", "manager"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only Admins and Founders can delete teams."
+        )
     try:
         team_obj_id = ObjectId(team_id)
     except Exception:

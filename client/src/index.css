@@ -9,38 +9,50 @@
 /* Define content sources for Tailwind to scan */
 @source "../src";
 
-/* Theme customization */
+/* ── Theme tokens ──────────────────────────────────────────────────────────── */
 @theme {
   /* Typography */
-  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-sans:    'Inter', ui-sans-serif, system-ui, sans-serif;
   --font-display: 'Space Grotesk', 'Inter', ui-sans-serif, system-ui, sans-serif;
 
-  /* Colors */
-  --color-primary: #1d7bf4;
-  --color-background: #e9ecf4;
-  --color-surface: #ffffff;
-  --color-text-dark: #1a1a1a;
-  --color-text-gray: #6b7280;
-  --color-success: #10b981;
-  --color-warning: #f59e0b;
-  --color-danger: #ef4444;
-  --color-border: #d1d5db;
+  /* Brand colors — single source of truth */
+  --color-primary:    #1d6ef5;   /* Orbit blue  */
+  --color-success:    #10b981;   /* Green       */
+  --color-warning:    #f59e0b;   /* Amber       */
+  --color-danger:     #ef4444;   /* Red         */
+  --color-purple:     #8b5cf6;   /* Purple      */
+  --color-teal:       #06b6d4;   /* Teal        */
+
+  /* Light mode surfaces */
+  --color-background: #f5f6fa;
+  --color-surface:    #ffffff;
+  --color-surface-2:  #f8f9fc;
+  --color-border:     rgba(0,0,0,.08);
+
+  /* Text */
+  --color-text-dark:  #0f172a;
+  --color-text-gray:  #475569;
+  --color-text-muted: #94a3b8;
 }
 
-/* Base layer - global resets and defaults */
+/* ── Global resets ─────────────────────────────────────────────────────────── */
 @layer base {
-
-  *,
-  *::before,
-  *::after {
+  *, *::before, *::after {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
   }
 
   :root {
-    --sidebar-width: 88px;
-    --header-height: 64px;
+    --sidebar-width:  88px;
+    --header-height:  58px;
+    /* Dark surfaces — used by inline-style components */
+    --surf-dark:      #111420;
+    --surf-dark-2:    #171b2e;
+    --bg-dark:        #0a0c14;
+    --sidebar-dark:   #0f1220;
+    --header-dark-bg: rgba(10,12,20,.92);
+    --header-lite-bg: rgba(255,255,255,.94);
   }
 
   html {
@@ -53,16 +65,15 @@
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    background-color: #e9ecf4;
-    color: #1a1a1a;
+    background-color: var(--color-background);
+    color: var(--color-text-dark);
     line-height: 1.5;
     text-rendering: optimizeLegibility;
     transition: background-color 200ms ease, color 200ms ease;
   }
 
-  /* Dark mode baseline so pages without explicit classes still invert */
   body.dark {
-    background-color: #0b1220;
+    background-color: var(--bg-dark);
     color: #e5e7eb;
   }
 
@@ -72,74 +83,206 @@
     flex-direction: column;
   }
 
-  /* Improve focus visibility for accessibility */
   :focus-visible {
-    outline: 2px solid #1d7bf4;
+    outline: 2px solid #1d6ef5;
     outline-offset: 2px;
+  }
+
+  /* Smooth scrollbar */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(29,110,245,.25) transparent;
+  }
+  *::-webkit-scrollbar       { width: 4px; height: 4px; }
+  *::-webkit-scrollbar-track { background: transparent; }
+  *::-webkit-scrollbar-thumb { background: rgba(29,110,245,.25); border-radius: 4px; }
+}
+
+/* ── Keyframe animations — single location, referenced by CSS class or style ─ */
+@layer base {
+  /* Generic slide-in (dropdowns, modals) */
+  @keyframes slideDown  { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes slideUp    { from{opacity:0;transform:translateY(8px)}  to{opacity:1;transform:translateY(0)} }
+  @keyframes fadeIn     { from{opacity:0}                            to{opacity:1} }
+  @keyframes fadeUp     { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+  /* Workspace / modal slide (used across pages) */
+  @keyframes wsSlide     { from{opacity:0;transform:translateY(-6px)}  to{opacity:1;transform:translateY(0)} }
+  /* Task drawer slide in from right */
+  @keyframes drawerSlideIn { from{opacity:0;transform:translateX(40px)} to{opacity:1;transform:translateX(0)} }
+
+  /* Spinner */
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Ping / pulse dot */
+  @keyframes ping  { 0%,100%{transform:scale(1);opacity:.35} 50%{transform:scale(2.5);opacity:0} }
+
+  /* Sidebar label slide-in */
+  @keyframes sbLabelIn { from{opacity:0;transform:translateX(-6px)} to{opacity:1;transform:translateX(0)} }
+  /* Sidebar active dot glow pulse */
+  @keyframes sbDotGlow {
+    0%,100% { box-shadow: 0 0 8px rgba(29,110,245,.9), 0 0 14px rgba(29,110,245,.4); }
+    50%     { box-shadow: 0 0 3px rgba(29,110,245,.4), 0 0 6px  rgba(29,110,245,.2); }
+  }
+
+  /* Chat widget */
+  @keyframes cbFadeUp  { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes cbBounce  { 0%,80%,100%{transform:translateY(0)} 40%{transform:translateY(-5px)} }
+  @keyframes cbPing    { 0%,100%{transform:scale(1);opacity:.6} 50%{transform:scale(1.9);opacity:0} }
+
+  /* Login page */
+  @keyframes loginSpin { to { transform: rotate(360deg); } }
+
+  /* App loading / setup page */
+  @keyframes appSpin     { to { transform: rotate(360deg); } }
+  @keyframes setupFadeUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes setupSpin   { to { transform: rotate(360deg); } }
+
+  /* Modals (Founder, Accounts, QC) */
+  @keyframes modalSlide { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes facSlide   { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes facSpin    { to{transform:rotate(360deg)} }
+  @keyframes fdSlide    { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes fdSpin     { to{transform:rotate(360deg)} }
+  @keyframes fdPing     { 0%,100%{transform:scale(1);opacity:.4} 50%{transform:scale(2.2);opacity:0} }
+  @keyframes qcSlide    { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes qcSpin     { to{transform:rotate(360deg)} }
+  @keyframes qcToast    { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+
+  /* Skeleton pulse */
+  @keyframes skeleton { 0%,100%{opacity:.5} 50%{opacity:1} }
+}
+
+/* ── Animation utility classes ─────────────────────────────────────────────── */
+@layer utilities {
+  .animate-spin-slow { animation: spin 1s linear infinite; }
+  .animate-fade-up   { animation: fadeUp .4s ease-out both; }
+  .animate-slide-down { animation: slideDown .2s ease-out both; }
+  .animate-ping-dot  { animation: ping 2s ease-in-out infinite; }
+  .animate-skeleton  { animation: skeleton 1.4s ease-in-out infinite; }
+}
+
+/* ── Sidebar classes ───────────────────────────────────────────────────────── */
+@layer components {
+  .sb-item {
+    transition: background 150ms ease, color 150ms ease, transform 150ms ease, box-shadow 150ms ease;
+  }
+  .sb-item:hover {
+    background: var(--sb-hover) !important;
+    color: var(--sb-text) !important;
+    transform: translateX(2px);
+  }
+  .sb-label {
+    animation: sbLabelIn 180ms ease-out both;
   }
 }
 
-/* Components layer - reusable patterns */
+/* ── Header classes ────────────────────────────────────────────────────────── */
 @layer components {
+  .hd-btn:hover {
+    background:   rgba(29,110,245,.12) !important;
+    border-color: rgba(29,110,245,.30) !important;
+    color:        rgba(29,110,245,.90) !important;
+  }
+  .hd-row:hover,
+  .hd-notif-row:hover {
+    background: var(--hd-hover) !important;
+  }
+}
 
-  /* Buttons */
-  .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed select-none;
+/* ── ChatbotWidget classes ─────────────────────────────────────────────────── */
+@layer components {
+  .cb-scroll::-webkit-scrollbar        { width: 3px; }
+  .cb-scroll::-webkit-scrollbar-track  { background: transparent; }
+  .cb-scroll::-webkit-scrollbar-thumb  { background: rgba(29,110,245,.3); border-radius: 3px; }
+
+  .cb-input::placeholder { color: rgba(120,160,210,.35) !important; }
+  .cb-input:focus {
+    border-color: rgba(29,110,245,.5)   !important;
+    box-shadow:   0 0 0 3px rgba(29,110,245,.08) !important;
+    outline: none !important;
   }
 
-  .btn-primary {
-    @apply bg-primary text-white hover:bg-blue-600 active:bg-blue-700 focus:ring-primary/30 shadow-sm hover:shadow;
+  .cb-send:hover:not(:disabled) {
+    background:  rgba(29,110,245,1)           !important;
+    box-shadow:  0 4px 16px rgba(29,110,245,.45) !important;
   }
+  .cb-send:disabled { opacity: .35; cursor: default; }
+}
 
-  .btn-secondary {
-    @apply bg-white text-text-dark border border-gray-300 hover:bg-gray-50 active:bg-gray-100 focus:ring-gray-300/30;
-  }
-
+/* ── Reusable component classes ────────────────────────────────────────────── */
+@layer components {
   .page-main {
-    margin-top: var(--header-height);
+    margin-top:  var(--header-height);
     padding-top: 1.5rem;
   }
 
-  /* Inputs */
+  /* Button base */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed select-none;
+  }
+  .btn-primary {
+    @apply bg-primary text-white hover:bg-blue-600 active:bg-blue-700 focus:ring-primary/30 shadow-sm hover:shadow;
+  }
+  .btn-secondary {
+    @apply bg-white text-text-dark border border-gray-200 hover:bg-gray-50 active:bg-gray-100 focus:ring-gray-300/30 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 dark:hover:bg-gray-700;
+  }
+  .btn-ghost {
+    @apply bg-transparent text-text-gray hover:bg-gray-100 dark:hover:bg-gray-800 focus:ring-gray-300/30;
+  }
+
+  /* Input */
   .input-field {
-    @apply w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm text-text-dark placeholder:text-text-gray focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all disabled:bg-gray-100 disabled:cursor-not-allowed;
+    @apply w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-text-dark placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all disabled:bg-gray-100 disabled:cursor-not-allowed dark:bg-gray-800/60 dark:border-gray-700 dark:text-gray-100 dark:placeholder:text-gray-500 dark:focus:border-primary dark:focus:ring-primary/20;
   }
 
   /* Cards */
   .card {
-    @apply bg-white rounded-xl border border-gray-200 shadow-sm p-6;
+    @apply bg-white rounded-xl border border-gray-200 shadow-sm p-6 dark:bg-gray-800/60 dark:border-gray-700;
   }
-
   .card-hover {
-    @apply bg-white rounded-xl border border-gray-200 shadow-sm p-6 hover:shadow-md hover:border-gray-300 transition-all;
+    /* Expands .card inline — Tailwind v4 forbids @apply on custom component classes */
+    @apply bg-white rounded-xl border border-gray-200 shadow-sm p-6 dark:bg-gray-800/60 dark:border-gray-700 hover:shadow-md hover:border-gray-300 dark:hover:border-gray-600 transition-all;
+  }
+  .surface {
+    @apply bg-white border border-gray-200 dark:bg-gray-800/60 dark:border-gray-700;
   }
 
-  /* Surfaces */
-  .surface {
-    @apply bg-white border border-gray-200;
+  /* Skeleton loader */
+  .skeleton {
+    @apply rounded-lg bg-gray-200 dark:bg-gray-700;
+    animation: skeleton 1.4s ease-in-out infinite;
+  }
+
+  /* Status dots */
+  .status-dot-green  { @apply w-2 h-2 rounded-full bg-success flex-shrink-0; }
+  .status-dot-amber  { @apply w-2 h-2 rounded-full bg-warning flex-shrink-0; }
+  .status-dot-red    { @apply w-2 h-2 rounded-full bg-danger flex-shrink-0; }
+
+  /* Label utility (replaces text-[10px] / text-[9px] scattered through pages) */
+  .label-xs {
+    @apply text-xs font-semibold uppercase tracking-wide text-text-muted;
+  }
+  .label-sm {
+    @apply text-xs font-medium text-text-gray;
   }
 }
 
-/* Utilities layer - custom utilities */
+/* ── Utility extras ────────────────────────────────────────────────────────── */
 @layer utilities {
-
-  /* Text utilities */
-  .text-balance {
-    text-wrap: balance;
-  }
-
-  /* Scrollbar utilities */
-  .scrollbar-thin {
-    scrollbar-width: thin;
-  }
+  .text-balance   { text-wrap: balance; }
+  .scrollbar-thin { scrollbar-width: thin; }
 
   .font-display {
     font-family: var(--font-display);
     letter-spacing: -0.01em;
   }
-
-  .font-tech {
-    font-family: 'Chivo Mono', var(--font-display);
-    letter-spacing: 0.05em;
+  .font-mono-sm {
+    font-family: 'Chivo Mono', 'SF Mono', 'Fira Code', ui-monospace, monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.04em;
   }
+
+  /* Transition helpers */
+  .transition-bg  { transition: background-color 200ms ease; }
+  .transition-all-fast { transition: all 150ms ease; }
 }

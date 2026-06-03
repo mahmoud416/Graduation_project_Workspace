@@ -28,6 +28,19 @@ class UserUpdate(BaseModel):
     status: Optional[str] = None
 
 
+class SelfProfileUpdate(BaseModel):
+    """Schema for users updating their own profile."""
+    name:       Optional[str] = Field(default=None, min_length=1, max_length=100)
+    phone:      Optional[str] = Field(default=None, max_length=30)
+    avatar:     Optional[str] = None
+    bio:        Optional[str] = Field(default=None, max_length=500)
+    department: Optional[str] = Field(default=None, max_length=100)
+    job_title:  Optional[str] = Field(default=None, max_length=100)
+    country:    Optional[str] = Field(default=None, max_length=100)
+    timezone:   Optional[str] = Field(default=None, max_length=80)
+    username:   Optional[str] = Field(default=None, max_length=50)
+
+
 class UserLogin(BaseModel):
     """Schema for user login request."""
     email: EmailStr
@@ -42,18 +55,26 @@ class PasswordUpdateRequest(BaseModel):
 
 class UserResponse(BaseModel):
     """Schema for user data in responses."""
-    id: str = Field(..., alias="_id")
-    email: str
-    name: str = Field(..., alias="name")
-    role: str
-    admin_id: Optional[str] = None
-    sub_admin_id: Optional[str] = None
-    phone: Optional[str] = None
-    status: Optional[str] = None
-    created_at: Optional[datetime] = None
-    is_active: Optional[bool] = None
-    password: Optional[str] = None
-    last_seen: Optional[datetime] = None
+    id:             str           = Field(..., alias="_id")
+    email:          str
+    name:           str           = Field(..., alias="name")
+    role:           str
+    admin_id:       Optional[str]      = None
+    sub_admin_id:   Optional[str]      = None
+    phone:          Optional[str]      = None
+    status:         Optional[str]      = None
+    created_at:     Optional[datetime] = None
+    is_active:      Optional[bool]     = None
+    password:       Optional[str]      = None
+    plain_password: Optional[str]      = None
+    avatar:         Optional[str]      = None
+    last_seen:      Optional[datetime] = None
+    bio:            Optional[str]      = None
+    department:     Optional[str]      = None
+    job_title:      Optional[str]      = None
+    country:        Optional[str]      = None
+    timezone:       Optional[str]      = None
+    username:       Optional[str]      = None
 
     class Config:
         populate_by_name = True

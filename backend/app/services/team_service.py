@@ -7,7 +7,7 @@ from bson import ObjectId
 
 from app.models.team import TeamModel
 from app.models.membership import MembershipModel, Role
-from app.db.collections import TEAMS_COLLECTION, MEMBERSHIPS_COLLECTION, TASKS_COLLECTION
+from app.db.collections import TEAMS_COLLECTION, MEMBERSHIPS_COLLECTION, TASKS_COLLECTION, PROJECTS_COLLECTION, USERS_COLLECTION
 
 
 class TeamService:
@@ -101,9 +101,32 @@ class TeamService:
         # Add user's role and member count to each team
         membership_map = {m["team_id"]: m["role"] for m in memberships}
         for team in teams:
-            team["user_role"] = membership_map.get(team["_id"])
-            team["memberCount"] = await db[MEMBERSHIPS_COLLECTION].count_documents({"team_id": team["_id"]})
-        
+            tid = team["_id"]
+            team["user_role"] = membership_map.get(tid)
+            team["memberCount"] = await db[MEMBERSHIPS_COLLECTION].count_documents({"team_id": tid})
+
+            # Manager name — first MANAGER or ADMIN membership joined
+            mgr_mem = await db[MEMBERSHIPS_COLLECTION].find_one(
+                {"team_id": tid, "role": {"$in": ["manager", "admin"]}},
+            )
+            if mgr_mem:
+                mgr_user = await db[USERS_COLLECTION].find_one({"_id": mgr_mem["user_id"]})
+                team["manager_name"] = (
+                    (mgr_user.get("full_name") or mgr_user.get("name")) if mgr_user else None
+                )
+            else:
+                team["manager_name"] = None
+
+            # Active project count + last activity from projects assigned to this team
+            team_projects = await db[PROJECTS_COLLECTION].find(
+                {"team_id": tid, "is_system_card": {"$ne": True}}
+            ).to_list(length=None)
+            active = [p for p in team_projects if (p.get("status") or "").upper() == "ACTIVE"]
+            team["active_project_count"] = len(active)
+            activities = [p["updated_at"] for p in team_projects if p.get("updated_at")]
+            team["last_activity"] = max(activities) if activities else None
+            team["status"] = "active" if active else ("inactive" if team_projects else "empty")
+
         return teams
     
     @staticmethod

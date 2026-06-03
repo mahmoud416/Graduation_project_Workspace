@@ -23,17 +23,19 @@ class EntityResponse(BaseModel):
     """Schema for entity data in responses."""
     id: str = Field(..., alias="_id")
     name: str
-    description: str
-    founder_id: str
-    it_staff_ids: List[str]
-    team_ids: List[str]
+    description: Optional[str] = ""
+    founder_id: Optional[str] = ""
+    it_staff_ids: Optional[List[str]] = []
+    team_ids: Optional[List[str]] = []
     quality_framework_ids: Optional[List[str]] = []
-    subscription_tier: str
-    max_teams: int
-    ai_quota: int
-    ai_tokens_used: int
-    created_at: datetime
-    updated_at: datetime
+    subscription_tier: Optional[str] = "Basic"
+    max_teams: Optional[int] = 5
+    ai_quota: Optional[int] = 0
+    ai_tokens_used: Optional[int] = 0
+    user_count: Optional[int] = 0
+    status: Optional[str] = "active"
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     class Config:
         populate_by_name = True

@@ -8,6 +8,7 @@ from app.db.collections import (
     QUALITY_EVALUATIONS_COLLECTION,
     TODO_AUDIT_COLLECTION,
     TASKS_COLLECTION,
+    PROJECTS_COLLECTION,
 )
 
 
@@ -65,6 +66,7 @@ class QualityReportService:
         if project_id:
             match_stage["project_id"] = project_id
 
+        # Support both legacy "compliance_score" field and current "score" field
         pipeline = [
             {"$match": match_stage},
             {
@@ -77,7 +79,11 @@ class QualityReportService:
                             }
                         }
                     },
-                    "avgScore": {"$avg": "$compliance_score"},
+                    "avgScore": {
+                        "$avg": {
+                            "$ifNull": ["$score", "$compliance_score"]
+                        }
+                    },
                     "count": {"$sum": 1},
                 }
             },
@@ -87,7 +93,7 @@ class QualityReportService:
         return [
             {
                 "date": item["_id"]["day"],
-                "avgScore": round(item.get("avgScore", 0), 2),
+                "avgScore": round(item.get("avgScore") or 0, 2),
                 "evaluations": item.get("count", 0),
             }
             for item in docs
@@ -149,23 +155,34 @@ class QualityReportService:
             {
                 "$group": {
                     "_id": "$project_id",
-                    "avgScore": {"$avg": "$compliance_score"},
+                    "avgScore": {
+                        "$avg": {"$ifNull": ["$score", "$compliance_score"]}
+                    },
                     "evaluations": {"$sum": 1},
                 }
             },
-            {"$sort": {"avgScore": -1}},
+            {"$sort": {"avgScore": 1}},   # ascending so worst appear first
         ]
         docs = await db[QUALITY_EVALUATIONS_COLLECTION].aggregate(pipeline).to_list(length=50)
+
+        # Resolve project titles in one batch query
+        raw_ids = [item.get("_id") for item in docs if item.get("_id")]
+        proj_ids = [pid if isinstance(pid, ObjectId) else (ObjectId(pid) if ObjectId.is_valid(str(pid)) else None) for pid in raw_ids]
+        proj_ids = [p for p in proj_ids if p]
+        proj_map: dict = {}
+        if proj_ids:
+            projs = await db[PROJECTS_COLLECTION].find({"_id": {"$in": proj_ids}}, {"title": 1}).to_list(None)
+            proj_map = {str(p["_id"]): p.get("title", "") for p in projs}
+
         result = []
         for item in docs:
             project_id = item.get("_id")
-            result.append(
-                {
-                    "projectId": str(project_id) if isinstance(project_id, ObjectId) else project_id,
-                    "avgScore": round(item.get("avgScore", 0), 2),
-                    "evaluations": item.get("evaluations", 0),
-                }
-            )
+            pid_str = str(project_id) if isinstance(project_id, ObjectId) else str(project_id or "")
+            result.append({
+                "projectId": proj_map.get(pid_str) or pid_str,
+                "avgScore": round(item.get("avgScore") or 0, 2),
+                "evaluations": item.get("evaluations", 0),
+            })
         return result
 
     @staticmethod
@@ -191,31 +208,38 @@ class QualityReportService:
             elif isinstance(tid, str) and ObjectId.is_valid(tid):
                 valid_task_ids.append(ObjectId(tid))
                 
-        tasks_map = {}
+        tasks_map: dict = {}
+
+        # Build task title map from tasks_map (fetch titles too)
+        task_titles: dict = {}
         if valid_task_ids:
-            tasks = await db[TASKS_COLLECTION].find({"_id": {"$in": valid_task_ids}}, {"status": 1}).to_list(length=None)
-            for t in tasks:
+            tasks_with_title = await db[TASKS_COLLECTION].find(
+                {"_id": {"$in": valid_task_ids}}, {"status": 1, "title": 1}
+            ).to_list(length=None)
+            for t in tasks_with_title:
                 tasks_map[str(t["_id"])] = t.get("status")
+                task_titles[str(t["_id"])] = t.get("title", "")
 
         history = []
         for doc in docs:
             t_id = str(doc.get("task_id")) if doc.get("task_id") else None
-            t_status = tasks_map.get(t_id)
-            
-            if t_status == "DONE":
-                display_status = "Completed"
-            else:
-                display_status = "Not Completed Yet"
-
-            history.append(
-                {
-                    "analysisId": str(doc.get("_id")),
-                    "taskTitle": doc.get("task_title", "Unknown Task"),
-                    "score": doc.get("compliance_score", 0),
-                    "createdAt": doc.get("created_at").isoformat() if doc.get("created_at") else None,
-                    "status": display_status,
-                }
+            t_status = tasks_map.get(t_id or "")
+            display_status = "Completed" if t_status == "DONE" else "In Review"
+            # score field: support both "score" and legacy "compliance_score"
+            score_val = doc.get("score") or doc.get("compliance_score") or 0
+            title = (
+                doc.get("task_title")
+                or task_titles.get(t_id or "")
+                or "Quality Review"
             )
+            history.append({
+                "analysisId": str(doc.get("_id")),
+                "taskTitle":  title,
+                "score":      round(score_val, 1),
+                "verdict":    doc.get("verdict", "pass" if score_val >= 85 else "fail"),
+                "createdAt":  doc.get("created_at").isoformat() if doc.get("created_at") else None,
+                "status":     display_status,
+            })
         return history
 
     @staticmethod

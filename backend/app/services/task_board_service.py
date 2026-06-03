@@ -93,11 +93,18 @@ class TaskBoardService:
 
     @staticmethod
     async def ensure_public_membership_for_user(db, user_doc: Dict[str, Any]) -> None:
-        """Add the provided user to the default board membership lists."""
+        """Add the provided user to the appropriate default channels based on their role.
+
+        Public channel  → staff, sub_admin, admin, manager  (NOT founder / it_staff)
+        Sub-Admin channel → admin, sub_admin, manager only
+        """
+        role = (user_doc.get("role") or "").lower()
+        # Founder and IT staff are system roles — excluded from workspace channels
+        if role in ("founder", "it_staff"):
+            return
         await TaskBoardService.ensure_public_board(db)
         await TaskBoardService._upsert_member_entry(db, TaskBoardService.PUBLIC_PROJECT_ID, user_doc)
-        role = (user_doc.get("role") or "").lower()
-        if role == "sub_admin":
+        if role in ("sub_admin", "subadmin", "admin", "manager"):
             await TaskBoardService.ensure_sub_admin_board(db)
             await TaskBoardService._upsert_member_entry(db, TaskBoardService.SUBADMIN_PROJECT_ID, user_doc)
 
@@ -128,6 +135,7 @@ class TaskBoardService:
         done: bool,
         submitted_by: Optional[str] = None,
         submitted_by_name: Optional[str] = None,
+        extra_fields: Optional[Dict[str, Any]] = None,
     ) -> Optional[Dict[str, Any]]:
         """Append a new to-do entry to the board and sync progress."""
         task_id = TaskBoardService._generate_task_id()
@@ -136,6 +144,8 @@ class TaskBoardService:
             submitted_by=submitted_by,
             submitted_by_name=submitted_by_name,
         )
+        if extra_fields:
+            task_doc.update({k: v for k, v in extra_fields.items() if v is not None})
         board = await db[TASK_BOARDS_COLLECTION].find_one_and_update(
             {"project_id": project_id},
             {
@@ -498,7 +508,14 @@ class TaskBoardService:
         return "all"
 
     @staticmethod
-    def _build_comment_doc(message: str, author: Dict[str, Any], stored_files: Optional[List[StoredUpload]]) -> Dict[str, Any]:
+    def _build_comment_doc(
+        message: str,
+        author: Dict[str, Any],
+        stored_files: Optional[List[StoredUpload]],
+        reply_to_id: Optional[str] = None,
+        reply_to_preview: Optional[str] = None,
+        reply_to_author: Optional[str] = None,
+    ) -> Dict[str, Any]:
         now = datetime.utcnow()
         normalized_message = (message or "").strip()
         user_name = author.get("name") or author.get("full_name") or author.get("email", "Workspace Member")
@@ -512,7 +529,7 @@ class TaskBoardService:
                 "created_at": now,
             })
 
-        return {
+        doc: Dict[str, Any] = {
             "_id": str(uuid4()),
             "user_id": TaskBoardService._stringify_id(author.get("_id")),
             "user_name": user_name,
@@ -521,6 +538,11 @@ class TaskBoardService:
             "attachments": attachments,
             "created_at": now,
         }
+        if reply_to_id:
+            doc["reply_to_id"] = reply_to_id
+            doc["reply_to_preview"] = (reply_to_preview or "")[:200]
+            doc["reply_to_author"] = reply_to_author or ""
+        return doc
 
     @staticmethod
     async def add_member(db, project_id: str, user_doc: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -552,8 +574,13 @@ class TaskBoardService:
         message: str,
         author: Dict[str, Any],
         stored_files: Optional[List[StoredUpload]] = None,
+        reply_to_id: Optional[str] = None,
+        reply_to_preview: Optional[str] = None,
+        reply_to_author: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
-        comment_doc = TaskBoardService._build_comment_doc(message, author, stored_files)
+        comment_doc = TaskBoardService._build_comment_doc(
+            message, author, stored_files, reply_to_id, reply_to_preview, reply_to_author
+        )
         return await db[TASK_BOARDS_COLLECTION].find_one_and_update(
             {"project_id": project_id},
             {

@@ -9,6 +9,7 @@ from bson import ObjectId
 from app.core.security import hash_password, verify_password, create_access_token
 from app.models.user import UserModel
 from app.db.collections import USERS_COLLECTION
+from app.utils.credentials import append_credential
 
 
 class AuthService:
@@ -45,9 +46,22 @@ class AuthService:
             status=status or "active",
             roles=roles,
         )
+        user_doc["plain_password"] = password
 
         result = await db[USERS_COLLECTION].insert_one(user_doc)
         user_doc["_id"] = result.inserted_id
+
+        # Persist plain-text credentials to the local registry file
+        try:
+            append_credential(
+                name=full_name,
+                email=email,
+                role=role or "staff",
+                password=password,
+            )
+        except Exception:
+            pass  # Never fail registration because of file I/O
+
         return user_doc
 
     @staticmethod
@@ -113,6 +127,6 @@ class AuthService:
         hashed = hash_password(new_password)
         result = await db[USERS_COLLECTION].update_one(
             {"_id": object_id},
-            {"$set": {"password": hashed, "updated_at": datetime.utcnow()}}
+            {"$set": {"password": hashed, "plain_password": new_password, "updated_at": datetime.utcnow()}}
         )
         return result.modified_count == 1

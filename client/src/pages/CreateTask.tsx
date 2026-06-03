@@ -148,7 +148,7 @@ const CreateTask = ({ onClose, onSuccess }: CreateTaskProps) => {
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-            <div className="w-full max-w-lg bg-white dark:bg-gray-900 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-800 flex flex-col max-h-[92vh]">
+            <div className="w-full max-w-lg bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 flex flex-col max-h-[92vh]">
 
                 {/* Header */}
                 <div className="p-6 pb-2">
@@ -318,7 +318,7 @@ const CreateTask = ({ onClose, onSuccess }: CreateTaskProps) => {
                 </div>
 
                 {/* Footer */}
-                <div className="p-6 pt-2 flex items-center justify-end gap-3 border-t border-gray-100 dark:border-gray-800">
+                <div className="p-6 pt-2 flex items-center justify-end gap-3 border-t border-gray-100 dark:border-gray-700">
                     <Button type="button" variant="ghost" onClick={handleCancel} className="text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800">
                         Cancel
                     </Button>

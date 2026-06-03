@@ -11,17 +11,18 @@ class Settings(BaseSettings):
     Application settings loaded from environment variables.
     """
 
-    # MongoDB Configuration
+    # MongoDB Configuration — MONGO_URI takes precedence over MONGODB_URL
+    MONGO_URI: str = ""
     MONGODB_URL: str = "mongodb://localhost:27017"
-    MONGODB_DB_NAME: str = "hericle_workspace"
+    MONGODB_DB_NAME: str = "orbitdb"
 
     # JWT Configuration
-    JWT_SECRET_KEY: str = "hericle-super-secret-key-change-in-production-2024"
+    JWT_SECRET_KEY: str = "orbit-super-secret-key-change-in-production-2024"
     JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 480  # 8 hours
 
     # Application Configuration
-    APP_NAME: str = "Hericle - Project Management System"
+    APP_NAME: str = "Orbit Workspace"
     APP_VERSION: str = "2.0.0"
     DEBUG: bool = False
 

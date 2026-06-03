@@ -1,1896 +1,1050 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
-import type { FormEvent, ChangeEvent, KeyboardEvent } from 'react';
-import { useSearchParams } from 'react-router-dom';
+/**
+ * TaskFlowDetail — Orbit Collaboration Hub
+ * Handles: /taskflow?projectId=public-group  (workspace announcements)
+ *          /taskflow?projectId=all-sub-admin  (operations center)
+ */
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useTheme } from '../contexts/useTheme';
 import Sidebar from '../components/Sidebar';
-import Header from '../components/Header';
-import TaskSubmitDrawer from '../components/TaskSubmitDrawer';
-import MultiAssigneePicker from '../components/MultiAssigneePicker';
-import type { TeamMember } from '../components/MultiAssigneePicker';
 
-const API_BASE = (import.meta.env.VITE_API_BASE ?? 'http://localhost:8000/api/v1').replace(/\/$/, '');
+const API = (import.meta.env.VITE_API_BASE ?? 'http://localhost:8000/api/v1').replace(/\/$/, '');
 
-type ReportType = {
-    key: string;
-    name_ar: string;
-    name_en: string;
-    description?: string;
-    required_elements?: string[];
+/* ── theme ──────────────────────────────────────────────────────────────── */
+const T = (d: boolean) => ({
+  bg:    d ? '#0b0d14' : '#f0f4f8',
+  surf:  d ? '#111420' : '#ffffff',
+  surf2: d ? '#161924' : '#f8fafc',
+  surf3: d ? '#1c2030' : '#edf2f7',
+  bord:  d ? 'rgba(255,255,255,.07)' : 'rgba(0,0,0,.07)',
+  text:  d ? '#f0f4f9' : '#0f172a',
+  sub:   d ? 'rgba(255,255,255,.62)' : '#334155',
+  muted: d ? 'rgba(255,255,255,.28)' : '#94a3b8',
+  hover: d ? 'rgba(255,255,255,.04)' : 'rgba(0,0,0,.04)',
+  inbg:  d ? 'rgba(255,255,255,.04)' : '#f8fafc',
+  inbd:  d ? 'rgba(255,255,255,.09)' : 'rgba(0,0,0,.10)',
+});
+
+const CH: Record<string, { label: string; accent: string; gradient: string; desc: string; icon: string }> = {
+  'public-group': {
+    label: 'public', accent: '#4f46e5',
+    gradient: 'linear-gradient(135deg,#6d28d9 0%,#4f46e5 55%,#2563eb 100%)',
+    desc: 'Open workspace channel — all members', icon: '🌐',
+  },
+  'all-sub-admin': {
+    label: 'all-sub-admin', accent: '#ea580c',
+    gradient: 'linear-gradient(135deg,#c2410c 0%,#ea580c 55%,#f59e0b 100%)',
+    desc: 'Manager coordination & operations', icon: '⚡',
+  },
 };
 
-const DEFAULT_REPORT_TYPES: ReportType[] = [
-    { key: 'course_report', name_ar: 'تقرير المقرر الدراسي', name_en: 'Course Report' },
-    { key: 'program_report', name_ar: 'تقرير البرنامج الدراسي', name_en: 'Program Report' },
-    { key: 'course_specification', name_ar: 'توصيف المقرر الدراسي', name_en: 'Course Specification' },
-    { key: 'program_specification', name_ar: 'توصيف البرنامج الدراسي', name_en: 'Program Specification' },
-];
+/* ── types ──────────────────────────────────────────────────────────────── */
+type Member    = { user_id?: string; name: string; role: string; avatar: string; online: boolean; email?: string };
+type Attach    = { id?: string; _id?: string; file_name: string; download_url?: string; size?: number };
+type Msg       = { id?: string; _id?: string; user_id?: string; user_name: string; message: string; created_at?: string; attachments?: Attach[] };
+type Resource  = { id?: string; _id?: string; file_name: string; uploader_name?: string; created_at?: string; download_url?: string; uploaded_by: string; uploader_role: string; size?: number };
+type TaskEntry = { id: string; title: string; done: boolean; assignees?: string[]; due?: string; status?: string };
+type Board     = { overview: { title: string; status_badge: string; progress: number }; tasks: TaskEntry[]; members: Member[]; resources: Resource[]; comments: Msg[] };
+type Reaction  = { emoji: string; count: number; mine: boolean };
 
-type TaskItem = {
-    id: string;
-    title: string;
-    assignee: string;
-    due: string;
-    done: boolean;
-    report_type?: string;
+/* ── helpers ─────────────────────────────────────────────────────────────── */
+function ini(n: string) { return n.trim().split(/\s+/).slice(0,2).map(w=>w[0]?.toUpperCase()??'').join(''); }
+function avbg(n: string) { const h=((n.charCodeAt(0)??0)*47+(n.charCodeAt(1)??0)*13)%360; return `linear-gradient(135deg,hsl(${h},55%,44%),hsl(${h+40},48%,32%))`; }
+function rel(iso?: string|null) {
+  if (!iso) return '';
+  const d = new Date(iso); const m = Math.floor((Date.now()-d.getTime())/60000);
+  if (m < 1)  return 'just now';
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m/60);
+  if (h < 24) return `${h}h ago`;
+  return d.toLocaleDateString('en-US', { month:'short', day:'numeric' });
+}
+function fmtTime(iso?: string|null) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit' });
+}
+function fmtSize(b?: number) {
+  if (!b) return '';
+  if (b < 1024*1024) return `${(b/1024).toFixed(1)} KB`;
+  return `${(b/1024/1024).toFixed(1)} MB`;
+}
+function fileExt(name: string) { return (name.split('.').pop()??'').toUpperCase().slice(0,4); }
+function fileColor(name: string) {
+  const e = (name.split('.').pop()??'').toLowerCase();
+  if (e==='pdf') return '#ef4444';
+  if (['doc','docx'].includes(e)) return '#3b82f6';
+  if (['xls','xlsx','csv'].includes(e)) return '#10b981';
+  if (['jpg','jpeg','png','gif','svg','webp'].includes(e)) return '#8b5cf6';
+  return '#64748b';
+}
+function isImg(name: string) { return /\.(jpe?g|png|gif|svg|webp)$/i.test(name); }
+function hdr() { return { Authorization: `Bearer ${localStorage.getItem('token')??''}`, 'X-User-Id': localStorage.getItem('userId')??'' }; }
+function cid(m: Msg) { return m.id ?? m._id ?? ''; }
+function rid(r: Resource) { return r.id ?? r._id ?? ''; }
+
+const POST_RE  = /^\[POST:(announcement|task|note)\] (.+?)\n([\s\S]*)$/;
+const REPLY_RE = /^\[REPLY:([^\]]+)\]\n([\s\S]*)$/;
+const isPost   = (t: string) => POST_RE.test(t);
+const isReply  = (t: string) => REPLY_RE.test(t);
+const parsePost  = (t: string) => { const m=t.match(POST_RE); return m?{type:m[1] as 'announcement'|'task'|'note',title:m[2],body:m[3].trim()}:null; };
+const parseReply = (t: string, all: Msg[]) => { const m=t.match(REPLY_RE); if(!m) return null; return {original:all.find(x=>cid(x)===m[1]),text:m[2]}; };
+
+const POST_CFG = {
+  announcement: { label:'Announcement', color:'#6366f1', bg:'rgba(99,102,241,.12)', icon:'📢' },
+  task:         { label:'Task',          color:'#10b981', bg:'rgba(16,185,129,.12)', icon:'📋' },
+  note:         { label:'Note',          color:'#f59e0b', bg:'rgba(245,158,11,.12)', icon:'📝' },
 };
 
-type MemberProfile = {
-    user_id?: string;
-    name: string;
-    role: string;
-    avatar: string;
-    online: boolean;
-    email?: string;
-    responsibility?: string;
-};
-
-type AvailableMember = {
-    user_id: string;
-    name: string;
-    role: string;
-    avatar: string;
-    email?: string;
-};
-
-type TaskBoardOverview = {
-    title: string;
-    description: string;
-    status_badge: string;
-    progress: number;
-};
-
-type CommentAttachment = {
-    id?: string;
-    _id?: string;
-    file_name: string;
-    download_url?: string;
-    size?: number;
-};
-
-type BoardComment = {
-    id?: string;
-    _id?: string;
-    user_id?: string;
-    user_name: string;
-    user_avatar: string;
-    message: string;
-    created_at?: string;
-    attachments?: CommentAttachment[];
-};
-
-type TaskBoardResponsePayload = {
-    overview: TaskBoardOverview;
-    tasks: TaskItem[];
-    members: MemberProfile[];
-    resources?: TaskBoardResource[];
-    comments?: BoardComment[];
-};
-
-type TaskBoardResource = {
-    id?: string;
-    _id?: string;
-    file_name: string;
-    path?: string;
-    uploaded_by: string;
-    uploader_role: string;
-    uploader_name?: string;
-    visible_to?: string;
-    created_at?: string;
-    download_url?: string;
-};
-
-type UploadRules = {
-    allowed_types?: string[];
-    max_size_mb?: number;
-    naming_pattern?: string;
-};
-
-const TaskFlowDetail = () => {
-    const [searchParams] = useSearchParams();
-    const projectId = searchParams.get('projectId') ?? 'public-group';
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    const commentFileInputRef = useRef<HTMLInputElement>(null);
-    const uploadModalFileInputRef = useRef<HTMLInputElement>(null);
-    const analysisIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-    const [newComment, setNewComment] = useState('');
-    const [commentFiles, setCommentFiles] = useState<File[]>([]);
-    const [comments, setComments] = useState<BoardComment[]>([]);
-    const [isPostingComment, setIsPostingComment] = useState(false);
-    const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
-    const [resources, setResources] = useState<TaskBoardResource[]>([]);
-    const [deletingResourceId, setDeletingResourceId] = useState<string | null>(null);
-    const [tasks, setTasks] = useState<TaskItem[]>([]);
-    const [isTaskFormOpen, setIsTaskFormOpen] = useState(false);
-    const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
-    const [isInvitingMember, setIsInvitingMember] = useState(false);
-    const [availableMembers, setAvailableMembers] = useState<AvailableMember[]>([]);
-    const [isLoadingMembers, setIsLoadingMembers] = useState(false);
-    const [memberSearch, setMemberSearch] = useState('');
-    const [activeMemberMenu, setActiveMemberMenu] = useState<MemberProfile | null>(null);
-    const [configureTarget, setConfigureTarget] = useState<MemberProfile | null>(null);
-    const [memberConfig, setMemberConfig] = useState({ responsibility: '', role: '' });
-    const [isSavingMemberConfig, setIsSavingMemberConfig] = useState(false);
-    const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
-    const [taskDraft, setTaskDraft] = useState<Omit<TaskItem, 'id'>>({ title: '', assignee: '', due: '', done: false, report_type: '' });
-    const [taskAssignees, setTaskAssignees] = useState<string[]>([]);
-    const [taskVisibility, setTaskVisibility] = useState<'team' | 'private'>('team');
-    const [reportTypes, setReportTypes] = useState<ReportType[]>(DEFAULT_REPORT_TYPES);
-    const [boardOverview, setBoardOverview] = useState<TaskBoardOverview | null>(null);
-    const modalTitle = boardOverview?.title ? `Add member to ${boardOverview.title}` : 'Add board member';
-    const [groupMembers, setGroupMembers] = useState<MemberProfile[]>([]);
-    const [boardLoading, setBoardLoading] = useState(true);
-    const [boardError, setBoardError] = useState<string | null>(null);
-    const [isSavingTask, setIsSavingTask] = useState(false);
-    const [isUploadingResource, setIsUploadingResource] = useState(false);
-    const [analysisTask, setAnalysisTask] = useState<TaskItem | null>(null);
-    const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
-    const [uploadRules, setUploadRules] = useState<UploadRules | null>(null);
-    const [, setIsLoadingRules] = useState(false);
-    const [uploadModalFile, setUploadModalFile] = useState<File | null>(null);
-    const [analysisProgress, setAnalysisProgress] = useState(0);
-    const [analysisDone, setAnalysisDone] = useState(false);
-    const [analysisCriteria, setAnalysisCriteria] = useState<Array<{ label: string; passed: boolean; hint: string }>>([]);
-    const completedTasks = tasks.filter((task) => task.done).length;
-    const progressPercent = tasks.length ? Math.round((completedTasks / tasks.length) * 100) : 0;
-    const buildDownloadUrl = useCallback((resource: TaskBoardResource) => (
-        resource.download_url ? `${API_BASE}${resource.download_url}` : undefined
-    ), []);
-    const currentUserId = typeof window !== 'undefined' ? localStorage.getItem('userId') : null;
-    const currentUserRole = typeof window !== 'undefined' ? localStorage.getItem('role') : null;
-    const normalizedUserRole = (currentUserRole ?? '').toLowerCase();
-    const currentUserGroupRole = groupMembers.find(m => m.user_id === currentUserId)?.role?.toLowerCase() || '';
-    const hasManagerRights = normalizedUserRole === 'admin' || normalizedUserRole === 'sub_admin' || normalizedUserRole === 'manager' || currentUserGroupRole === 'manager';
-    const canModerateComments = hasManagerRights;
-    const isSystemCard = projectId === 'public-group' || projectId === 'all-sub-admin';
-    const canAddTask = hasManagerRights;
-    const canDeleteComment = (comment: BoardComment) => {
-        if (canModerateComments) {
-            return true;
-        }
-        if (!currentUserId) {
-            return false;
-        }
-        return Boolean(comment.user_id && comment.user_id === currentUserId);
-    };
-    const canDeleteResource = (resource: TaskBoardResource) => {
-        if (canModerateComments) {
-            return true;
-        }
-        if (!currentUserId) {
-            return false;
-        }
-        return Boolean(resource.uploaded_by && resource.uploaded_by === currentUserId);
-    };
-
-    const loadAvailableMembers = useCallback(async () => {
-        if (!projectId) return;
-        const userId = localStorage.getItem('userId');
-        if (!userId) {
-            setBoardError('Missing admin session. Please log in again.');
-            return;
-        }
-        setIsLoadingMembers(true);
-        setBoardError(null);
-        try {
-            const params = new URLSearchParams();
-            if (memberSearch.trim()) {
-                params.set('search', memberSearch.trim());
-            }
-            const query = params.toString();
-            const response = await fetch(`${API_BASE}/task-boards/${projectId}/members/available${query ? `?${query}` : ''}`, {
-                headers: { 'X-User-Id': userId, 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') }
-            });
-            if (!response.ok) {
-                const detail = await response.text();
-                throw new Error(detail || 'Unable to load members');
-            }
-            const payload = await response.json();
-            setAvailableMembers((payload.members ?? []).map((member: AvailableMember) => ({
-                ...member,
-                avatar: member.avatar || member.name.slice(0, 2).toUpperCase(),
-            })));
-        } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : 'Unable to load members';
-            setBoardError(message);
-        } finally {
-            setIsLoadingMembers(false);
-        }
-    }, [projectId, memberSearch]);
-
-    const overviewTitle = boardOverview?.title ?? 'Develop Responsive Dashboard Layout';
-    const overviewDescription = boardOverview?.description ?? 'Implementation of the main dashboard grid system using Tailwind CSS. Needs to be mobile-friendly and support both light and dark modes according to the provided sketch designs.';
-    const overviewStatus = boardOverview?.status_badge ?? 'IN PROGRESS';
-    const overviewProgress = boardOverview?.progress ?? 0;
-
-    const applyBoardPayload = useCallback((payload: TaskBoardResponsePayload) => {
-        if (!payload) return;
-        setBoardOverview(payload.overview);
-        setTasks(payload.tasks ?? []);
-        setGroupMembers((payload.members ?? []).map((member) => ({
-            ...member,
-            user_id: member.user_id,
-            avatar: member.avatar || member.name.slice(0, 2).toUpperCase(),
-            online: member.online ?? false,
-            responsibility: member.responsibility,
-        })));
-        setResources((payload.resources ?? []).map((resource) => ({
-            ...resource,
-            id: resource.id ?? resource._id,
-        })));
-        setComments((payload.comments ?? []).map((comment) => ({
-            ...comment,
-            id: comment.id ?? comment._id,
-            attachments: (comment.attachments ?? []).map((attachment) => ({
-                ...attachment,
-                id: attachment.id ?? attachment._id,
-            })),
-        })));
-    }, []);
-
-    const fetchBoard = useCallback(async () => {
-        if (!projectId) return;
-        const userId = localStorage.getItem('userId');
-        if (!userId) {
-            setBoardError('Missing admin session. Please log in again.');
-            setBoardLoading(false);
-            return;
-        }
-
-        setBoardLoading(true);
-        setBoardError(null);
-        try {
-            const response = await fetch(`${API_BASE}/task-boards/${projectId}`, {
-                headers: { 'X-User-Id': userId, 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') }
-            });
-
-            if (!response.ok) {
-                const detail = await response.text();
-                throw new Error(detail || 'Unable to load task board');
-            }
-
-            const payload = await response.json();
-            applyBoardPayload(payload);
-        } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : 'Unable to load task board';
-            setBoardError(message);
-        } finally {
-            setBoardLoading(false);
-        }
-    }, [projectId, applyBoardPayload]);
-
-    useEffect(() => {
-        fetchBoard();
-    }, [fetchBoard]);
-
-    useEffect(() => {
-        const token = localStorage.getItem('token');
-        const userId = localStorage.getItem('userId');
-        if (!token) return;
-        fetch(`${API_BASE}/quality/report-types`, {
-            headers: {
-                Authorization: `Bearer ${token}`,
-                'X-User-Id': userId ?? '',
-            },
-        })
-            .then((r) => r.ok ? r.json() : null)
-            .then((data) => Array.isArray(data) && data.length > 0 ? setReportTypes(data) : undefined)
-            .catch(() => { });
-    }, []);
-
-    const sendTaskBoardRequest = useCallback(
-        async (
-            endpoint: string,
-            method: 'POST' | 'PATCH',
-            body: Record<string, unknown>,
-            closeForm = false
-        ) => {
-            const userId = localStorage.getItem('userId');
-            if (!userId) {
-                setBoardError('Missing admin session. Please log in again.');
-                return null;
-            }
-
-            setIsSavingTask(true);
-            setBoardError(null);
-            try {
-                const response = await fetch(endpoint, {
-                    method,
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-User-Id': userId,
-                        'Authorization': 'Bearer ' + (localStorage.getItem('token') || ''),
-                    },
-                    body: JSON.stringify(body),
-                });
-
-                if (!response.ok) {
-                    const detail = await response.text();
-                    throw new Error(detail || 'Unable to save task');
-                }
-
-                const payload = await response.json();
-                applyBoardPayload(payload);
-                if (closeForm) {
-                    setIsTaskFormOpen(false);
-                    setEditingTaskId(null);
-                    setTaskDraft({ title: '', assignee: '', due: '', done: false, report_type: '' });
-                }
-                return payload;
-            } catch (err: unknown) {
-                const message = err instanceof Error ? err.message : 'Unable to save task';
-                setBoardError(message);
-                return null;
-            } finally {
-                setIsSavingTask(false);
-            }
-        },
-        [applyBoardPayload]
-    );
-
-    const uploadResource = useCallback(async (file: File) => {
-        if (!projectId) return;
-        const userId = localStorage.getItem('userId');
-        if (!userId) {
-            setBoardError('Missing admin session. Please log in again.');
-            return;
-        }
-
-        setIsUploadingResource(true);
-        setBoardError(null);
-        try {
-            const formData = new FormData();
-            formData.append('file', file);
-
-            const response = await fetch(`${API_BASE}/task-boards/${projectId}/resources`, {
-                method: 'POST',
-                headers: { 'X-User-Id': userId, 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') },
-                body: formData,
-            });
-
-            if (!response.ok) {
-                const detail = await response.text();
-                throw new Error(detail || 'Unable to upload resource');
-            }
-
-            const payload = await response.json();
-            applyBoardPayload(payload);
-        } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : 'Unable to upload resource';
-            setBoardError(message);
-        } finally {
-            setIsUploadingResource(false);
-            if (fileInputRef.current) {
-                fileInputRef.current.value = '';
-            }
-        }
-    }, [projectId, applyBoardPayload]);
-
-    const fetchUploadRules = useCallback(async () => {
-        if (!projectId) return;
-        const userId = localStorage.getItem('userId');
-        setIsLoadingRules(true);
-        try {
-            const response = await fetch(`${API_BASE}/projects/${projectId}/upload-rules`, {
-                headers: {
-                    'X-User-Id': userId || '',
-                    'Authorization': 'Bearer ' + (localStorage.getItem('token') || ''),
-                },
-            });
-            if (response.ok) {
-                const data = await response.json();
-                setUploadRules(data);
-            } else {
-                setUploadRules(null);
-            }
-        } catch {
-            setUploadRules(null);
-        } finally {
-            setIsLoadingRules(false);
-        }
-    }, [projectId]);
-
-    const runFileAnalysis = useCallback((file: File) => {
-        if (analysisIntervalRef.current) {
-            clearInterval(analysisIntervalRef.current);
-        }
-        setAnalysisProgress(0);
-        setAnalysisDone(false);
-        setAnalysisCriteria([]);
-        setIsUploadModalOpen(true);
-
-        const sizeMB = file.size / (1024 * 1024);
-        // Simulate: 1.5s for tiny files, scaling up to ~4s for large files
-        const durationMs = Math.min(Math.max(sizeMB * 600 + 1500, 1500), 4000);
-        const STEPS = 60;
-        const intervalMs = durationMs / STEPS;
-        let step = 0;
-
-        analysisIntervalRef.current = setInterval(() => {
-            step++;
-            const progress = Math.round((step / STEPS) * 100);
-            setAnalysisProgress(Math.min(progress, 100));
-
-            if (step >= STEPS) {
-                clearInterval(analysisIntervalRef.current!);
-                analysisIntervalRef.current = null;
-
-                const maxSizeMB = uploadRules?.max_size_mb ?? 10;
-                const ALLOWED_EXT = [
-                    '.pdf', '.doc', '.docx', '.xls', '.xlsx',
-                    '.ppt', '.pptx', '.txt', '.csv', '.zip',
-                    '.jpg', '.jpeg', '.png', '.gif', '.svg',
-                    '.mp4', '.mp3', '.webm',
-                ];
-                const ext = file.name.toLowerCase().slice(file.name.lastIndexOf('.'));
-                const typeOk = ALLOWED_EXT.includes(ext);
-                const sizeOk = sizeMB <= maxSizeMB;
-                const nameOk = file.name.length <= 100 && !/[<>:"/\\|?*\x00-\x1F]/.test(file.name);
-
-                setAnalysisCriteria([
-                    {
-                        label: 'File type accepted',
-                        passed: typeOk,
-                        hint: typeOk
-                            ? ''
-                            : `"${ext}" may not be supported. Supported: PDF, Office docs, images, archives, plain text.`,
-                    },
-                    {
-                        label: `File size within limit (≤ ${maxSizeMB} MB)`,
-                        passed: sizeOk,
-                        hint: sizeOk
-                            ? ''
-                            : `File is ${sizeMB.toFixed(1)} MB. Please compress or split before uploading.`,
-                    },
-                    {
-                        label: 'Filename format valid',
-                        passed: nameOk,
-                        hint: nameOk
-                            ? ''
-                            : 'Filename contains invalid characters or exceeds 100 chars. Use letters, numbers, spaces, dots, hyphens.',
-                    },
-                ]);
-                setAnalysisDone(true);
-            }
-        }, intervalMs);
-    }, [uploadRules]);
-
-    const closeUploadModal = () => {
-        if (analysisIntervalRef.current) {
-            clearInterval(analysisIntervalRef.current);
-            analysisIntervalRef.current = null;
-        }
-        setIsUploadModalOpen(false);
-        setUploadModalFile(null);
-        setAnalysisProgress(0);
-        setAnalysisDone(false);
-        setAnalysisCriteria([]);
-    };
-
-    const handleUploadModalFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            setUploadModalFile(file);
-            runFileAnalysis(file);
-        }
-        e.target.value = '';
-    };
-
-    const handleUploadModalConfirm = async () => {
-        if (!uploadModalFile) return;
-        closeUploadModal();
-        await uploadResource(uploadModalFile);
-    };
-
-    const handleDeleteResource = async (resourceId?: string) => {
-        if (!projectId || !resourceId) return;
-        const userId = localStorage.getItem('userId');
-        if (!userId) {
-            setBoardError('Missing admin session. Please log in again.');
-            return;
-        }
-
-        setDeletingResourceId(resourceId);
-        setBoardError(null);
-        try {
-            const response = await fetch(`${API_BASE}/task-boards/${projectId}/resources/${resourceId}`, {
-                method: 'DELETE',
-                headers: { 'X-User-Id': userId, 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') },
-            });
-
-            if (!response.ok) {
-                const detail = await response.text();
-                throw new Error(detail || 'Unable to delete resource');
-            }
-
-            const payload = await response.json();
-            applyBoardPayload(payload);
-        } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : 'Unable to delete resource';
-            setBoardError(message);
-        } finally {
-            setDeletingResourceId(null);
-        }
-    };
-
-    const handleSendComment = async () => {
-        if (!projectId) return;
-        const trimmedComment = newComment.trim();
-        if (!trimmedComment && commentFiles.length === 0) return;
-
-        const userId = localStorage.getItem('userId');
-        if (!userId) {
-            setBoardError('Missing admin session. Please log in again.');
-            return;
-        }
-
-        setIsPostingComment(true);
-        setBoardError(null);
-        try {
-            const formData = new FormData();
-            formData.append('message', trimmedComment);
-            commentFiles.forEach((file) => formData.append('attachments', file));
-
-            const response = await fetch(`${API_BASE}/task-boards/${projectId}/comments`, {
-                method: 'POST',
-                headers: { 'X-User-Id': userId, 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') },
-                body: formData,
-            });
-
-            if (!response.ok) {
-                const detail = await response.text();
-                throw new Error(detail || 'Unable to add comment');
-            }
-
-            const payload = await response.json();
-            applyBoardPayload(payload);
-            setNewComment('');
-            setCommentFiles([]);
-            if (commentFileInputRef.current) {
-                commentFileInputRef.current.value = '';
-            }
-        } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : 'Unable to add comment';
-            setBoardError(message);
-        } finally {
-            setIsPostingComment(false);
-        }
-    };
-
-    const handleDeleteComment = async (commentId?: string) => {
-        if (!projectId || !commentId) return;
-        const userId = localStorage.getItem('userId');
-        if (!userId) {
-            setBoardError('Missing admin session. Please log in again.');
-            return;
-        }
-        setDeletingCommentId(commentId);
-        setBoardError(null);
-        try {
-            const response = await fetch(`${API_BASE}/task-boards/${projectId}/comments/${commentId}`, {
-                method: 'DELETE',
-                headers: { 'X-User-Id': userId, 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') },
-            });
-            if (!response.ok) {
-                const detail = await response.text();
-                throw new Error(detail || 'Unable to delete comment');
-            }
-            const payload = await response.json();
-            applyBoardPayload(payload);
-        } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : 'Unable to delete comment';
-            setBoardError(message);
-        } finally {
-            setDeletingCommentId(null);
-        }
-    };
-
-    const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            void handleSendComment();
-        }
-    };
-
-    const triggerCommentFilePicker = () => {
-        commentFileInputRef.current?.click();
-    };
-
-    const handleCommentFileChange = (event: ChangeEvent<HTMLInputElement>) => {
-        const files = Array.from(event.target.files ?? []);
-        if (!files.length) {
-            return;
-        }
-        setCommentFiles((prev) => [...prev, ...files]);
-        event.target.value = '';
-    };
-
-    const removeCommentFile = (index: number) => {
-        setCommentFiles((prev) => {
-            const next = prev.filter((_, idx) => idx !== index);
-            if (next.length === 0 && commentFileInputRef.current) {
-                commentFileInputRef.current.value = '';
-            }
-            return next;
-        });
-    };
-
-    const handleUploadClick = () => {
-        void fetchUploadRules();
-        uploadModalFileInputRef.current?.click();
-    };
-
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            uploadResource(file);
-        }
-    };
-
-    const handleToggleTask = async (taskId: string) => {
-        const targetTask = tasks.find((task) => task.id === taskId);
-        if (!projectId || !targetTask) return;
-
-        await sendTaskBoardRequest(
-            `${API_BASE}/task-boards/${projectId}/todos/${taskId}`,
-            'PATCH',
-            { done: !targetTask.done }
-        );
-    };
-
-    const toggleMemberMenu = (member: MemberProfile) => {
-        if (!member.user_id) return;
-        setActiveMemberMenu((prev) => (prev?.user_id === member.user_id ? null : member));
-    };
-
-    const handleConfigureMember = (member: MemberProfile) => {
-        setMemberConfig({
-            responsibility: member.responsibility ?? '',
-            role: member.role ?? '',
-        });
-        setConfigureTarget(member);
-        setActiveMemberMenu(null);
-    };
-
-    const closeConfigureModal = () => {
-        setConfigureTarget(null);
-        setMemberConfig({ responsibility: '', role: '' });
-    };
-
-    const handleMemberConfigChange = (field: 'responsibility' | 'role', value: string) => {
-        setMemberConfig((prev) => ({ ...prev, [field]: value }));
-    };
-
-    const handleMemberConfigSubmit = async (event: FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
-        if (!projectId || !configureTarget?.user_id) return;
-        setIsSavingMemberConfig(true);
-        const payload = await sendTaskBoardRequest(
-            `${API_BASE}/task-boards/${projectId}/members/${configureTarget.user_id}`,
-            'PATCH',
-            {
-                action: 'update',
-                responsibility: memberConfig.responsibility,
-                role: memberConfig.role,
-            }
-        );
-        setIsSavingMemberConfig(false);
-        if (payload) {
-            closeConfigureModal();
-        }
-    };
-
-    const handleRemoveMember = async (member: MemberProfile) => {
-        if (!projectId || !member.user_id) return;
-        const confirmed = window.confirm(`Remove ${member.name} from this board?`);
-        if (!confirmed) return;
-        await sendTaskBoardRequest(
-            `${API_BASE}/task-boards/${projectId}/members/${member.user_id}`,
-            'PATCH',
-            { action: 'remove' }
-        );
-        setActiveMemberMenu(null);
-    };
-
-    const openTaskForm = (task?: TaskItem) => {
-        if (task) {
-            setEditingTaskId(task.id);
-            setTaskDraft({ title: task.title, assignee: task.assignee, due: task.due, done: task.done, report_type: task.report_type ?? '' });
-            // Pre-select assignee in the multi-picker if it matches a member
-            const matched = groupMembers.find((m) => m.name === task.assignee);
-            setTaskAssignees(matched?.user_id ? [matched.user_id] : []);
-        } else {
-            setEditingTaskId(null);
-            setTaskDraft({ title: '', assignee: '', due: '', done: false, report_type: '' });
-            setTaskAssignees([]);
-            setTaskVisibility('team');
-        }
-        setIsTaskFormOpen(true);
-    };
-
-    const handleTaskDraftChange = (field: keyof Omit<TaskItem, 'id'>, value: string | boolean) => {
-        setTaskDraft((prev) => ({ ...prev, [field]: value }));
-    };
-
-    const handleTaskFormSubmit = async (event: FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
-        if (!projectId || !taskDraft.title.trim()) return;
-
-        const endpoint = editingTaskId
-            ? `${API_BASE}/task-boards/${projectId}/todos/${editingTaskId}`
-            : `${API_BASE}/task-boards/${projectId}/todos`;
-        const method: 'POST' | 'PATCH' = editingTaskId ? 'PATCH' : 'POST';
-
-        await sendTaskBoardRequest(
-            endpoint,
-            method,
-            {
-                title: taskDraft.title,
-                // Resolve assignee name from selected IDs (fall back to taskDraft.assignee)
-                assignee: (() => {
-                    if (taskAssignees.length > 0) {
-                        const names = taskAssignees
-                            .map((id) => groupMembers.find((m) => m.user_id === id)?.name)
-                            .filter(Boolean) as string[];
-                        return names.join(', ') || taskDraft.assignee || 'Unassigned';
-                    }
-                    return taskDraft.assignee || 'Unassigned';
-                })(),
-                due: taskDraft.due || 'TBD',
-                done: taskDraft.done,
-                visibility: taskVisibility,
-                assignee_ids: taskAssignees,
-                ...(taskDraft.report_type ? { report_type: taskDraft.report_type } : {}),
-            },
-            true
-        );
-    };
-
-    const handleCancelTaskEdit = () => {
-        setIsTaskFormOpen(false);
-        setEditingTaskId(null);
-        setTaskDraft({ title: '', assignee: '', due: '', done: false, report_type: '' });
-    };
-
-    const handleDeleteTask = async (taskId: string) => {
-        if (!projectId || !taskId) return;
-        const confirmed = window.confirm('Delete this task permanently?');
-        if (!confirmed) return;
-        const userId = localStorage.getItem('userId');
-        if (!userId) {
-            setBoardError('Missing session. Please log in again.');
-            return;
-        }
-        setIsSavingTask(true);
-        setBoardError(null);
-        try {
-            const response = await fetch(`${API_BASE}/task-boards/${projectId}/todos/${taskId}`, {
-                method: 'DELETE',
-                headers: {
-                    'X-User-Id': userId,
-                    'Authorization': 'Bearer ' + (localStorage.getItem('token') || ''),
-                },
-            });
-            if (!response.ok) {
-                const detail = await response.text();
-                throw new Error(detail || 'Unable to delete task');
-            }
-            const payload = await response.json();
-            applyBoardPayload(payload);
-            setIsTaskFormOpen(false);
-            setEditingTaskId(null);
-            setTaskDraft({ title: '', assignee: '', due: '', done: false, report_type: '' });
-        } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : 'Unable to delete task';
-            setBoardError(message);
-        } finally {
-            setIsSavingTask(false);
-        }
-    };
-
-    useEffect(() => {
-        if (!isMemberModalOpen) {
-            return;
-        }
-        const timeoutId = setTimeout(() => {
-            loadAvailableMembers();
-        }, 200);
-        return () => clearTimeout(timeoutId);
-    }, [isMemberModalOpen, memberSearch, loadAvailableMembers]);
-
-    const handleAddMemberClick = () => {
-        setMemberSearch('');
-        setAvailableMembers([]);
-        setIsMemberModalOpen(true);
-    };
-
-    const closeMemberModal = () => {
-        setIsMemberModalOpen(false);
-        setAvailableMembers([]);
-        setMemberSearch('');
-    };
-
-    const handleInviteMember = async (member: AvailableMember) => {
-        if (!projectId) return;
-        setIsInvitingMember(true);
-        try {
-            const payload = await sendTaskBoardRequest(
-                `${API_BASE}/task-boards/${projectId}/members`,
-                'POST',
-                { user_id: member.user_id }
-            );
-            if (payload) {
-                closeMemberModal();
-            }
-        } finally {
-            setIsInvitingMember(false);
-        }
-    };
-
-    return (
-        <>
-            <div className="flex min-h-screen bg-background dark:bg-gray-900 transition-colors duration-200">
-                <Sidebar />
-
-                <div className="flex-1 ml-[var(--sidebar-width)] transition-[margin] duration-200">
-                    <Header title={isSystemCard ? `# ${projectId === 'public-group' ? 'public' : 'all-sub-admin'}` : 'TaskFlow'} />
-
-                    <main className="page-main p-8">
-                        {boardLoading && (
-                            <div className="mb-6 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-primary">
-                                Syncing latest board data...
-                            </div>
-                        )}
-                        {boardError && (
-                            <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                                {boardError}
-                            </div>
-                        )}
-                        <div className="grid grid-cols-3 gap-6">
-                            {/* Main Content - Left Column (2/3) */}
-                            <div className="col-span-2 space-y-6">
-                                {/* Project / Channel Header */}
-                                {isSystemCard ? (
-                                    /* ── Channel gradient banner ── */
-                                    <div
-                                        className="relative overflow-hidden rounded-2xl"
-                                        style={{
-                                            background: projectId === 'public-group'
-                                                ? 'linear-gradient(135deg, #6d28d9 0%, #4f46e5 45%, #2563eb 100%)'
-                                                : 'linear-gradient(135deg, #c2410c 0%, #ea580c 45%, #f59e0b 100%)',
-                                            boxShadow: projectId === 'public-group'
-                                                ? '0 8px 40px rgba(109,40,217,0.30)'
-                                                : '0 8px 40px rgba(194,65,12,0.30)',
-                                        }}
-                                    >
-                                        {/* Radial light overlay */}
-                                        <div
-                                            className="pointer-events-none absolute inset-0"
-                                            style={{ background: 'radial-gradient(ellipse at 10% 25%, rgba(255,255,255,0.22) 0%, transparent 60%)' }}
-                                        />
-                                        {/* Watermark # */}
-                                        <div
-                                            className="pointer-events-none select-none absolute -right-4 -bottom-6 text-[180px] font-black leading-none"
-                                            style={{ color: 'rgba(255,255,255,0.06)', fontFamily: 'monospace' }}
-                                        >#</div>
-
-                                        <div className="relative z-10 p-7">
-                                            {/* Live badge row */}
-                                            <div className="flex items-center justify-between mb-5">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="relative flex h-2.5 w-2.5">
-                                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-60" />
-                                                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white/90" />
-                                                    </span>
-                                                    <span className="text-white/70 text-[11px] font-bold uppercase tracking-[0.15em]">
-                                                        {projectId === 'public-group' ? 'Public Channel' : 'Admin Channel'} · Live
-                                                    </span>
-                                                </div>
-                                                <span className="px-3 py-1 rounded-full bg-white/15 text-white/90 text-xs font-bold">
-                                                    {overviewStatus}
-                                                </span>
-                                            </div>
-
-                                            {/* Channel name */}
-                                            <div className="flex items-end gap-1.5 mb-3">
-                                                <span className="text-white/35 text-6xl font-black leading-none" style={{ fontFamily: 'monospace' }}>#</span>
-                                                <h1 className="text-white text-3xl font-black tracking-tight leading-none mb-1">
-                                                    {projectId === 'public-group' ? 'public' : 'all-sub-admin'}
-                                                </h1>
-                                            </div>
-
-                                            {/* Description */}
-                                            <p className="text-white/65 text-sm leading-relaxed max-w-xl mb-5">
-                                                {overviewDescription}
-                                            </p>
-
-                                            {/* Footer stats row */}
-                                            <div className="flex items-center gap-5 pt-4 border-t border-white/15">
-                                                <div className="flex items-center gap-1.5">
-                                                    <svg className="w-4 h-4 text-white/60" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-                                                        <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
-                                                    </svg>
-                                                    <span className="text-white/70 text-xs font-medium">
-                                                        {groupMembers.length} member{groupMembers.length !== 1 ? 's' : ''}
-                                                    </span>
-                                                </div>
-                                                <div className="flex items-center gap-1.5">
-                                                    <svg className="w-4 h-4 text-white/60" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-                                                        <path d="M9 12l2 2 4-4M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                                                    </svg>
-                                                    <span className="text-white/70 text-xs font-medium">
-                                                        {tasks.length > 0 ? `${completedTasks}/${tasks.length} tasks done` : 'No tasks yet'}
-                                                    </span>
-                                                </div>
-                                                {projectId === 'public-group' && (
-                                                    <div className="flex items-center gap-1.5">
-                                                        <svg className="w-4 h-4 text-white/60" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-                                                            <circle cx="12" cy="12" r="10" /><path d="M2 12h20M12 2a15.3 15.3 0 010 20M12 2a15.3 15.3 0 000 20" />
-                                                        </svg>
-                                                        <span className="text-white/70 text-xs font-medium">Open to all workspace</span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    /* ── Regular project header card ── */
-                                    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 transition-colors">
-                                        <div className="flex items-center justify-between mb-4">
-                                            <div>
-                                                <div className="text-xs font-medium text-primary uppercase tracking-wide mb-2">
-                                                    {boardOverview ? `Project • ${overviewTitle}` : 'PROJECT A • SPRINT 4'}
-                                                </div>
-                                                <h1 className="text-2xl font-bold text-text-dark dark:text-gray-100 mb-2">
-                                                    {overviewTitle}
-                                                </h1>
-                                                <p className="text-sm text-text-gray dark:text-gray-400 leading-relaxed">
-                                                    {overviewDescription}
-                                                </p>
-                                            </div>
-                                            <span className="px-3 py-1.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-lg text-xs font-medium whitespace-nowrap">
-                                                {overviewStatus}
-                                            </span>
-                                        </div>
-                                        <div className="mt-6">
-                                            <div className="flex items-center justify-between mb-2">
-                                                <span className="text-sm font-medium text-text-dark dark:text-gray-200">Overall Progress</span>
-                                                <span className="text-sm font-bold text-primary">{overviewProgress}%</span>
-                                            </div>
-                                            <div className="w-full h-2.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                                                <div className="h-full bg-primary rounded-full" style={{ width: `${overviewProgress}%` }}></div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* To-do Tracker */}
-                                <div className={`rounded-xl border p-6 transition-colors ${isSystemCard
-                                        ? `bg-white dark:bg-gray-800 border-l-4 ${projectId === 'public-group' ? 'border-l-violet-500 border-gray-200 dark:border-gray-700' : 'border-l-orange-500 border-gray-200 dark:border-gray-700'}`
-                                        : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
-                                    }`}>
-                                    <div className="flex items-center gap-4 mb-6">
-                                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${isSystemCard
-                                                ? projectId === 'public-group'
-                                                    ? 'bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400'
-                                                    : 'bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400'
-                                                : 'bg-blue-50 dark:bg-blue-900/20 text-primary'
-                                            }`}>
-                                            <svg className="w-6 h-6" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path d="M9 12l2 2 4-4" />
-                                                <path d="M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                                            </svg>
-                                        </div>
-                                        <div className="flex-1">
-                                            <p className={`text-xs font-semibold uppercase tracking-wide ${isSystemCard
-                                                    ? projectId === 'public-group' ? 'text-violet-600 dark:text-violet-400' : 'text-orange-600 dark:text-orange-400'
-                                                    : 'text-primary'
-                                                }`}>
-                                                {isSystemCard ? 'Channel Tasks' : 'Sprint Checklist'}
-                                            </p>
-                                            <h2 className="text-xl font-bold text-text-dark dark:text-gray-100">
-                                                {isSystemCard ? 'Task Board' : 'To-do Tracker'}
-                                            </h2>
-                                            <p className="text-sm text-text-gray dark:text-gray-400">
-                                                {isSystemCard ? 'Track and coordinate tasks across the channel.' : 'Mark items as you complete them to keep TaskFlow aligned.'}
-                                            </p>
-                                        </div>
-                                        <div className="flex items-center gap-4">
-                                            {canAddTask && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => openTaskForm()}
-                                                    className="flex h-10 w-10 items-center justify-center rounded-full border border-primary text-primary hover:bg-primary/10"
-                                                    aria-label="Add or edit tasks"
-                                                >
-                                                    <span className="text-2xl leading-none">+</span>
-                                                </button>
-                                            )}
-                                            <div className="text-right">
-                                                <div className="text-2xl font-bold text-text-dark dark:text-gray-100">{completedTasks}/{tasks.length}</div>
-                                                <div className="text-xs text-text-gray dark:text-gray-400">Tasks done</div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {tasks.length > 0 && (
-                                        <div className="mb-5">
-                                            <div className="flex items-center justify-between text-xs font-medium text-text-gray dark:text-gray-400 mb-2">
-                                                <span>Progress</span>
-                                                <span className={progressPercent === 100 ? 'text-green-600 dark:text-green-400 font-bold' : ''}>
-                                                    {progressPercent === 100 ? '✓ Done!' : `${progressPercent}%`}
-                                                </span>
-                                            </div>
-                                            <div className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                                                <div
-                                                    className={`h-full rounded-full transition-all ${progressPercent === 100 ? 'bg-green-500' : 'bg-gradient-to-r from-primary to-blue-400'}`}
-                                                    style={{ width: `${progressPercent}%` }}
-                                                ></div>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {isTaskFormOpen && (
-                                        <form onSubmit={handleTaskFormSubmit} className="mb-5 rounded-2xl border border-dashed border-primary/40 bg-blue-50/40 dark:bg-blue-900/10 p-4 space-y-3">
-                                            <div className="flex items-center justify-between">
-                                                <p className="text-sm font-semibold text-text-dark dark:text-gray-100">
-                                                    {editingTaskId ? 'Edit Task' : 'Add New Task'}
-                                                </p>
-                                                <button type="button" onClick={handleCancelTaskEdit} className="text-xs text-text-gray hover:text-text-dark">Close</button>
-                                            </div>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                                <div>
-                                                    <label className="text-xs font-semibold text-text-gray dark:text-gray-300 uppercase">Title</label>
-                                                    <input
-                                                        type="text"
-                                                        value={taskDraft.title}
-                                                        onChange={(e) => handleTaskDraftChange('title', e.target.value)}
-                                                        className="mt-1 w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-text-dark dark:text-gray-100 focus:border-primary focus:outline-none"
-                                                        required
-                                                    />
-                                                </div>
-                                                <div className="col-span-1 md:col-span-2">
-                                                    <label className="text-xs font-semibold text-text-gray dark:text-gray-300 uppercase">Assignees &amp; Visibility</label>
-                                                    {groupMembers.length > 0 ? (
-                                                        <div className="mt-2">
-                                                            <MultiAssigneePicker
-                                                                members={groupMembers
-                                                                    .filter((m): m is typeof m & { user_id: string } => !!m.user_id)
-                                                                    .map((m): TeamMember => ({
-                                                                        id: m.user_id!,
-                                                                        name: m.name,
-                                                                        email: m.email,
-                                                                        role: m.role,
-                                                                    }))}
-                                                                selectedIds={taskAssignees}
-                                                                onChange={setTaskAssignees}
-                                                                visibility={taskVisibility}
-                                                                onVisibilityChange={setTaskVisibility}
-                                                            />
-                                                        </div>
-                                                    ) : (
-                                                        <input
-                                                            type="text"
-                                                            value={taskDraft.assignee}
-                                                            onChange={(e) => handleTaskDraftChange('assignee', e.target.value)}
-                                                            className="mt-1 w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-text-dark dark:text-gray-100 focus:border-primary focus:outline-none"
-                                                            placeholder="Who is responsible?"
-                                                        />
-                                                    )}
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <label className="text-xs font-semibold text-text-gray dark:text-gray-300 uppercase">نوع التقرير / Report Type</label>
-                                                <select
-                                                    value={taskDraft.report_type ?? ''}
-                                                    onChange={(e) => handleTaskDraftChange('report_type', e.target.value)}
-                                                    className="mt-1 w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-text-dark dark:text-gray-100 focus:border-primary focus:outline-none"
-                                                >
-                                                    <option value="">— بدون تصنيف —</option>
-                                                    {reportTypes.map((rt) => (
-                                                        <option key={rt.key} value={rt.key}>
-                                                            {rt.name_ar} — {rt.name_en}
-                                                        </option>
-                                                    ))}
-                                                </select>
-                                            </div>
-                                            <div className="flex items-center gap-4">
-                                                <div className="flex-1">
-                                                    <label className="text-xs font-semibold text-text-gray dark:text-gray-300 uppercase">Deadline</label>
-                                                    <input
-                                                        type="date"
-                                                        value={taskDraft.due}
-                                                        onChange={(e) => handleTaskDraftChange('due', e.target.value)}
-                                                        className="mt-1 w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-text-dark dark:text-gray-100 focus:border-primary focus:outline-none"
-                                                    />
-                                                </div>
-                                                <label className="inline-flex items-center gap-2 text-sm font-medium text-text-dark dark:text-gray-100">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={taskDraft.done}
-                                                        onChange={(e) => handleTaskDraftChange('done', e.target.checked)}
-                                                        className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                                                    />
-                                                    Mark as done
-                                                </label>
-                                            </div>
-                                            <div className="flex items-center justify-between gap-3 pt-2">
-                                                {editingTaskId ? (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => void handleDeleteTask(editingTaskId)}
-                                                        disabled={isSavingTask}
-                                                        className="h-10 px-4 rounded-lg bg-red-50 dark:bg-red-900/20 text-danger text-sm font-semibold hover:bg-red-100 disabled:opacity-60"
-                                                    >
-                                                        Delete Task
-                                                    </button>
-                                                ) : (
-                                                    <span />
-                                                )}
-                                                <div className="flex items-center gap-3">
-                                                    <button
-                                                        type="button"
-                                                        onClick={handleCancelTaskEdit}
-                                                        className="h-10 px-4 rounded-lg border border-gray-200 text-sm font-semibold text-text-gray"
-                                                    >
-                                                        Cancel
-                                                    </button>
-                                                    <button
-                                                        type="submit"
-                                                        disabled={isSavingTask}
-                                                        className="h-10 px-5 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-blue-600 disabled:opacity-60"
-                                                    >
-                                                        {isSavingTask ? 'Saving...' : editingTaskId ? 'Update Task' : 'Add Task'}
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </form>
-                                    )}
-
-                                    <div className="space-y-3">
-                                        {tasks.map((task) => (
-                                            <div
-                                                key={task.id}
-                                                className="flex items-center gap-3 p-3 border border-gray-200 dark:border-gray-700 rounded-xl hover:border-primary/30 dark:hover:border-primary/40 transition-colors"
-                                            >
-                                                <input
-                                                    type="checkbox"
-                                                    checked={task.done}
-                                                    onChange={() => handleToggleTask(task.id)}
-                                                    className="h-5 w-5 rounded-md border-gray-300 dark:border-gray-600 text-primary focus:ring-primary"
-                                                />
-                                                <div className="flex-1">
-                                                    <div className="flex items-center justify-between flex-wrap gap-2">
-                                                        <div className="flex items-center gap-2 flex-wrap">
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => setAnalysisTask(task)}
-                                                                className={`text-sm font-semibold text-left hover:underline hover:text-primary transition-colors ${task.done ? 'text-primary' : 'text-text-dark dark:text-gray-200'}`}
-                                                            >
-                                                                {task.title}
-                                                            </button>
-                                                            {isSystemCard && task.assignee && task.assignee !== 'Unassigned' && (
-                                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/30 text-xs font-medium text-primary dark:text-blue-300 border border-blue-200 dark:border-blue-700">
-                                                                    <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-                                                                        <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
-                                                                        <circle cx="12" cy="7" r="4" />
-                                                                    </svg>
-                                                                    {task.assignee}
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                        <span className="text-xs text-text-gray dark:text-gray-400">Due {task.due}</span>
-                                                    </div>
-                                                    {!isSystemCard && (
-                                                        <p className="text-xs text-text-gray dark:text-gray-400">{task.assignee}</p>
-                                                    )}
-                                                </div>
-                                                <div className="flex items-center gap-2">
-                                                    {task.done && (
-                                                        <span className="text-green-600 dark:text-green-400 text-xs font-semibold flex items-center gap-1">
-                                                            <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                                                                <path d="M9 12l2 2 4-4" />
-                                                            </svg>
-                                                            Done
-                                                        </span>
-                                                    )}
-                                                    {canAddTask && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => openTaskForm(task)}
-                                                            className="text-xs font-semibold text-primary hover:underline"
-                                                        >
-                                                            Edit
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                {/* Team Discussion / Channel Feed */}
-                                <div className={`rounded-xl border p-6 transition-colors ${isSystemCard
-                                        ? `bg-white dark:bg-gray-800 border-l-4 ${projectId === 'public-group' ? 'border-l-violet-500 border-gray-200 dark:border-gray-700' : 'border-l-orange-500 border-gray-200 dark:border-gray-700'}`
-                                        : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
-                                    }`}>
-                                    <div className="flex items-center gap-2 mb-6">
-                                        {isSystemCard ? (
-                                            <span
-                                                className={`text-2xl font-black leading-none ${projectId === 'public-group' ? 'text-violet-500' : 'text-orange-500'}`}
-                                                style={{ fontFamily: 'monospace' }}
-                                            >#</span>
-                                        ) : (
-                                            <svg className="w-5 h-5 text-text-gray dark:text-gray-400" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                                            </svg>
-                                        )}
-                                        <h2 className="text-base font-bold text-text-dark dark:text-gray-100">
-                                            {isSystemCard ? 'Channel Feed' : 'Team Discussion'}
-                                        </h2>
-                                        <span className="ml-auto text-xs text-text-gray dark:text-gray-400">{comments.length} {isSystemCard ? 'Messages' : 'Comments'}</span>
-                                    </div>
-
-                                    <input
-                                        type="file"
-                                        ref={commentFileInputRef}
-                                        className="hidden"
-                                        multiple
-                                        onChange={handleCommentFileChange}
-                                    />
-
-                                    <div className="space-y-5 max-h-[420px] overflow-y-auto pr-2">
-                                        {comments.map((comment) => {
-                                            const commentKey = comment.id ?? comment._id ?? `${comment.user_name}-${comment.created_at}`;
-                                            const timestamp = comment.created_at ? new Date(comment.created_at).toLocaleString() : 'Just now';
-                                            const avatarLabel = comment.user_avatar || comment.user_name.slice(0, 2).toUpperCase();
-                                            const attachments = comment.attachments ?? [];
-                                            const resolvedCommentId = comment.id ?? comment._id;
-                                            const showDelete = resolvedCommentId ? canDeleteComment(comment) : false;
-                                            return (
-                                                <div key={commentKey} className="flex gap-3">
-                                                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-white text-sm font-medium flex-shrink-0">
-                                                        {avatarLabel}
-                                                    </div>
-                                                    <div className="flex-1">
-                                                        <div className="mb-2 flex flex-wrap items-center gap-2 justify-between">
-                                                            <div className="flex items-center gap-2">
-                                                                <span className="text-sm font-semibold text-text-dark dark:text-gray-200">{comment.user_name}</span>
-                                                                <span className="text-xs text-text-gray dark:text-gray-500">{timestamp}</span>
-                                                            </div>
-                                                            {showDelete && (
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => handleDeleteComment(resolvedCommentId)}
-                                                                    className="text-xs font-semibold text-danger hover:text-red-600"
-                                                                >
-                                                                    {deletingCommentId === resolvedCommentId ? 'Removing...' : 'Delete'}
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                        {comment.message && (
-                                                            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 text-sm text-text-dark dark:text-gray-200">
-                                                                {comment.message}
-                                                            </div>
-                                                        )}
-                                                        {attachments.length > 0 && (
-                                                            <div className="mt-3 flex flex-wrap gap-2">
-                                                                {attachments.map((attachment) => {
-                                                                    const attachmentKey = attachment.id ?? attachment._id ?? attachment.file_name;
-                                                                    const downloadHref = attachment.download_url ? `${API_BASE}${attachment.download_url}` : undefined;
-                                                                    if (downloadHref) {
-                                                                        return (
-                                                                            <a
-                                                                                key={attachmentKey}
-                                                                                href={downloadHref}
-                                                                                target="_blank"
-                                                                                rel="noreferrer"
-                                                                                className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-xs font-semibold text-text-dark dark:text-gray-200 hover:border-primary"
-                                                                            >
-                                                                                <svg className="w-4 h-4 text-primary" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                                                                                    <path d="M15 13l-3 3-3-3" />
-                                                                                    <path d="M12 4v12" />
-                                                                                    <path d="M5 19h14" />
-                                                                                </svg>
-                                                                                <span>{attachment.file_name}</span>
-                                                                            </a>
-                                                                        );
-                                                                    }
-                                                                    return (
-                                                                        <div
-                                                                            key={attachmentKey}
-                                                                            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-xs font-semibold text-text-dark dark:text-gray-200"
-                                                                        >
-                                                                            <svg className="w-4 h-4 text-primary" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                                                                                <path d="M15 13l-3 3-3-3" />
-                                                                                <path d="M12 4v12" />
-                                                                                <path d="M5 19h14" />
-                                                                            </svg>
-                                                                            <span>{attachment.file_name}</span>
-                                                                        </div>
-                                                                    );
-                                                                })}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                        {comments.length === 0 && (
-                                            <p className="text-sm text-text-gray dark:text-gray-400">
-                                                {isSystemCard ? 'No messages yet. Start the conversation.' : 'No comments yet. Be the first to post an update.'}
-                                            </p>
-                                        )}
-                                    </div>
-
-                                    <div className="mt-6">
-                                        <div className="relative">
-                                            <input
-                                                type="text"
-                                                value={newComment}
-                                                onChange={(e) => setNewComment(e.target.value)}
-                                                onKeyDown={handleKeyDown}
-                                                placeholder={isSystemCard ? `Message #${projectId === 'public-group' ? 'public' : 'all-sub-admin'}...` : 'Share an update with the team...'}
-                                                disabled={isPostingComment}
-                                                className="w-full pl-4 pr-28 py-3 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 rounded-lg text-sm text-text-dark dark:text-gray-200 placeholder:text-text-gray dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-60"
-                                            />
-                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                                <button
-                                                    type="button"
-                                                    onClick={triggerCommentFilePicker}
-                                                    className="text-text-gray dark:text-gray-400 hover:text-primary"
-                                                    aria-label="Attach files"
-                                                >
-                                                    <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path d="M21 16V5a3 3 0 00-3-3H8a3 3 0 00-3 3v11a4 4 0 004 4h9a4 4 0 004-4z" />
-                                                        <path d="M17 8l-6 6-3-3" />
-                                                    </svg>
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => void handleSendComment()}
-                                                    disabled={isPostingComment || (!newComment.trim() && commentFiles.length === 0)}
-                                                    className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-white hover:bg-blue-600 disabled:opacity-50"
-                                                    aria-label="Send comment"
-                                                >
-                                                    {isPostingComment ? (
-                                                        <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24">
-                                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
-                                                        </svg>
-                                                    ) : (
-                                                        <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                                                            <path d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                                                        </svg>
-                                                    )}
-                                                </button>
-                                            </div>
-                                        </div>
-                                        {commentFiles.length > 0 && (
-                                            <div className="mt-3 flex flex-wrap gap-2">
-                                                {commentFiles.map((file, index) => (
-                                                    <span key={`${file.name}-${index}`} className="inline-flex items-center gap-2 rounded-full border border-primary/40 bg-primary/5 px-3 py-1 text-xs font-medium text-primary">
-                                                        {file.name}
-                                                        <button type="button" onClick={() => removeCommentFile(index)} className="text-primary/80 hover:text-primary">&times;</button>
-                                                    </span>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Right Sidebar */}
-                            <div className="space-y-6">
-                                {/* Task Resources */}
-                                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 transition-colors">
-                                    <div className="flex items-center gap-2 mb-6">
-                                        <svg className="w-5 h-5 text-text-gray dark:text-gray-400" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                        </svg>
-                                        <h3 className="text-base font-bold text-text-dark dark:text-gray-100">Task Resources</h3>
-                                    </div>
-
-                                    {/* Hidden File Input */}
-                                    <input
-                                        type="file"
-                                        ref={fileInputRef}
-                                        className="hidden"
-                                        onChange={handleFileChange}
-                                    />
-
-                                    {/* Uploaded Resources */}
-                                    {resources.length > 0 && (
-                                        <div className="space-y-2 mb-4">
-                                            {resources.map((resource) => {
-                                                const key = resource.id || resource._id || resource.file_name;
-                                                const uploadedAt = resource.created_at
-                                                    ? new Date(resource.created_at).toLocaleString()
-                                                    : null;
-                                                const downloadHref = buildDownloadUrl(resource);
-                                                const resolvedResourceId = resource.id ?? resource._id;
-                                                const canRemoveResource = resolvedResourceId ? canDeleteResource(resource) : false;
-                                                return (
-                                                    <div key={key} className="flex items-center justify-between gap-3 text-sm text-text-dark dark:text-gray-200 bg-gray-50 dark:bg-gray-700/50 p-3 rounded">
-                                                        <div className="flex-1 min-w-0">
-                                                            <div className="flex items-center gap-2">
-                                                                <svg className="w-4 h-4 text-primary" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                                                                <span className="truncate font-semibold">{resource.file_name}</span>
-                                                            </div>
-                                                            <p className="text-xs text-text-gray dark:text-gray-400 mt-0.5 truncate">
-                                                                Uploaded by {resource.uploader_name || 'Workspace member'}
-                                                                {` · ${resource.uploader_role}`}
-                                                                {uploadedAt ? ` · ${uploadedAt}` : ''}
-                                                            </p>
-                                                        </div>
-                                                        <div className="flex items-center gap-3 shrink-0">
-                                                            {downloadHref && (
-                                                                <a
-                                                                    href={downloadHref}
-                                                                    target="_blank"
-                                                                    rel="noreferrer"
-                                                                    className="text-xs font-semibold text-primary hover:underline"
-                                                                >
-                                                                    Download
-                                                                </a>
-                                                            )}
-                                                            {canRemoveResource && resolvedResourceId && (
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => handleDeleteResource(resolvedResourceId)}
-                                                                    disabled={deletingResourceId === resolvedResourceId}
-                                                                    className={`text-xs font-semibold text-danger hover:text-red-600 ${deletingResourceId === resolvedResourceId ? 'opacity-60 cursor-not-allowed' : ''}`}
-                                                                >
-                                                                    {deletingResourceId === resolvedResourceId ? 'Removing...' : 'Delete'}
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    )}
-                                    {resources.length === 0 && (
-                                        <p className="text-sm text-text-gray dark:text-gray-400 mb-4">No shared files yet. Upload a document to kick things off.</p>
-                                    )}
-
-                                    {/* Image Preview Placeholder */}
-                                    <div className="mb-4">
-                                        <div className="w-full h-32 bg-gradient-to-br from-green-100 to-green-200 dark:from-green-900/30 dark:to-green-800/30 rounded-lg flex items-center justify-center mb-3">
-                                            <svg className="w-12 h-12 text-green-600 dark:text-green-400" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                            </svg>
-                                        </div>
-                                        <button
-                                            onClick={handleUploadClick}
-                                            disabled={isUploadingResource}
-                                            className={`w-full py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors ${isUploadingResource ? 'text-gray-400 dark:text-gray-500 cursor-not-allowed' : 'text-text-gray dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
-                                        >
-                                            <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                            </svg>
-                                            {isUploadingResource ? 'Uploading...' : 'Upload Photo'}
-                                        </button>
-                                    </div>
-
-                                    <button
-                                        onClick={handleUploadClick}
-                                        disabled={isUploadingResource}
-                                        className={`w-full py-3 rounded-lg text-sm font-medium flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20 transition-colors ${isUploadingResource ? 'bg-blue-300 cursor-not-allowed' : 'bg-primary hover:bg-blue-600 text-white'}`}
-                                    >
-                                        <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                                        </svg>
-                                        {isUploadingResource ? 'Uploading...' : 'Upload Documents'}
-                                    </button>
-                                </div>
-
-                                {/* Group / Channel Members */}
-                                <div className={`rounded-xl border p-6 transition-colors ${isSystemCard
-                                        ? `bg-white dark:bg-gray-800 border-l-4 ${projectId === 'public-group' ? 'border-l-violet-500 border-gray-200 dark:border-gray-700' : 'border-l-orange-500 border-gray-200 dark:border-gray-700'}`
-                                        : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
-                                    }`}>
-                                    <div className="flex items-center justify-between mb-6">
-                                        <div className="flex items-center gap-2">
-                                            {isSystemCard && (
-                                                <span
-                                                    className={`text-lg font-black leading-none ${projectId === 'public-group' ? 'text-violet-500' : 'text-orange-500'}`}
-                                                    style={{ fontFamily: 'monospace' }}
-                                                >#</span>
-                                            )}
-                                            <h3 className="text-base font-bold text-text-dark dark:text-gray-100">
-                                                {isSystemCard ? 'Channel Members' : 'Group Members'}
-                                            </h3>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={handleAddMemberClick}
-                                            className="text-sm text-primary font-medium hover:underline"
-                                        >
-                                            Add New
-                                        </button>
-                                    </div>
-
-                                    <div className="space-y-4 max-h-72 overflow-y-auto pr-2">
-                                        {groupMembers.map((member, index) => (
-                                            <div key={member.user_id ?? index} className="flex items-center justify-between">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="relative">
-                                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-medium bg-gradient-to-br ${isSystemCard
-                                                                ? projectId === 'public-group' ? 'from-violet-500 to-indigo-500' : 'from-orange-500 to-amber-400'
-                                                                : 'from-blue-400 to-purple-400'
-                                                            }`}>
-                                                            {member.avatar}
-                                                        </div>
-                                                        {member.online && (
-                                                            <div className="absolute bottom-0 right-0 w-3 h-3 bg-success border-2 border-white dark:border-gray-800 rounded-full"></div>
-                                                        )}
-                                                    </div>
-                                                    <div>
-                                                        <div className="text-sm font-semibold text-text-dark dark:text-gray-200">{member.name}</div>
-                                                        <div className="text-xs text-text-gray dark:text-gray-500">
-                                                            {member.role}
-                                                            {member.responsibility ? ` · ${member.responsibility}` : ''}
-                                                        </div>
-                                                        {member.email && (
-                                                            <div className="text-[11px] text-text-gray/70 dark:text-gray-500">{member.email}</div>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                                <div className="relative">
-                                                    <button
-                                                        type="button"
-                                                        className="text-text-gray dark:text-gray-500 hover:text-text-dark dark:hover:text-gray-300"
-                                                        onClick={() => toggleMemberMenu(member)}
-                                                    >
-                                                        <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                                                            <path d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                                                        </svg>
-                                                    </button>
-                                                    {activeMemberMenu?.user_id === member.user_id && (
-                                                        <div className="absolute right-0 mt-2 w-36 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-lg z-10">
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => handleConfigureMember(member)}
-                                                                className="block w-full px-4 py-2 text-left text-sm text-text-dark dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
-                                                            >
-                                                                Configure
-                                                            </button>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => handleRemoveMember(member)}
-                                                                className="block w-full px-4 py-2 text-left text-sm text-danger hover:bg-red-50 dark:hover:bg-red-900/30"
-                                                            >
-                                                                Remove
-                                                            </button>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                    {groupMembers.length === 0 && (
-                                        <p className="mt-4 text-sm text-text-gray dark:text-gray-500">No members have been linked to this board yet.</p>
-                                    )}
-                                </div>
-
-                                {/* Task Details */}
-                                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 transition-colors">
-                                    <div className="space-y-4">
-                                        <div className="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-gray-700">
-                                            <span className="text-sm font-medium text-text-gray dark:text-gray-400">DUE DATE</span>
-                                            <span className="text-sm font-semibold text-text-dark dark:text-gray-200">Oct 24, 2023</span>
-                                        </div>
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-sm font-medium text-text-gray dark:text-gray-400">PRIORITY</span>
-                                            <span className="px-2.5 py-1 bg-red-100 dark:bg-red-900/30 text-danger dark:text-red-400 rounded text-xs font-semibold">! High</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </main>
-                </div>
-            </div>
-            {/* Hidden file input for resource uploads — must live outside any conditional modal */}
-            <input
-                type="file"
-                ref={uploadModalFileInputRef}
-                className="hidden"
-                onChange={handleUploadModalFileSelect}
-            />
-
-            {/* File Analysis Overlay */}
-            {isUploadModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-                    <div className="w-full max-w-md rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-2xl overflow-hidden">
-                        {/* Gradient Header */}
-                        <div className="bg-gradient-to-r from-primary to-blue-600 px-6 py-5">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
-                                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-                                        <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                    </svg>
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <h3 className="text-lg font-bold text-white">File Quality Check</h3>
-                                    <p className="text-xs text-white/70 truncate">
-                                        {uploadModalFile?.name ?? 'Analyzing file...'}
-                                    </p>
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={closeUploadModal}
-                                    className="w-8 h-8 rounded-full bg-white/20 text-white hover:bg-white/30 flex items-center justify-center transition-colors flex-shrink-0"
-                                    aria-label="Close"
-                                >
-                                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                                        <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                                    </svg>
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="px-6 py-5 space-y-5">
-                            {/* File info chip */}
-                            {uploadModalFile && (
-                                <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
-                                    <svg className="w-8 h-8 text-primary flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-                                        <path d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                                    </svg>
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-semibold text-text-dark dark:text-gray-100 truncate">{uploadModalFile.name}</p>
-                                        <p className="text-xs text-text-gray dark:text-gray-400">
-                                            {(uploadModalFile.size / (1024 * 1024)).toFixed(2)} MB
-                                        </p>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Progress bar */}
-                            <div>
-                                <div className="flex items-center justify-between text-xs font-medium mb-2">
-                                    <span className="text-text-gray dark:text-gray-400 flex items-center gap-1.5">
-                                        {analysisDone ? (
-                                            <>
-                                                <svg className="w-3.5 h-3.5 text-green-500" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5" /></svg>
-                                                Analysis complete
-                                            </>
-                                        ) : (
-                                            <>
-                                                <svg className="w-3.5 h-3.5 animate-spin text-primary" viewBox="0 0 24 24" fill="none">
-                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-                                                </svg>
-                                                Analyzing quality...
-                                            </>
-                                        )}
-                                    </span>
-                                    <span className={`font-bold ${analysisDone ? 'text-green-600 dark:text-green-400' : 'text-primary'}`}>
-                                        {analysisProgress}%
-                                    </span>
-                                </div>
-                                <div className="w-full h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                                    <div
-                                        className={`h-full rounded-full transition-all duration-200 ${analysisDone ? 'bg-green-500' : 'bg-gradient-to-r from-primary to-blue-400'}`}
-                                        style={{ width: `${analysisProgress}%` }}
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Criteria results */}
-                            {analysisDone && analysisCriteria.length > 0 && (
-                                <div className="space-y-2">
-                                    <p className="text-xs font-semibold text-text-gray dark:text-gray-400 uppercase tracking-wide">Quality Criteria</p>
-                                    {analysisCriteria.map((criterion, idx) => (
-                                        <div
-                                            key={idx}
-                                            className={`flex items-start gap-3 p-3 rounded-xl border ${criterion.passed ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800' : 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800'}`}
-                                        >
-                                            <span className={`mt-0.5 flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-white text-xs ${criterion.passed ? 'bg-green-500' : 'bg-amber-500'}`}>
-                                                {criterion.passed ? '✓' : '!'}
-                                            </span>
-                                            <div>
-                                                <p className={`text-sm font-semibold ${criterion.passed ? 'text-green-700 dark:text-green-400' : 'text-amber-700 dark:text-amber-400'}`}>
-                                                    {criterion.label}
-                                                </p>
-                                                {!criterion.passed && criterion.hint && (
-                                                    <p className="mt-0.5 text-xs text-amber-600 dark:text-amber-400 leading-relaxed">{criterion.hint}</p>
-                                                )}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Footer */}
-                        <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-800">
-                            <button
-                                type="button"
-                                onClick={closeUploadModal}
-                                className="h-10 px-4 rounded-lg border border-gray-200 dark:border-gray-700 text-sm font-semibold text-text-gray dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
-                            >
-                                Cancel
-                            </button>
-                            <div className="flex items-center gap-3">
-                                {analysisDone && analysisCriteria.some((c) => !c.passed) && (
-                                    <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">Issues found — review before uploading</span>
-                                )}
-                                <button
-                                    type="button"
-                                    onClick={() => void handleUploadModalConfirm()}
-                                    disabled={!analysisDone || isUploadingResource}
-                                    className="h-10 px-5 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                >
-                                    {isUploadingResource ? 'Uploading...' : analysisDone ? 'Upload File' : 'Analyzing...'}
-                                </button>
-                            </div>
-                        </div>
+const REACTIONS = ['👍','❤️','😂','🔥','✅'];
+
+/* ── Avatar ─────────────────────────────────────────────────────────────── */
+function Av({ name, size=30, online }: { name:string; size?:number; online?:boolean }) {
+  return (
+    <div style={{ position:'relative', flexShrink:0, width:size, height:size }}>
+      <div style={{ width:size, height:size, borderRadius:'50%', background:avbg(name), display:'flex', alignItems:'center', justifyContent:'center', fontSize:Math.round(size*.37), fontWeight:700, color:'#fff', userSelect:'none' }}>
+        {ini(name)}
+      </div>
+      {online !== undefined && (
+        <span style={{ position:'absolute', bottom:0, right:0, width:Math.max(7,size*.28), height:Math.max(7,size*.28), borderRadius:'50%', background:online?'#10b981':'#475569', border:'2px solid transparent', outline:'2px solid transparent' }} />
+      )}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ChannelPage
+══════════════════════════════════════════════════════════════════════════ */
+function ChannelPage({ channelId }: { channelId: string }) {
+  const { isDark } = useTheme();
+  const t = T(isDark);
+  const ch = CH[channelId] ?? CH['public-group'];
+
+  const userId   = localStorage.getItem('userId') ?? '';
+  const userName = localStorage.getItem('name') ?? localStorage.getItem('userName') ?? 'You';
+  const userRole = (localStorage.getItem('role') ?? '').toLowerCase();
+  const isMgr    = ['admin','sub_admin','manager'].includes(userRole);
+
+  /* refs */
+  const feedRef    = useRef<HTMLDivElement>(null);
+  const msgRef     = useRef<HTMLInputElement>(null);
+  const attachRef  = useRef<HTMLInputElement>(null);
+  const fileRef    = useRef<HTMLInputElement>(null);
+  const pFileRef   = useRef<HTMLInputElement>(null);
+
+  /* core state */
+  const [board,     setBoard]     = useState<Board|null>(null);
+  const [loading,   setLoading]   = useState(true);
+  const [err,       setErr]       = useState<string|null>(null);
+
+  /* chat */
+  const [msg,       setMsg]       = useState('');
+  const [chatFiles, setChatFiles] = useState<File[]>([]);
+  const [posting,   setPosting]   = useState(false);
+  const [delMsg,    setDelMsg]    = useState<string|null>(null);
+  const [replyTo,   setReplyTo]   = useState<Msg|null>(null);
+  const [mQuery,    setMQuery]    = useState('');
+  const [mOpen,     setMOpen]     = useState(false);
+  const [mIds,      setMIds]      = useState<string[]>([]);
+  const [reactions, setReactions] = useState<Record<string, Reaction[]>>({});
+  const [showPicker,setShowPicker]= useState<string|null>(null);
+  const [expanded,  setExpanded]  = useState<Record<string,boolean>>({});
+
+  /* resources */
+  const [uploading, setUploading] = useState(false);
+  const [delRes,    setDelRes]    = useState<string|null>(null);
+  const [previewUrl,setPreviewUrl]= useState<string|null>(null);
+
+  /* new post */
+  const [newPostOpen, setNewPostOpen] = useState(false);
+  const [pType,       setPType]       = useState<'announcement'|'task'|'note'>('announcement');
+  const [pTitle,      setPTitle]      = useState('');
+  const [pBody,       setPBody]       = useState('');
+  const [pFiles,      setPFiles]      = useState<File[]>([]);
+
+  /* new task */
+  const [newTaskOpen, setNewTaskOpen] = useState(false);
+  const [tTitle,      setTTitle]      = useState('');
+  const [tDue,        setTDue]        = useState('');
+  const [savingTask,  setSavingTask]  = useState(false);
+
+  /* left panel */
+  const [leftTab, setLeftTab] = useState<'board'|'tasks'|'files'|'members'>('board');
+
+
+  /* ── load ─────────────────────────────────────────────────────────────── */
+  const load = useCallback(async () => {
+    try {
+      const r = await fetch(`${API}/task-boards/${channelId}`, { headers: hdr() });
+      if (!r.ok) throw new Error(await r.text());
+      setBoard(await r.json());
+    } catch (e: unknown) { setErr(e instanceof Error ? e.message : 'Load failed'); }
+    finally { setLoading(false); }
+  }, [channelId]);
+
+  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    if (feedRef.current) feedRef.current.scrollTop = feedRef.current.scrollHeight;
+  }, [board?.comments?.length]);
+
+  /* ── derived ──────────────────────────────────────────────────────────── */
+  const onlineCount  = useMemo(() => (board?.members??[]).filter(m=>m.online).length, [board]);
+  const posts        = useMemo(() => (board?.comments??[]).filter(m=>isPost(m.message)), [board]);
+  const chatMsgs     = useMemo(() => (board?.comments??[]).filter(m=>!isPost(m.message)), [board]);
+  const filteredChat = chatMsgs;
+  const filteredM = useMemo(() => (board?.members??[]).filter(m=>m.name.toLowerCase().includes(mQuery.toLowerCase())).slice(0,6), [board, mQuery]);
+
+  /* ── send message ─────────────────────────────────────────────────────── */
+  const doSend = async (text: string, files: File[]) => {
+    setPosting(true);
+    try {
+      const fd = new FormData();
+      fd.append('message', text);
+      if (mIds.length > 0) mIds.forEach(id => fd.append('mentioned_user_ids', id));
+      files.forEach(f => fd.append('files', f));
+      const r = await fetch(`${API}/task-boards/${channelId}/comments`, { method:'POST', headers:hdr(), body:fd });
+      if (!r.ok) throw new Error(await r.text());
+      setBoard(await r.json());
+    } catch (e: unknown) { setErr(e instanceof Error ? e.message : 'Post failed'); }
+    finally { setPosting(false); }
+  };
+
+  const sendChat = async () => {
+    if (!msg.trim() && chatFiles.length === 0) return;
+    const text = replyTo ? `[REPLY:${cid(replyTo)}]\n${msg.trim()}` : msg.trim();
+    await doSend(text, chatFiles);
+    setMsg(''); setChatFiles([]); setMIds([]); setReplyTo(null);
+  };
+
+  const sendPost = async () => {
+    if (!pTitle.trim()) return;
+    const text = `[POST:${pType}] ${pTitle.trim()}\n${pBody.trim()}`;
+    await doSend(text, pFiles);
+    setNewPostOpen(false); setPTitle(''); setPBody(''); setPFiles([]);
+  };
+
+  /* ── delete message ───────────────────────────────────────────────────── */
+  const deleteMsg = async (id: string) => {
+    setDelMsg(id);
+    try {
+      const r = await fetch(`${API}/task-boards/${channelId}/comments/${id}`, { method:'DELETE', headers:hdr() });
+      if (!r.ok) throw new Error(await r.text());
+      setBoard(await r.json());
+    } catch {} finally { setDelMsg(null); }
+  };
+
+  /* ── upload resource ──────────────────────────────────────────────────── */
+  const uploadFile = async (file: File) => {
+    setUploading(true);
+    try {
+      const fd = new FormData(); fd.append('file', file);
+      const r = await fetch(`${API}/task-boards/${channelId}/resources`, { method:'POST', headers:hdr(), body:fd });
+      if (!r.ok) throw new Error(await r.text());
+      setBoard(await r.json());
+    } catch (e: unknown) { setErr(e instanceof Error ? e.message : 'Upload failed'); }
+    finally { setUploading(false); if (fileRef.current) fileRef.current.value=''; }
+  };
+
+  const deleteRes = async (id: string) => {
+    setDelRes(id);
+    try {
+      const r = await fetch(`${API}/task-boards/${channelId}/resources/${id}`, { method:'DELETE', headers:hdr() });
+      if (!r.ok) throw new Error(await r.text());
+      setBoard(await r.json());
+    } catch {} finally { setDelRes(null); }
+  };
+
+  /* ── toggle task done ─────────────────────────────────────────────────── */
+  const toggleTask = async (taskId: string, currentDone: boolean) => {
+    setBoard(prev => prev ? { ...prev, tasks: prev.tasks.map(t => t.id === taskId ? { ...t, done: !currentDone } : t) } : prev);
+    try {
+      const r = await fetch(`${API}/task-boards/${channelId}/todos/${taskId}`, {
+        method: 'PATCH',
+        headers: { ...hdr(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ done: !currentDone }),
+      });
+      if (!r.ok) {
+        setBoard(prev => prev ? { ...prev, tasks: prev.tasks.map(t => t.id === taskId ? { ...t, done: currentDone } : t) } : prev);
+      } else {
+        const updated = await r.json();
+        if (updated?.tasks) setBoard(updated);
+      }
+    } catch {
+      setBoard(prev => prev ? { ...prev, tasks: prev.tasks.map(t => t.id === taskId ? { ...t, done: currentDone } : t) } : prev);
+    }
+  };
+
+  /* ── create task via post ─────────────────────────────────────────────── */
+  const createTask = async () => {
+    if (!tTitle.trim()) return;
+    setSavingTask(true);
+    await doSend(`[POST:task] ${tTitle.trim()}\nDue: ${tDue || 'TBD'}`, []);
+    setNewTaskOpen(false); setTTitle(''); setTDue('');
+    setSavingTask(false);
+  };
+
+  /* ── reactions (client-side) ──────────────────────────────────────────── */
+  const toggleReaction = (msgId: string, emoji: string) => {
+    setReactions(prev => {
+      const cur = prev[msgId] ?? REACTIONS.map(e=>({emoji:e,count:0,mine:false}));
+      return { ...prev, [msgId]: cur.map(r => r.emoji===emoji ? {...r, count:r.mine?r.count-1:r.count+1, mine:!r.mine} : r) };
+    });
+    setShowPicker(null);
+  };
+  const getMsgReactions = (msgId: string): Reaction[] =>
+    reactions[msgId] ?? REACTIONS.map(e=>({emoji:e,count:0,mine:false}));
+
+  /* ── mention input ────────────────────────────────────────────────────── */
+  const handleMsgChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const v = e.target.value; setMsg(v);
+    const cur = e.target.selectionStart ?? v.length;
+    const at = v.slice(0,cur).lastIndexOf('@');
+    if (at !== -1) { const q = v.slice(0,cur).slice(at+1); if (!q.includes(' ')) { setMQuery(q); setMOpen(true); return; } }
+    setMOpen(false); setMQuery('');
+  };
+  const pickMention = (m: Member) => {
+    const cur = msgRef.current?.selectionStart ?? msg.length;
+    const at = msg.slice(0,cur).lastIndexOf('@');
+    setMsg(msg.slice(0,at)+`@${m.name} `+msg.slice(cur));
+    if (m.user_id) setMIds(p=>[...new Set([...p,m.user_id!])]);
+    setMOpen(false); setMQuery(''); msgRef.current?.focus();
+  };
+  const renderMsg = (text: string) => text.split(/(@\S+)/g).map((p,i) =>
+    p.startsWith('@')
+      ? <span key={i} style={{padding:'1px 5px',borderRadius:4,background:`${ch.accent}1a`,color:ch.accent,fontSize:12,fontWeight:600}}>{p}</span>
+      : <span key={i}>{p}</span>);
+
+  const canDel  = (m: Msg)      => isMgr || (!!userId && m.user_id===userId);
+  const canDelR = (r: Resource) => isMgr || (!!userId && r.uploaded_by===userId);
+
+  /* ── activity feed (derived from board data) ──────────────────────────── */
+  const activityFeed = useMemo(() => {
+    const items: {id:string; type:string; actor:string; detail:string; time?:string; icon:string; color:string}[] = [];
+    (board?.comments??[]).slice(-20).reverse().forEach(m => {
+      const p = parsePost(m.message);
+      if (p) {
+        items.push({id:cid(m),type:'post',actor:m.user_name,detail:`posted a ${p.type}: "${p.title}"`,time:m.created_at,icon:POST_CFG[p.type].icon,color:POST_CFG[p.type].color});
+      } else if (isReply(m.message)) {
+        items.push({id:cid(m),type:'reply',actor:m.user_name,detail:'replied to a post',time:m.created_at,icon:'↩',color:'#6366f1'});
+      } else if ((m.attachments??[]).length>0) {
+        items.push({id:cid(m),type:'file',actor:m.user_name,detail:`shared ${m.attachments!.length} file(s)`,time:m.created_at,icon:'📎',color:'#8b5cf6'});
+      } else {
+        items.push({id:cid(m),type:'msg',actor:m.user_name,detail:m.message.slice(0,50),time:m.created_at,icon:'💬',color:'#64748b'});
+      }
+    });
+    (board?.resources??[]).slice(-5).reverse().forEach(r => {
+      items.push({id:rid(r),type:'upload',actor:r.uploader_name??r.uploaded_by,detail:`uploaded "${r.file_name}"`,time:r.created_at,icon:'📄',color:'#10b981'});
+    });
+    return items.sort((a,b) => new Date(b.time??0).getTime() - new Date(a.time??0).getTime()).slice(0,12);
+  }, [board]);
+
+  /* ── loading / error ──────────────────────────────────────────────────── */
+  if (loading) return (
+    <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:12,color:T(isDark).muted,fontFamily:'"Inter",-apple-system,sans-serif'}}>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style={{animation:'spin 1s linear infinite'}} className="animate-spin"><circle opacity=".25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path opacity=".75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/></svg>
+      <span style={{fontSize:13}}>Loading channel…</span>
+    </div>
+  );
+
+  /* ══════════════════════════════════════════════════════════════════════
+     RENDER
+  ══════════════════════════════════════════════════════════════════════ */
+  return (
+    <div style={{display:'flex',flex:1,flexDirection:'column',overflow:'hidden',fontFamily:'"Inter",-apple-system,sans-serif',background:t.bg,height:'100%'}}>
+
+      {/* ── Header ───────────────────────────────────────────────────────── */}
+      <div style={{height:54,display:'flex',alignItems:'center',gap:12,padding:'0 20px',borderBottom:`1px solid ${t.bord}`,background:t.surf,flexShrink:0,zIndex:10}}>
+        <span style={{fontSize:22,fontWeight:900,color:ch.accent,fontFamily:'monospace'}}>#</span>
+        <div>
+          <div style={{fontSize:14,fontWeight:800,color:t.text,lineHeight:1.2}}>{ch.label}</div>
+          <div style={{fontSize:10,color:t.muted}}>{(board?.members??[]).length} members · {onlineCount} online</div>
+        </div>
+        <div style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:8}}>
+          <div style={{display:'flex',alignItems:'center',gap:6,padding:'4px 10px',borderRadius:20,background:`${ch.accent}14`,border:`1px solid ${ch.accent}22`}}>
+            <div style={{width:7,height:7,borderRadius:'50%',background:'#10b981'}} />
+            <span style={{fontSize:11,fontWeight:600,color:ch.accent}}>{onlineCount} online</span>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Body ─────────────────────────────────────────────────────────── */}
+      <div style={{display:'flex',flex:1,overflow:'hidden',position:'relative'}}>
+
+        {/* ════════════════════════════════════════════════════════
+            LEFT PANEL — Board / Tasks / Files / Members
+        ════════════════════════════════════════════════════════ */}
+        <div style={{width:310,flexShrink:0,borderRight:`1px solid ${t.bord}`,background:t.surf2,display:'flex',flexDirection:'column',overflow:'hidden'}}>
+
+          {/* tabs */}
+          <div style={{display:'flex',borderBottom:`1px solid ${t.bord}`,flexShrink:0,background:t.surf}}>
+            {([['board','Board'],['tasks','Tasks'],['files','Files'],['members','Members']] as const).map(([id,label])=>(
+              <button key={id} type="button" onClick={()=>setLeftTab(id)}
+                style={{flex:1,padding:'10px 4px',border:'none',background:'transparent',color:leftTab===id?ch.accent:t.muted,borderBottom:`2px solid ${leftTab===id?ch.accent:'transparent'}`,fontSize:11,fontWeight:leftTab===id?700:500,cursor:'pointer',fontFamily:'inherit',transition:'color .15s'}}>
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <div style={{flex:1,overflowY:'auto',scrollbarWidth:'thin',scrollbarColor:`${t.bord} transparent`}}>
+
+            {/* ── BOARD TAB ──────────────────────────────────────── */}
+            {leftTab === 'board' && (
+              <div style={{display:'flex',flexDirection:'column',gap:0}}>
+
+                {/* Announcements section */}
+                <div style={{padding:'14px 14px 0'}}>
+                  <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+                    <div style={{display:'flex',alignItems:'center',gap:7}}>
+                      <span style={{fontSize:15}}>📢</span>
+                      <span style={{fontSize:12,fontWeight:700,color:t.text}}>Announcements</span>
                     </div>
+                    {isMgr && (
+                      <button type="button" onClick={()=>{setPType('announcement');setNewPostOpen(true);}}
+                        style={{display:'flex',alignItems:'center',gap:3,padding:'3px 9px',borderRadius:6,border:`1px solid ${ch.accent}`,background:`${ch.accent}12`,color:ch.accent,fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>
+                        + New
+                      </button>
+                    )}
+                  </div>
+
+                  {/* announcement cards */}
+                  {posts.filter(m=>parsePost(m.message)?.type==='announcement').length === 0 && (
+                    <div style={{textAlign:'center',padding:'20px 0 10px',color:t.muted,fontSize:11}}>No announcements yet.</div>
+                  )}
+                  <div style={{display:'flex',flexDirection:'column',gap:8,paddingBottom:14}}>
+                    {posts.filter(m=>parsePost(m.message)?.type==='announcement').map(m=>{
+                      const post = parsePost(m.message)!;
+                      const mid  = cid(m);
+                      const replies = (board?.comments??[]).filter(x=>{ const r=parseReply(x.message,board?.comments??[]); return r&&r.original&&cid(r.original)===mid; });
+                      return (
+                        <div key={mid} style={{borderRadius:10,border:`1px solid ${t.bord}`,background:t.surf,overflow:'hidden'}}>
+                          <div style={{height:3,background:ch.accent}} />
+                          <div style={{padding:'10px 12px'}}>
+                            <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:6}}>
+                              <span style={{fontSize:9,fontWeight:800,padding:'2px 7px',borderRadius:20,background:`${ch.accent}18`,color:ch.accent,letterSpacing:'.04em'}}>📌 PINNED</span>
+                              <span style={{fontSize:9,color:t.muted,marginLeft:'auto'}}>{rel(m.created_at)}</span>
+                              {canDel(m) && <button type="button" onClick={()=>void deleteMsg(mid)} style={{fontSize:10,color:'#ef4444',background:'none',border:'none',cursor:'pointer',fontFamily:'inherit',opacity:.7}}>×</button>}
+                            </div>
+                            <div style={{fontSize:13,fontWeight:700,color:t.text,marginBottom:post.body?5:0,lineHeight:1.3}}>{post.title}</div>
+                            {post.body && <div style={{fontSize:11,color:t.sub,lineHeight:1.6,whiteSpace:'pre-wrap'}}>{post.body}</div>}
+                            {(m.attachments??[]).length>0 && (
+                              <div style={{display:'flex',flexWrap:'wrap',gap:4,marginTop:6}}>
+                                {(m.attachments??[]).map(att=>{
+                                  const url = att.download_url?`${API}${att.download_url}`:undefined;
+                                  return url?<a key={att.id??att.file_name} href={url} target="_blank" rel="noreferrer" style={{display:'inline-flex',alignItems:'center',gap:4,padding:'2px 7px',borderRadius:5,border:`1px solid ${t.bord}`,background:t.surf2,fontSize:10,color:t.sub,textDecoration:'none'}}>📎 {att.file_name}</a>:null;
+                                })}
+                              </div>
+                            )}
+                            <div style={{display:'flex',alignItems:'center',gap:12,marginTop:8}}>
+                              <span style={{fontSize:10,color:t.muted}}>{m.user_name} · {fmtTime(m.created_at)}</span>
+                              <span style={{fontSize:10,color:t.muted,display:'flex',alignItems:'center',gap:3}}>
+                                <svg width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                                {Math.floor(Math.random()*50)+10}
+                              </span>
+                              <button type="button" onClick={()=>{setReplyTo(m);setTimeout(()=>msgRef.current?.focus(),50);}}
+                                style={{marginLeft:'auto',fontSize:10,color:t.muted,background:'none',border:'none',cursor:'pointer',fontFamily:'inherit',fontWeight:500}}
+                                onMouseEnter={e=>(e.currentTarget.style.color=ch.accent)} onMouseLeave={e=>(e.currentTarget.style.color=t.muted)}>
+                                ↩ Reply{replies.length>0?` (${replies.length})`:''}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
+
+                <div style={{height:1,background:t.bord,margin:'0 14px'}} />
+
+                {/* Channel Tasks */}
+                <div style={{padding:'14px 14px 0'}}>
+                  <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+                    <div style={{display:'flex',alignItems:'center',gap:7}}>
+                      <span style={{fontSize:15}}>📋</span>
+                      <span style={{fontSize:12,fontWeight:700,color:t.text}}>Channel Tasks</span>
+                    </div>
+                    <button type="button" onClick={()=>setNewTaskOpen(true)}
+                      style={{display:'flex',alignItems:'center',gap:3,padding:'3px 9px',borderRadius:6,border:`1px solid #10b981`,background:'rgba(16,185,129,.1)',color:'#10b981',fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>
+                      + New Task
+                    </button>
+                  </div>
+                  <div style={{display:'flex',flexDirection:'column',gap:6,paddingBottom:14}}>
+                    {[...(board?.tasks??[]), ...posts.filter(m=>parsePost(m.message)?.type==='task').map(m=>({id:cid(m),title:parsePost(m.message)!.title,done:false,due:parsePost(m.message)!.body.replace('Due: ','').trim()}))].slice(0,5).map((task,i)=>(
+                      <div key={task.id??i} style={{display:'flex',alignItems:'center',gap:8,padding:'7px 10px',borderRadius:8,border:`1px solid ${t.bord}`,background:t.surf}}>
+                        <div onClick={()=>task.id && toggleTask(task.id, task.done)} style={{width:14,height:14,borderRadius:3,border:`2px solid ${task.done?'#10b981':t.bord}`,background:task.done?'#10b981':'transparent',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',transition:'all .15s'}}>
+                          {task.done && <svg width="8" height="8" fill="none" stroke="white" strokeWidth="3" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>}
+                        </div>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:11,fontWeight:600,color:task.done?t.muted:t.sub,textDecoration:task.done?'line-through':'none',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{task.title}</div>
+                        </div>
+                        {(task as TaskEntry & {due?:string}).due && (task as TaskEntry & {due?:string}).due !== 'TBD' && (
+                          <span style={{fontSize:9,color:t.muted,flexShrink:0}}>{(task as TaskEntry & {due?:string}).due}</span>
+                        )}
+                      </div>
+                    ))}
+                    {(board?.tasks??[]).length===0 && posts.filter(m=>parsePost(m.message)?.type==='task').length===0 && (
+                      <div style={{textAlign:'center',padding:'16px 0',color:t.muted,fontSize:11}}>No tasks yet.</div>
+                    )}
+                    {(board?.tasks??[]).length > 5 && (
+                      <button type="button" style={{fontSize:11,color:ch.accent,background:'none',border:'none',cursor:'pointer',textAlign:'left',fontFamily:'inherit',padding:'4px 0'}}>View all tasks →</button>
+                    )}
+                  </div>
+                </div>
+
+                <div style={{height:1,background:t.bord,margin:'0 14px'}} />
+
+                {/* Quick Actions */}
+                <div style={{padding:'14px'}}>
+                  <div style={{fontSize:10,fontWeight:700,color:t.muted,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:10}}>Quick Actions</div>
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+                    {[
+                      {label:'New Post',    color:'#6366f1', action:()=>{setPType('note');setNewPostOpen(true);}},
+                      {label:'New Task',    color:'#10b981', action:()=>setNewTaskOpen(true)},
+                      {label:'Upload File', color:'#3b82f6', action:()=>fileRef.current?.click()},
+                      {label:'Announcement',color:'#f59e0b', action:()=>{setPType('announcement');setNewPostOpen(true);}},
+                    ].map(a=>(
+                      <button key={a.label} type="button" onClick={a.action}
+                        style={{padding:'9px 6px',borderRadius:8,border:`1px solid ${a.color}22`,background:`${a.color}0f`,color:a.color,fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:'inherit',transition:'all .15s'}}
+                        onMouseEnter={e=>{e.currentTarget.style.background=`${a.color}22`}}
+                        onMouseLeave={e=>{e.currentTarget.style.background=`${a.color}0f`}}>
+                        {a.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
             )}
-            {isMemberModalOpen && (
-                <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-                    <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-gray-900 p-6 shadow-2xl border border-gray-200 dark:border-gray-700">
-                        <div className="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-gray-800">
-                            <div>
-                                <h3 className="text-lg font-semibold text-text-dark dark:text-gray-100">{modalTitle}</h3>
-                                <p className="text-xs text-text-gray dark:text-gray-400">Search anyone in the workspace who is not already assigned.</p>
-                            </div>
-                            <button type="button" onClick={closeMemberModal} className="text-text-gray hover:text-text-dark dark:text-gray-400 dark:hover:text-gray-200" aria-label="Close member modal">
-                                &times;
-                            </button>
-                        </div>
 
-                        <div className="mt-4">
-                            <div className="relative">
-                                <input
-                                    type="text"
-                                    value={memberSearch}
-                                    onChange={(e) => setMemberSearch(e.target.value)}
-                                    placeholder="Search by name or email"
-                                    className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2.5 text-sm text-text-dark dark:text-gray-100 focus:border-primary focus:ring-1 focus:ring-primary"
-                                />
-                                <svg className="w-4 h-4 text-text-gray absolute right-4 top-1/2 -translate-y-1/2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                    <circle cx="11" cy="11" r="7" />
-                                    <path d="M21 21l-4.35-4.35" />
-                                </svg>
-                            </div>
+            {/* ── TASKS TAB ──────────────────────────────────────── */}
+            {leftTab === 'tasks' && (
+              <div style={{padding:14}}>
+                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
+                  <span style={{fontSize:12,fontWeight:700,color:t.text}}>All Tasks · {(board?.tasks??[]).length}</span>
+                  <button type="button" onClick={()=>setNewTaskOpen(true)} style={{fontSize:11,color:'#10b981',background:'rgba(16,185,129,.1)',border:'1px solid #10b981',borderRadius:6,padding:'3px 9px',cursor:'pointer',fontWeight:700,fontFamily:'inherit'}}>+ Task</button>
+                </div>
+                <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                  {(board?.tasks??[]).map((task,i)=>(
+                    <div key={task.id??i} style={{padding:'9px 12px',borderRadius:9,border:`1px solid ${t.bord}`,background:t.surf}}>
+                      <div style={{display:'flex',alignItems:'center',gap:8}}>
+                        <div onClick={()=>task.id && toggleTask(task.id, task.done)} style={{width:14,height:14,borderRadius:3,border:`2px solid ${task.done?'#10b981':t.bord}`,background:task.done?'#10b981':'transparent',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',transition:'all .15s'}}>
+                          {task.done&&<svg width="8" height="8" fill="none" stroke="white" strokeWidth="3" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>}
                         </div>
+                        <span style={{fontSize:12,fontWeight:600,color:task.done?t.muted:t.text,flex:1,textDecoration:task.done?'line-through':'none'}}>{task.title}</span>
+                        <span style={{fontSize:10,padding:'2px 7px',borderRadius:20,background:task.done?'rgba(16,185,129,.12)':'rgba(99,102,241,.1)',color:task.done?'#10b981':'#6366f1',fontWeight:600}}>{task.done?'Done':'Open'}</span>
+                      </div>
+                    </div>
+                  ))}
+                  {(board?.tasks??[]).length===0 && <div style={{textAlign:'center',padding:'30px 0',color:t.muted,fontSize:12}}>No tasks in this channel.</div>}
+                </div>
+              </div>
+            )}
 
-                        <div className="mt-4 max-h-72 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-800">
-                            {isLoadingMembers && (
-                                <p className="py-6 text-center text-sm text-text-gray dark:text-gray-400">Searching directory...</p>
-                            )}
-                            {!isLoadingMembers && availableMembers.length === 0 && (
-                                <p className="py-6 text-center text-sm text-text-gray dark:text-gray-400">No new members match this search.</p>
-                            )}
-                            {!isLoadingMembers && availableMembers.map((member) => (
-                                <div key={member.user_id} className="flex items-center justify-between py-3">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-400 to-purple-400 flex items-center justify-center text-white text-xs font-semibold">
-                                            {member.avatar}
-                                        </div>
-                                        <div>
-                                            <div className="text-sm font-semibold text-text-dark dark:text-gray-100">{member.name}</div>
-                                            <div className="text-xs text-text-gray dark:text-gray-400">
-                                                {member.role}
-                                                {member.email ? ` · ${member.email}` : ''}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        className="rounded-full px-4 py-1.5 text-xs font-semibold border border-primary text-primary hover:bg-primary/10 disabled:opacity-60"
-                                        onClick={() => handleInviteMember(member)}
-                                        disabled={isInvitingMember}
-                                    >
-                                        {isInvitingMember ? 'Adding...' : 'Invite'}
-                                    </button>
-                                </div>
+            {/* ── FILES TAB ──────────────────────────────────────── */}
+            {leftTab === 'files' && (
+              <div style={{padding:14}}>
+                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
+                  <span style={{fontSize:12,fontWeight:700,color:t.text}}>Files · {(board?.resources??[]).length}</span>
+                  <button type="button" onClick={()=>fileRef.current?.click()} disabled={uploading}
+                    style={{fontSize:11,color:'#3b82f6',background:'rgba(59,130,246,.1)',border:'1px solid #3b82f6',borderRadius:6,padding:'3px 9px',cursor:'pointer',fontWeight:700,fontFamily:'inherit'}}>
+                    {uploading?'…':'+ Upload'}
+                  </button>
+                </div>
+                <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                  {(board?.resources??[]).map(res=>{
+                    const url = res.download_url?`${API}${res.download_url}`:undefined;
+                    const id = rid(res);
+                    const ext = fileExt(res.file_name);
+                    const col = fileColor(res.file_name);
+                    return (
+                      <div key={id||res.file_name} style={{display:'flex',alignItems:'center',gap:8,padding:'8px 10px',borderRadius:8,border:`1px solid ${t.bord}`,background:t.surf}}>
+                        <div style={{width:32,height:32,borderRadius:6,background:`${col}18`,border:`1px solid ${col}28`,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                          <span style={{fontSize:8,fontWeight:800,color:col}}>{ext}</span>
+                        </div>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:11,fontWeight:600,color:t.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{res.file_name}</div>
+                          <div style={{fontSize:10,color:t.muted}}>{res.uploader_name??res.uploaded_by} · {rel(res.created_at)}</div>
+                        </div>
+                        <div style={{display:'flex',gap:4,flexShrink:0}}>
+                          {url && isImg(res.file_name) && (
+                            <button type="button" onClick={()=>setPreviewUrl(`${API}${res.download_url}`)} style={{width:24,height:24,borderRadius:5,border:`1px solid ${t.bord}`,background:'transparent',color:t.muted,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:10}}>👁</button>
+                          )}
+                          {url && <a href={url} download target="_blank" rel="noreferrer" style={{width:24,height:24,borderRadius:5,border:`1px solid ${t.bord}`,background:'transparent',color:t.muted,display:'flex',alignItems:'center',justifyContent:'center',textDecoration:'none',fontSize:11}}>↓</a>}
+                          {id&&canDelR(res)&&<button type="button" onClick={()=>void deleteRes(id)} disabled={delRes===id} style={{width:24,height:24,borderRadius:5,border:`1px solid ${t.bord}`,background:'transparent',color:'#ef4444',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',opacity:delRes===id?.5:1}}>×</button>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {(board?.resources??[]).length===0 && <div style={{textAlign:'center',padding:'30px 0',color:t.muted,fontSize:12}}>No files yet. Upload one!</div>}
+                </div>
+              </div>
+            )}
+
+            {/* ── MEMBERS TAB ────────────────────────────────────── */}
+            {leftTab === 'members' && (
+              <div style={{padding:14}}>
+                <div style={{fontSize:12,fontWeight:700,color:t.text,marginBottom:12}}>Members · {(board?.members??[]).length}</div>
+                <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                  {(board?.members??[]).map(m=>(
+                    <div key={m.user_id??m.name} style={{display:'flex',alignItems:'center',gap:10,padding:'7px 10px',borderRadius:8,border:`1px solid ${t.bord}`,background:t.surf}}>
+                      <Av name={m.name} size={32} online={m.online} />
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontSize:12,fontWeight:600,color:t.text}}>{m.name}</div>
+                        <div style={{fontSize:10,color:t.muted,textTransform:'capitalize'}}>{m.role.replace(/_/g,' ')}</div>
+                      </div>
+                      <div style={{width:8,height:8,borderRadius:'50%',background:m.online?'#10b981':'#475569',flexShrink:0}} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+          </div>
+        </div>
+
+        {/* ════════════════════════════════════════════════════════
+            CENTER — Chat / Discussion
+        ════════════════════════════════════════════════════════ */}
+        <div style={{display:'flex',flexDirection:'column',flex:1,overflow:'hidden',minWidth:0}}>
+
+          {/* error */}
+          {err && <div style={{margin:'8px 16px 0',padding:'7px 10px',background:'rgba(239,68,68,.08)',border:'1px solid rgba(239,68,68,.22)',borderRadius:8,fontSize:11,color:'#ef4444',flexShrink:0}}>{err}</div>}
+
+          {/* messages */}
+          <div ref={feedRef} style={{flex:1,overflowY:'auto',padding:'12px 16px',display:'flex',flexDirection:'column',gap:0,scrollbarWidth:'thin',scrollbarColor:`${t.bord} transparent`}}>
+
+            {filteredChat.length===0 && (
+              <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',flex:1,gap:12,color:t.muted,paddingTop:40}}>
+                <div style={{fontSize:40}}>{ch.icon}</div>
+                <div style={{fontSize:14,fontWeight:700,color:t.sub}}>Welcome to #{ch.label}</div>
+                <div style={{fontSize:12,color:t.muted,textAlign:'center',maxWidth:300}}>{ch.desc}</div>
+              </div>
+            )}
+
+            {filteredChat.map((m, i)=>{
+              const all = board?.comments??[];
+              const prev = i>0?filteredChat[i-1]:null;
+              const grouped = !!prev && prev.user_id===m.user_id && Math.abs(new Date(m.created_at??'').getTime()-new Date(prev.created_at??'').getTime())<5*60000;
+              const isOwn = m.user_id===userId;
+              const mid = cid(m);
+              const replyData = isReply(m.message)?parseReply(m.message,all):null;
+              const msgReactions = getMsgReactions(mid);
+              const activeReactions = msgReactions.filter(r=>r.count>0);
+              const replies = all.filter(x=>{ const r=parseReply(x.message,all); return r&&r.original&&cid(r.original)===mid&&!isPost(m.message); });
+              const showReplies = expanded[mid];
+
+              return (
+                <div key={mid} style={{display:'flex',gap:10,alignItems:'flex-start',padding:'3px 6px',borderRadius:8,marginBottom:grouped?0:6,position:'relative',transition:'background .12s'}}
+                  onMouseEnter={e=>(e.currentTarget.style.background=t.hover)}
+                  onMouseLeave={e=>(e.currentTarget.style.background='transparent')}>
+
+                  {/* avatar or spacer */}
+                  {!grouped ? <Av name={m.user_name} size={34} /> : <div style={{width:34,flexShrink:0}} />}
+
+                  <div style={{flex:1,minWidth:0}}>
+                    {/* name + time */}
+                    {!grouped && (
+                      <div style={{display:'flex',alignItems:'baseline',gap:7,marginBottom:2}}>
+                        <span style={{fontSize:13,fontWeight:700,color:isOwn?ch.accent:t.text}}>{m.user_name}</span>
+                        <span style={{fontSize:10,color:t.muted}}>{fmtTime(m.created_at)} · {rel(m.created_at)}</span>
+                        {canDel(m) && (
+                          <button type="button" onClick={()=>void deleteMsg(mid)} disabled={delMsg===mid} style={{marginLeft:'auto',fontSize:10,color:'#ef4444',background:'none',border:'none',cursor:'pointer',opacity:delMsg===mid?.4:.6,fontFamily:'inherit'}}>
+                            delete
+                          </button>
+                        )}
+                        <button type="button" style={{fontSize:11,color:t.muted,background:'none',border:'none',cursor:'pointer',fontFamily:'inherit',opacity:.5}} onClick={()=>{}}>⋯</button>
+                      </div>
+                    )}
+
+                    {/* reply context */}
+                    {replyData && (
+                      <div style={{marginBottom:4,padding:'4px 8px',borderLeft:`2px solid ${ch.accent}`,background:`${ch.accent}09`,borderRadius:'0 5px 5px 0',fontSize:11,color:t.muted,cursor:'pointer'}}
+                        onClick={()=>{ const id=replyData.original?cid(replyData.original):''; if(id){document.getElementById(`msg-${id}`)?.scrollIntoView({behavior:'smooth',block:'center'});} }}>
+                        <span style={{fontWeight:600,color:ch.accent}}>↩ {replyData.original?.user_name??'Unknown'}</span>: {' '}
+                        {(replyData.original?.message??'').slice(0,80)}
+                      </div>
+                    )}
+
+                    {/* message text */}
+                    <div id={`msg-${mid}`} style={{fontSize:13,color:t.sub,lineHeight:1.65,wordBreak:'break-word',whiteSpace:'pre-wrap'}}>
+                      {renderMsg(replyData?replyData.text:m.message)}
+                    </div>
+
+                    {/* file attachments */}
+                    {(m.attachments??[]).length>0 && (
+                      <div style={{display:'flex',flexWrap:'wrap',gap:6,marginTop:6}}>
+                        {(m.attachments??[]).map(att=>{
+                          const url = att.download_url?`${API}${att.download_url}`:undefined;
+                          const col = fileColor(att.file_name);
+                          const img = isImg(att.file_name);
+                          return (
+                            <div key={att.id??att.file_name} style={{display:'flex',alignItems:'center',gap:8,padding:'7px 10px',borderRadius:8,border:`1px solid ${t.bord}`,background:t.surf2}}>
+                              <div style={{width:28,height:28,borderRadius:5,background:`${col}18`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:8,fontWeight:800,color:col,flexShrink:0}}>{fileExt(att.file_name)}</div>
+                              <div>
+                                <div style={{fontSize:11,fontWeight:600,color:t.text}}>{att.file_name}</div>
+                                {fmtSize(att.size) && <div style={{fontSize:9,color:t.muted}}>{fmtSize(att.size)}</div>}
+                              </div>
+                              <div style={{display:'flex',gap:4,marginLeft:8}}>
+                                {img&&url&&<button type="button" onClick={()=>setPreviewUrl(url)} style={{fontSize:11,background:`${col}14`,border:`1px solid ${col}22`,color:col,borderRadius:4,cursor:'pointer',padding:'2px 6px',fontFamily:'inherit'}}>Preview</button>}
+                                {url&&<a href={url} download target="_blank" rel="noreferrer" style={{fontSize:11,background:t.surf3,border:`1px solid ${t.bord}`,color:t.sub,borderRadius:4,padding:'2px 6px',textDecoration:'none',fontWeight:500}}>↓ Download</a>}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* reactions row */}
+                    {activeReactions.length>0 && (
+                      <div style={{display:'flex',flexWrap:'wrap',gap:4,marginTop:5}}>
+                        {activeReactions.map(r=>(
+                          <button key={r.emoji} type="button" onClick={()=>toggleReaction(mid,r.emoji)}
+                            style={{display:'flex',alignItems:'center',gap:3,padding:'2px 8px',borderRadius:20,border:`1px solid ${r.mine?ch.accent:t.bord}`,background:r.mine?`${ch.accent}14`:t.surf2,cursor:'pointer',fontSize:12,color:r.mine?ch.accent:t.sub,fontWeight:r.mine?700:400}}>
+                            {r.emoji} <span style={{fontSize:11}}>{r.count}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* action bar */}
+                    <div style={{display:'flex',alignItems:'center',gap:8,marginTop:4}}>
+                      {/* reply */}
+                      <button type="button" onClick={()=>{setReplyTo(m);setTimeout(()=>msgRef.current?.focus(),50);}}
+                        style={{fontSize:11,color:t.muted,background:'none',border:'none',cursor:'pointer',fontFamily:'inherit',fontWeight:500,display:'flex',alignItems:'center',gap:3}}
+                        onMouseEnter={e=>(e.currentTarget.style.color=ch.accent)} onMouseLeave={e=>(e.currentTarget.style.color=t.muted)}>
+                        ↩ Reply
+                      </button>
+                      {/* add reaction */}
+                      <div style={{position:'relative'}}>
+                        <button type="button" onClick={()=>setShowPicker(showPicker===mid?null:mid)}
+                          style={{fontSize:12,color:t.muted,background:'none',border:'none',cursor:'pointer',fontFamily:'inherit'}}
+                          onMouseEnter={e=>(e.currentTarget.style.color=t.sub)} onMouseLeave={e=>(e.currentTarget.style.color=t.muted)}>
+                          😊 +
+                        </button>
+                        {showPicker===mid && (
+                          <div style={{position:'absolute',bottom:'100%',left:0,background:t.surf,border:`1px solid ${t.bord}`,borderRadius:10,padding:'6px 8px',display:'flex',gap:4,boxShadow:'0 8px 24px rgba(0,0,0,.25)',zIndex:50,marginBottom:4}}>
+                            {REACTIONS.map(e=>(
+                              <button key={e} type="button" onClick={()=>toggleReaction(mid,e)}
+                                style={{fontSize:16,background:'transparent',border:'none',cursor:'pointer',borderRadius:6,padding:'3px',transition:'transform .1s'}}
+                                onMouseEnter={ev=>(ev.currentTarget.style.transform='scale(1.3)')} onMouseLeave={ev=>(ev.currentTarget.style.transform='scale(1)')}>
+                                {e}
+                              </button>
                             ))}
-                        </div>
-
-                        <div className="mt-6 flex justify-end">
-                            <button
-                                type="button"
-                                onClick={closeMemberModal}
-                                className="px-4 py-2 text-sm font-semibold text-text-gray dark:text-gray-300 hover:text-text-dark"
-                            >
-                                Close
-                            </button>
-                        </div>
+                          </div>
+                        )}
+                      </div>
+                      {/* view replies */}
+                      {replies.length>0 && (
+                        <button type="button" onClick={()=>setExpanded(p=>({...p,[mid]:!p[mid]}))}
+                          style={{fontSize:11,color:ch.accent,background:'none',border:'none',cursor:'pointer',fontFamily:'inherit',fontWeight:600}}>
+                          {showReplies?'Hide':'View'} {replies.length} {replies.length===1?'reply':'replies'}
+                        </button>
+                      )}
                     </div>
+
+                    {/* inline thread replies */}
+                    {showReplies && replies.length>0 && (
+                      <div style={{marginTop:8,paddingLeft:12,borderLeft:`2px solid ${t.bord}`,display:'flex',flexDirection:'column',gap:6}}>
+                        {replies.map(rx=>{
+                          const rd = parseReply(rx.message, board?.comments??[]);
+                          return (
+                            <div key={cid(rx)} style={{display:'flex',gap:8,alignItems:'flex-start'}}>
+                              <Av name={rx.user_name} size={22} />
+                              <div style={{flex:1}}>
+                                <span style={{fontSize:11,fontWeight:700,color:t.text}}>{rx.user_name}</span>
+                                <span style={{fontSize:9,color:t.muted,marginLeft:6}}>{rel(rx.created_at)}</span>
+                                <div style={{fontSize:12,color:t.sub,marginTop:2}}>{renderMsg(rd?rd.text:rx.message)}</div>
+                              </div>
+                              {canDel(rx)&&<button type="button" onClick={()=>void deleteMsg(cid(rx))} style={{fontSize:10,color:'#ef4444',background:'none',border:'none',cursor:'pointer'}}>×</button>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </div>
+              );
+            })}
+          </div>
+
+          {/* ── Message Input ─────────────────────────────────────────── */}
+          <div style={{padding:'10px 14px 14px',borderTop:`1px solid ${t.bord}`,background:t.surf,flexShrink:0}}>
+            {/* reply strip */}
+            {replyTo && (
+              <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8,padding:'5px 10px',borderRadius:8,background:`${ch.accent}0d`,border:`1px solid ${ch.accent}22`}}>
+                <span style={{fontSize:11,color:ch.accent}}>↩ Replying to <strong>{replyTo.user_name}</strong>: {(isPost(replyTo.message)?parsePost(replyTo.message)?.title:replyTo.message)?.slice(0,60)}</span>
+                <button type="button" onClick={()=>setReplyTo(null)} style={{marginLeft:'auto',background:'none',border:'none',cursor:'pointer',color:t.muted,fontSize:18,lineHeight:1}}>×</button>
+              </div>
             )}
-
-            {configureTarget && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-                    <form
-                        onSubmit={handleMemberConfigSubmit}
-                        className="w-full max-w-md rounded-2xl bg-white dark:bg-gray-900 p-6 shadow-2xl border border-gray-200 dark:border-gray-700"
-                    >
-                        <div className="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-gray-800">
-                            <div>
-                                <h3 className="text-lg font-semibold text-text-dark dark:text-gray-100">Configure {configureTarget.name}</h3>
-                                <p className="text-xs text-text-gray dark:text-gray-400">Add context about their role on this board.</p>
-                            </div>
-                            <button type="button" onClick={closeConfigureModal} className="text-text-gray hover:text-text-dark dark:text-gray-400 dark:hover:text-gray-200" aria-label="Close configure modal">
-                                &times;
-                            </button>
-                        </div>
-
-                        <div className="mt-4 space-y-4">
-                            <div>
-                                <label className="text-xs font-semibold text-text-gray dark:text-gray-400 uppercase">Role label</label>
-                                <input
-                                    type="text"
-                                    value={memberConfig.role}
-                                    onChange={(e) => handleMemberConfigChange('role', e.target.value)}
-                                    placeholder="e.g., Task Master Lead"
-                                    className="mt-1 w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2.5 text-sm text-text-dark dark:text-gray-100 focus:border-primary focus:ring-1 focus:ring-primary"
-                                />
-                            </div>
-                            <div>
-                                <label className="text-xs font-semibold text-text-gray dark:text-gray-400 uppercase">Responsibility</label>
-                                <textarea
-                                    value={memberConfig.responsibility}
-                                    onChange={(e) => handleMemberConfigChange('responsibility', e.target.value)}
-                                    placeholder="Outline what this member owns on the board"
-                                    className="mt-1 w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2.5 text-sm text-text-dark dark:text-gray-100 focus:border-primary focus:ring-1 focus:ring-primary"
-                                    rows={3}
-                                />
-                            </div>
-                        </div>
-
-                        <div className="mt-6 flex justify-end gap-3">
-                            <button type="button" onClick={closeConfigureModal} className="px-4 py-2 text-sm font-semibold text-text-gray dark:text-gray-300 hover:text-text-dark">
-                                Cancel
-                            </button>
-                            <button
-                                type="submit"
-                                disabled={isSavingMemberConfig}
-                                className="px-4 py-2 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-blue-600 disabled:opacity-60"
-                            >
-                                {isSavingMemberConfig ? 'Saving...' : 'Save Changes'}
-                            </button>
-                        </div>
-                    </form>
+            {/* attached files */}
+            {chatFiles.length>0 && (
+              <div style={{display:'flex',flexWrap:'wrap',gap:5,marginBottom:8}}>
+                {chatFiles.map((f,i)=>(
+                  <span key={`${f.name}-${i}`} style={{display:'inline-flex',alignItems:'center',gap:4,padding:'2px 8px',borderRadius:5,background:`${ch.accent}0d`,border:`1px solid ${ch.accent}22`,fontSize:11,color:ch.accent}}>
+                    {f.name}
+                    <button type="button" onClick={()=>setChatFiles(p=>p.filter((_,j)=>j!==i))} style={{background:'none',border:'none',cursor:'pointer',color:ch.accent,fontSize:14,lineHeight:1}}>×</button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div style={{position:'relative'}}>
+              {/* @mention dropdown */}
+              {mOpen&&filteredM.length>0 && (
+                <div style={{position:'absolute',bottom:'100%',marginBottom:4,left:0,width:220,background:t.surf,border:`1px solid ${t.bord}`,borderRadius:10,overflow:'hidden',boxShadow:'0 8px 24px rgba(0,0,0,.2)',zIndex:50}}>
+                  {filteredM.map(m=>(
+                    <button key={m.user_id??m.name} type="button" onMouseDown={e=>{e.preventDefault();pickMention(m);}}
+                      style={{display:'flex',alignItems:'center',gap:9,width:'100%',padding:'8px 12px',border:'none',background:'transparent',cursor:'pointer',textAlign:'left',fontFamily:'inherit'}}
+                      onMouseEnter={e=>(e.currentTarget.style.background=t.hover)} onMouseLeave={e=>(e.currentTarget.style.background='transparent')}>
+                      <Av name={m.name} size={22} />
+                      <div>
+                        <div style={{fontSize:12,fontWeight:600,color:t.text}}>{m.name}</div>
+                        <div style={{fontSize:10,color:t.muted,textTransform:'capitalize'}}>{m.role}</div>
+                      </div>
+                    </button>
+                  ))}
                 </div>
-            )}
+              )}
+              <div style={{display:'flex',alignItems:'center',gap:8,background:t.surf2,border:`1.5px solid ${t.inbd}`,borderRadius:12,padding:'0 12px',transition:'border-color .15s'}}
+                onFocusCapture={e=>(e.currentTarget.style.borderColor=ch.accent)} onBlurCapture={e=>(e.currentTarget.style.borderColor=t.inbd)}>
+                <input ref={msgRef} type="text" value={msg} onChange={handleMsgChange}
+                  onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!mOpen){e.preventDefault();void sendChat();}if(e.key==='Escape'){setMOpen(false);setReplyTo(null);}}}
+                  onBlur={()=>setTimeout(()=>setMOpen(false),150)}
+                  placeholder={`Message #${ch.label}… @ to mention, / for commands`} disabled={posting}
+                  style={{flex:1,padding:'11px 0',background:'transparent',border:'none',outline:'none',color:t.text,fontSize:13,fontFamily:'inherit'}} />
+                <input ref={attachRef} type="file" multiple style={{display:'none'}} onChange={e=>{if(e.target.files)setChatFiles(p=>[...p,...Array.from(e.target.files!)]);}} />
+                <button type="button" onClick={()=>attachRef.current?.click()} title="Attach file" style={{background:'none',border:'none',cursor:'pointer',color:t.muted,padding:'4px',lineHeight:1,fontSize:16}}>📎</button>
+                <button type="button" title="Emoji" style={{background:'none',border:'none',cursor:'pointer',color:t.muted,padding:'4px',lineHeight:1,fontSize:16}}>😊</button>
+                <button type="button" title="Mention" onClick={()=>setMsg(p=>p+'@')} style={{background:'none',border:'none',cursor:'pointer',color:t.muted,padding:'4px',lineHeight:1,fontSize:15,fontWeight:700,fontFamily:'monospace'}}>@</button>
+                <button type="button" onClick={()=>void sendChat()} disabled={posting||(!msg.trim()&&chatFiles.length===0)}
+                  style={{width:32,height:32,borderRadius:9,border:'none',background:posting||(!msg.trim()&&chatFiles.length===0)?`${ch.accent}55`:ch.accent,color:'#fff',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:14,transition:'all .15s'}}>
+                  →
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
 
-            {analysisTask && (
-                <TaskSubmitDrawer
-                    isOpen={true}
-                    taskId={analysisTask.id}
-                    taskTitle={analysisTask.title}
-                    projectId={projectId}
-                    reportType={analysisTask.report_type}
-                    onClose={() => setAnalysisTask(null)}
-                    onSuccess={fetchBoard}
-                />
-            )}
-        </>
-    );
-};
+        {/* ════════════════════════════════════════════════════════
+            RIGHT PANEL — Channel Overview / Files / Members / Activity
+        ════════════════════════════════════════════════════════ */}
+        <div style={{width:270,flexShrink:0,borderLeft:`1px solid ${t.bord}`,background:t.surf2,display:'flex',flexDirection:'column',overflow:'hidden'}}>
+          <div style={{flex:1,overflowY:'auto',scrollbarWidth:'thin',scrollbarColor:`${t.bord} transparent`}}>
 
-export default TaskFlowDetail;
+            {/* Channel Overview */}
+            <div style={{padding:'16px 14px',borderBottom:`1px solid ${t.bord}`}}>
+              <div style={{fontSize:13,fontWeight:700,color:t.text,marginBottom:12}}>Channel Overview</div>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:0}}>
+                {[
+                  {icon:'👥',val:(board?.members??[]).length,label:'Members',color:'#6366f1'},
+                  {icon:'🟢',val:onlineCount,label:'Online',color:'#10b981'},
+                  {icon:'📋',val:(board?.tasks??[]).length,label:'Tasks',color:'#f59e0b'},
+                  {icon:'📄',val:(board?.resources??[]).length,label:'Files',color:'#3b82f6'},
+                ].map(s=>(
+                  <div key={s.label} style={{padding:'10px 10px',borderRadius:9,border:`1px solid ${t.bord}`,background:t.surf,display:'flex',alignItems:'center',gap:8}}>
+                    <div style={{width:30,height:30,borderRadius:7,background:`${s.color}14`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,flexShrink:0}}>{s.icon}</div>
+                    <div>
+                      <div style={{fontSize:17,fontWeight:800,color:t.text,lineHeight:1}}>{s.val}</div>
+                      <div style={{fontSize:10,color:t.muted}}>{s.label}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Recent Files */}
+            <div style={{padding:'14px 14px',borderBottom:`1px solid ${t.bord}`}}>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+                <span style={{fontSize:12,fontWeight:700,color:t.text}}>Recent Files</span>
+                <button type="button" onClick={()=>fileRef.current?.click()} style={{fontSize:11,color:ch.accent,background:'none',border:'none',cursor:'pointer',fontWeight:700,fontFamily:'inherit'}}>+ Add</button>
+              </div>
+              <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                {(board?.resources??[]).slice(0,4).map(res=>{
+                  const url = res.download_url?`${API}${res.download_url}`:undefined;
+                  const col = fileColor(res.file_name);
+                  return (
+                    <div key={rid(res)||res.file_name} style={{display:'flex',alignItems:'center',gap:8}}>
+                      <div style={{width:30,height:30,borderRadius:6,background:`${col}18`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:8,fontWeight:800,color:col,flexShrink:0}}>{fileExt(res.file_name)}</div>
+                      <div style={{flex:1,minWidth:0}}>
+                        {url?<a href={url} target="_blank" rel="noreferrer" style={{fontSize:11,color:t.sub,textDecoration:'none',display:'block',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontWeight:500}}>{res.file_name}</a>
+                        :<span style={{fontSize:11,color:t.muted,display:'block',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{res.file_name}</span>}
+                        <span style={{fontSize:9,color:t.muted}}>{res.uploader_name??res.uploaded_by}</span>
+                      </div>
+                      {rid(res)&&canDelR(res)&&<button type="button" onClick={()=>void deleteRes(rid(res))} style={{fontSize:11,color:t.muted,background:'none',border:'none',cursor:'pointer'}}
+                        onMouseEnter={e=>(e.currentTarget.style.color='#ef4444')} onMouseLeave={e=>(e.currentTarget.style.color=t.muted)}>×</button>}
+                    </div>
+                  );
+                })}
+                {(board?.resources??[]).length===0&&<div style={{fontSize:11,color:t.muted,textAlign:'center',padding:'8px 0'}}>No files yet.</div>}
+                {(board?.resources??[]).length>4&&<button type="button" onClick={()=>setLeftTab('files')} style={{fontSize:11,color:ch.accent,background:'none',border:'none',cursor:'pointer',textAlign:'left',fontFamily:'inherit',padding:'2px 0'}}>View all files →</button>}
+              </div>
+            </div>
+
+            {/* Active Members */}
+            <div style={{padding:'14px 14px',borderBottom:`1px solid ${t.bord}`}}>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+                <span style={{fontSize:12,fontWeight:700,color:t.text}}>Active Members</span>
+                <button type="button" onClick={()=>setLeftTab('members')} style={{fontSize:11,color:ch.accent,background:'none',border:'none',cursor:'pointer',fontWeight:600,fontFamily:'inherit'}}>View all</button>
+              </div>
+              <div style={{display:'flex',flexWrap:'wrap',gap:0}}>
+                {(board?.members??[]).slice(0,8).map((m,i)=>(
+                  <div key={m.user_id??m.name} title={m.name} style={{marginLeft:i>0?-6:0,zIndex:8-i}}>
+                    <Av name={m.name} size={32} online={m.online} />
+                  </div>
+                ))}
+                {(board?.members??[]).length>8&&<div style={{width:32,height:32,borderRadius:'50%',background:t.surf3,border:`2px solid ${t.surf2}`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:700,color:t.muted,marginLeft:-6}}>+{(board?.members??[]).length-8}</div>}
+              </div>
+            </div>
+
+            {/* Channel Activity */}
+            <div style={{padding:'14px 14px'}}>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+                <span style={{fontSize:12,fontWeight:700,color:t.text}}>Channel Activity</span>
+              </div>
+              <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                {activityFeed.slice(0,6).map((a,i)=>(
+                  <div key={`${a.id}-${i}`} style={{display:'flex',gap:8,alignItems:'flex-start'}}>
+                    <div style={{width:26,height:26,borderRadius:6,background:`${a.color}14`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,flexShrink:0}}>{a.icon}</div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:11,color:t.sub,lineHeight:1.45}}>
+                        <strong style={{color:t.text}}>{a.actor}</strong> {a.detail}
+                      </div>
+                      <div style={{fontSize:10,color:t.muted,marginTop:1}}>{rel(a.time)}</div>
+                    </div>
+                  </div>
+                ))}
+                {activityFeed.length===0&&<div style={{fontSize:11,color:t.muted,textAlign:'center',padding:'12px 0'}}>No activity yet.</div>}
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        {/* ── New Post Modal ──────────────────────────────────────────────── */}
+        {newPostOpen && (
+          <div style={{position:'absolute',inset:0,zIndex:60,background:'rgba(0,0,0,.55)',display:'flex',alignItems:'center',justifyContent:'center'}} onClick={()=>setNewPostOpen(false)}>
+            <div style={{width:500,borderRadius:16,background:t.surf,border:`1px solid ${t.bord}`,boxShadow:'0 24px 64px rgba(0,0,0,.4)',overflow:'hidden'}} onClick={e=>e.stopPropagation()}>
+              <div style={{padding:'14px 18px',borderBottom:`1px solid ${t.bord}`,display:'flex',alignItems:'center',justifyContent:'space-between',background:`${ch.accent}08`}}>
+                <div style={{fontSize:14,fontWeight:700,color:t.text}}>📌 New Board Post</div>
+                <button type="button" onClick={()=>setNewPostOpen(false)} style={{background:'none',border:'none',cursor:'pointer',color:t.muted,fontSize:20,lineHeight:1}}>×</button>
+              </div>
+              <div style={{padding:'16px 18px',display:'flex',flexDirection:'column',gap:12}}>
+                <div>
+                  <div style={{fontSize:10,fontWeight:700,color:t.muted,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:8}}>Type</div>
+                  <div style={{display:'flex',gap:7}}>
+                    {(Object.entries(POST_CFG) as [typeof pType, typeof POST_CFG[typeof pType]][]).map(([k,v])=>(
+                      <button key={k} type="button" onClick={()=>setPType(k)}
+                        style={{flex:1,padding:'7px 0',borderRadius:8,border:`2px solid ${pType===k?v.color:t.bord}`,background:pType===k?v.bg:'transparent',color:pType===k?v.color:t.muted,fontSize:11,fontWeight:600,cursor:'pointer',fontFamily:'inherit',transition:'all .15s'}}>
+                        {v.icon} {v.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <div style={{fontSize:10,fontWeight:700,color:t.muted,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:6}}>Title <span style={{color:'#ef4444'}}>*</span></div>
+                  <input value={pTitle} onChange={e=>setPTitle(e.target.value)} placeholder="Enter a title…"
+                    style={{width:'100%',padding:'9px 11px',borderRadius:8,border:`1px solid ${t.inbd}`,background:t.surf2,color:t.text,fontSize:13,outline:'none',fontFamily:'inherit',boxSizing:'border-box'}}
+                    onFocus={e=>(e.currentTarget.style.borderColor=ch.accent)} onBlur={e=>(e.currentTarget.style.borderColor=t.inbd)} />
+                </div>
+                <div>
+                  <div style={{fontSize:10,fontWeight:700,color:t.muted,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:6}}>Body</div>
+                  <textarea value={pBody} onChange={e=>setPBody(e.target.value)} rows={4} placeholder="Add details, links, or instructions…"
+                    style={{width:'100%',padding:'9px 11px',borderRadius:8,border:`1px solid ${t.inbd}`,background:t.surf2,color:t.text,fontSize:13,outline:'none',fontFamily:'inherit',resize:'vertical',boxSizing:'border-box'}}
+                    onFocus={e=>(e.currentTarget.style.borderColor=ch.accent)} onBlur={e=>(e.currentTarget.style.borderColor=t.inbd)} />
+                </div>
+                <div>
+                  <div style={{fontSize:10,fontWeight:700,color:t.muted,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:6}}>Attachments</div>
+                  <input ref={pFileRef} type="file" multiple style={{display:'none'}} onChange={e=>{if(e.target.files)setPFiles(p=>[...p,...Array.from(e.target.files!)]);}} />
+                  <button type="button" onClick={()=>pFileRef.current?.click()} style={{padding:'5px 12px',borderRadius:6,border:`1px dashed ${t.bord}`,background:'transparent',color:t.muted,fontSize:11,cursor:'pointer',fontFamily:'inherit'}}>📎 Attach files</button>
+                  {pFiles.length>0 && (
+                    <div style={{display:'flex',flexWrap:'wrap',gap:4,marginTop:6}}>
+                      {pFiles.map((f,i)=>(
+                        <span key={i} style={{display:'inline-flex',alignItems:'center',gap:4,padding:'2px 7px',borderRadius:5,background:`${ch.accent}0d`,border:`1px solid ${ch.accent}22`,fontSize:10,color:ch.accent}}>
+                          {f.name}<button type="button" onClick={()=>setPFiles(p=>p.filter((_,j)=>j!==i))} style={{background:'none',border:'none',cursor:'pointer',color:ch.accent,fontSize:13,lineHeight:1}}>×</button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div style={{padding:'10px 18px',borderTop:`1px solid ${t.bord}`,display:'flex',gap:8,justifyContent:'flex-end'}}>
+                <button type="button" onClick={()=>setNewPostOpen(false)} style={{padding:'7px 16px',borderRadius:8,border:`1px solid ${t.bord}`,background:'transparent',color:t.muted,fontSize:12,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>Cancel</button>
+                <button type="button" onClick={()=>void sendPost()} disabled={posting||!pTitle.trim()}
+                  style={{padding:'7px 18px',borderRadius:8,border:'none',background:posting||!pTitle.trim()?`${ch.accent}55`:ch.accent,color:'#fff',fontSize:12,fontWeight:700,cursor:posting||!pTitle.trim()?'not-allowed':'pointer',fontFamily:'inherit'}}>
+                  {posting?'Posting…':'Publish Post'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── New Task Modal ──────────────────────────────────────────────── */}
+        {newTaskOpen && (
+          <div style={{position:'absolute',inset:0,zIndex:60,background:'rgba(0,0,0,.55)',display:'flex',alignItems:'center',justifyContent:'center'}} onClick={()=>setNewTaskOpen(false)}>
+            <div style={{width:420,borderRadius:14,background:t.surf,border:`1px solid ${t.bord}`,boxShadow:'0 20px 50px rgba(0,0,0,.35)'}} onClick={e=>e.stopPropagation()}>
+              <div style={{padding:'13px 18px',borderBottom:`1px solid ${t.bord}`,display:'flex',alignItems:'center',justifyContent:'space-between',background:'rgba(16,185,129,.06)'}}>
+                <div style={{fontSize:14,fontWeight:700,color:t.text}}>📋 New Channel Task</div>
+                <button type="button" onClick={()=>setNewTaskOpen(false)} style={{background:'none',border:'none',cursor:'pointer',color:t.muted,fontSize:20}}>×</button>
+              </div>
+              <div style={{padding:'16px 18px',display:'flex',flexDirection:'column',gap:12}}>
+                <div>
+                  <div style={{fontSize:10,fontWeight:700,color:t.muted,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:6}}>Task Title <span style={{color:'#ef4444'}}>*</span></div>
+                  <input value={tTitle} onChange={e=>setTTitle(e.target.value)} placeholder="What needs to be done?"
+                    style={{width:'100%',padding:'9px 11px',borderRadius:8,border:`1px solid ${t.inbd}`,background:t.surf2,color:t.text,fontSize:13,outline:'none',fontFamily:'inherit',boxSizing:'border-box'}}
+                    onFocus={e=>(e.currentTarget.style.borderColor='#10b981')} onBlur={e=>(e.currentTarget.style.borderColor=t.inbd)} />
+                </div>
+                <div>
+                  <div style={{fontSize:10,fontWeight:700,color:t.muted,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:6}}>Due Date</div>
+                  <input type="date" value={tDue} onChange={e=>setTDue(e.target.value)}
+                    style={{width:'100%',padding:'9px 11px',borderRadius:8,border:`1px solid ${t.inbd}`,background:t.surf2,color:t.text,fontSize:13,outline:'none',fontFamily:'inherit',boxSizing:'border-box'}}
+                    onFocus={e=>(e.currentTarget.style.borderColor='#10b981')} onBlur={e=>(e.currentTarget.style.borderColor=t.inbd)} />
+                </div>
+              </div>
+              <div style={{padding:'10px 18px',borderTop:`1px solid ${t.bord}`,display:'flex',gap:8,justifyContent:'flex-end'}}>
+                <button type="button" onClick={()=>setNewTaskOpen(false)} style={{padding:'7px 16px',borderRadius:8,border:`1px solid ${t.bord}`,background:'transparent',color:t.muted,fontSize:12,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>Cancel</button>
+                <button type="button" onClick={()=>void createTask()} disabled={savingTask||!tTitle.trim()}
+                  style={{padding:'7px 18px',borderRadius:8,border:'none',background:savingTask||!tTitle.trim()?'rgba(16,185,129,.4)':'#10b981',color:'#fff',fontSize:12,fontWeight:700,cursor:savingTask||!tTitle.trim()?'not-allowed':'pointer',fontFamily:'inherit'}}>
+                  {savingTask?'Saving…':'Create Task'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Image Preview Lightbox ──────────────────────────────────────── */}
+        {previewUrl && (
+          <div onClick={()=>setPreviewUrl(null)} style={{position:'absolute',inset:0,zIndex:70,background:'rgba(0,0,0,.8)',display:'flex',alignItems:'center',justifyContent:'center',cursor:'zoom-out',backdropFilter:'blur(4px)'}}>
+            <img src={previewUrl} alt="preview" style={{maxWidth:'85vw',maxHeight:'80vh',borderRadius:10,boxShadow:'0 24px 64px rgba(0,0,0,.6)'}} />
+          </div>
+        )}
+
+      </div>
+
+      {/* hidden file inputs */}
+      <input ref={fileRef} type="file" style={{display:'none'}} onChange={e=>{const f=e.target.files?.[0];if(f)void uploadFile(f);}} />
+
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Page wrapper
+══════════════════════════════════════════════════════════════════════════ */
+export default function TaskFlowDetail() {
+  const [params] = useSearchParams();
+  const navigate = useNavigate();
+  const channelId = params.get('projectId') ?? '';
+
+  useEffect(() => {
+    if (channelId && !CH[channelId]) {
+      navigate(`/workspace?projectId=${channelId}`, { replace: true });
+    }
+  }, [channelId, navigate]);
+
+  if (!channelId || !CH[channelId]) return null;
+
+  return (
+    <div className="flex min-h-screen" style={{ overflow: 'hidden', height: '100vh' }}>
+      <Sidebar />
+      <div className="flex-1 transition-[margin] duration-200" style={{ marginLeft: 'var(--sidebar-width, 88px)', display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
+        <ChannelPage channelId={channelId} />
+      </div>
+    </div>
+  );
+}

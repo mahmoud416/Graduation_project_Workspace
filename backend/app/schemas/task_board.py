@@ -33,9 +33,19 @@ class TaskBoardOverview(BaseModel):
 class TaskBoardTask(BaseModel):
     id: str
     title: str
+    description: Optional[str] = None
     assignee: str
+    assignee_ids: Optional[List[str]] = Field(default_factory=list)
     due: str
     done: bool = False
+    status: Optional[str] = None
+    priority: Optional[str] = None
+    visibility: Optional[str] = "team"
+    report_type: Optional[str] = None
+    completed_by: Optional[List[str]] = Field(default_factory=list)
+    completed_by_names: Optional[List[str]] = Field(default_factory=list)
+    created_by: Optional[str] = None
+    created_at: Optional[datetime] = None
     submitted_by: Optional[str] = None
     submitted_by_name: Optional[str] = None
 
@@ -98,16 +108,31 @@ class TaskBoardUpdate(BaseModel):
 
 class TaskBoardTaskCreate(BaseModel):
     title: str
+    description: Optional[str] = None
     assignee: Optional[str] = "Unassigned"
+    assignee_ids: Optional[List[str]] = Field(default_factory=list)
     due: Optional[str] = "TBD"
     done: bool = False
+    visibility: Optional[str] = "team"   # 'team' | 'private'
+    report_type: Optional[str] = None
+    created_by: Optional[str] = None
+    status: Optional[Literal["todo", "in_progress", "review", "done"]] = "todo"
+    priority: Optional[Literal["low", "medium", "high", "urgent"]] = "medium"
 
 
 class TaskBoardTaskPatch(BaseModel):
     title: Optional[str] = None
+    description: Optional[str] = None
     assignee: Optional[str] = None
+    assignee_ids: Optional[List[str]] = None
     due: Optional[str] = None
     done: Optional[bool] = None
+    visibility: Optional[str] = None
+    report_type: Optional[str] = None
+    completed_by: Optional[List[str]] = None       # user_ids who checked
+    completed_by_names: Optional[List[str]] = None  # display names
+    status: Optional[Literal["todo", "in_progress", "review", "done"]] = None
+    priority: Optional[Literal["low", "medium", "high", "urgent"]] = None
 
 
 class TaskBoardMemberRequest(BaseModel):

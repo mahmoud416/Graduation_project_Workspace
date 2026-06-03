@@ -29,6 +29,7 @@ class ProjectBase(BaseModel):
     staff_ids:     List[str]   = Field(default_factory=list)
     team_id:       Optional[str] = None
     due_date:      Optional[str] = None
+    priority:      Optional[str] = None
 
 
 class ProjectCreate(ProjectBase):
@@ -60,7 +61,7 @@ class ProjectStaffUpdate(BaseModel):
 
 class ProjectResponse(BaseModel):
     """Schema returned to the frontend for project details."""
-    id:               str             = Field(..., alias="_id")
+    id:               str
     title:            str
     description:      str
     status:           str
@@ -77,6 +78,7 @@ class ProjectResponse(BaseModel):
     created_at:       datetime
     updated_at:       datetime
     due_date:         Optional[str]   = None
+    priority:         Optional[str]   = None
 
     class Config:
         populate_by_name = True

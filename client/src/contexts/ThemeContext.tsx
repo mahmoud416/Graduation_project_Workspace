@@ -14,7 +14,7 @@ const readStoredTheme = (): Theme => {
     if (saved === 'dark' || saved === 'system' || saved === 'light') {
         return saved as Theme;
     }
-    return 'light';
+    return 'dark';
 };
 
 const resolveTheme = (theme: Theme, prefersDark: boolean): ResolvedTheme => {

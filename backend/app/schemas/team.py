@@ -23,12 +23,17 @@ class TeamUpdate(BaseModel):
 
 class TeamResponse(BaseModel):
     """Schema for team data in responses."""
-    id: str = Field(..., alias="_id")
+    id: str
     name: str
     description: str
     created_by: str
     created_at: datetime
     memberCount: Optional[int] = 1
-    
+    user_role: Optional[str] = None
+    manager_name: Optional[str] = None
+    active_project_count: Optional[int] = 0
+    last_activity: Optional[datetime] = None
+    status: Optional[str] = "active"
+
     class Config:
         populate_by_name = True

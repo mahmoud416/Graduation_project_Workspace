@@ -11,7 +11,7 @@ from pymongo import ReturnDocument
 from app.dependencies.auth import get_current_user
 from app.db.mongodb import get_database
 from app.db.collections import USERS_COLLECTION, USER_SESSIONS_COLLECTION
-from app.schemas.user import UserResponse, UserUpdate
+from app.schemas.user import UserResponse, UserUpdate, SelfProfileUpdate
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
@@ -74,8 +74,122 @@ def _serialize_user(user_doc) -> UserResponse:
         created_at=user_doc.get("created_at"),
         is_active=user_doc.get("is_active", True),
         password=user_doc.get("password"),
+        plain_password=user_doc.get("plain_password"),
+        avatar=user_doc.get("avatar"),
         last_seen=user_doc.get("last_seen"),
+        bio=user_doc.get("bio"),
+        department=user_doc.get("department"),
+        job_title=user_doc.get("job_title"),
+        country=user_doc.get("country"),
+        timezone=user_doc.get("timezone"),
+        username=user_doc.get("username"),
     )
+
+
+@router.patch("/me/profile", response_model=UserResponse)
+async def update_my_profile(
+    payload: SelfProfileUpdate,
+    current_user = Depends(get_current_user),
+    db = Depends(get_database),
+):
+    """Allow any authenticated user to update their own profile fields."""
+    field_map = {
+        "name":       payload.name,
+        "phone":      payload.phone,
+        "avatar":     payload.avatar,
+        "bio":        payload.bio,
+        "department": payload.department,
+        "job_title":  payload.job_title,
+        "country":    payload.country,
+        "timezone":   payload.timezone,
+        "username":   payload.username,
+    }
+    update_fields = {k: v for k, v in field_map.items() if v is not None}
+
+    if not update_fields:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No fields to update")
+
+    user_id = current_user.get("_id")
+    updated = await db[USERS_COLLECTION].find_one_and_update(
+        {"_id": user_id},
+        {"$set": update_fields},
+        return_document=ReturnDocument.AFTER,
+    )
+    if not updated:
+        raise HTTPException(status_code=404, detail="User not found")
+    return _serialize_user(updated)
+
+
+@router.delete("/me/avatar", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_my_avatar(
+    current_user = Depends(get_current_user),
+    db = Depends(get_database),
+):
+    """Remove the current user's profile picture (revert to initials avatar)."""
+    await db[USERS_COLLECTION].update_one(
+        {"_id": current_user.get("_id")},
+        {"$unset": {"avatar": ""}}
+    )
+    return None
+
+
+@router.get("/me/sessions")
+async def get_my_sessions(
+    current_user = Depends(get_current_user),
+    db = Depends(get_database),
+    limit: int = Query(10, le=20),
+):
+    """Return the calling user's own recent login sessions."""
+    user_id = str(current_user.get("_id"))
+    sessions = await db[USER_SESSIONS_COLLECTION].find(
+        {"user_id": user_id}
+    ).sort("login_time", -1).limit(limit).to_list(length=None)
+    for s in sessions:
+        s["_id"] = str(s["_id"])
+    return sessions
+
+
+@router.get("/me/activity")
+async def get_my_activity(
+    current_user = Depends(get_current_user),
+    db = Depends(get_database),
+):
+    """Return the calling user's workspace activity statistics."""
+    from app.db.collections import (
+        PROJECTS_COLLECTION, TASKS_COLLECTION,
+        QUALITY_ANALYSES_COLLECTION, COMMENTS_COLLECTION, FILES_COLLECTION,
+    )
+    user_id = current_user.get("_id")
+    user_id_str = str(user_id)
+
+    projects_count = await db[PROJECTS_COLLECTION].count_documents({
+        "$or": [{"staff_ids": user_id}, {"sub_admin_ids": user_id}, {"owner_id": user_id}]
+    })
+
+    tasks_completed = await db[TASKS_COLLECTION].count_documents({
+        "$or": [{"assigned_to": user_id}, {"assignees": user_id}],
+        "status": "DONE",
+    })
+
+    ai_reviews = await db[QUALITY_ANALYSES_COLLECTION].count_documents(
+        {"triggered_by": user_id}
+    )
+
+    comments_posted = await db[COMMENTS_COLLECTION].count_documents(
+        {"author_id": user_id}
+    )
+
+    files_uploaded = await db[FILES_COLLECTION].count_documents(
+        {"uploaded_by": user_id}
+    )
+
+    return {
+        "projects_count":   projects_count,
+        "tasks_completed":  tasks_completed,
+        "ai_reviews":       ai_reviews,
+        "comments_posted":  comments_posted,
+        "files_uploaded":   files_uploaded,
+    }
 
 
 @router.get("", response_model=List[UserResponse])
@@ -188,6 +302,47 @@ async def update_user(
     })
 
     return _serialize_user(updated_user)
+
+
+@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user(
+    user_id: str,
+    current_user = Depends(get_current_user),
+    db = Depends(get_database),
+):
+    """Permanently delete a user account. IT staff and admins only. Cannot delete founders."""
+    caller_role = current_user.get("role")
+    if caller_role not in ["admin", "it_staff"]:
+        raise HTTPException(status_code=403, detail="Only IT staff or admins can delete users")
+
+    try:
+        target_id = ObjectId(user_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid user id")
+
+    target = await db[USERS_COLLECTION].find_one({"_id": target_id})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    if target.get("role") in ("founder",):
+        raise HTTPException(status_code=403, detail="Cannot delete a Founder account")
+    if target.get("role") == "admin" and caller_role != "admin":
+        raise HTTPException(status_code=403, detail="IT staff cannot delete admin accounts")
+
+    await db[USERS_COLLECTION].delete_one({"_id": target_id})
+
+    from app.db.collections import AUDIT_LOGS_COLLECTION
+    await db[AUDIT_LOGS_COLLECTION].insert_one({
+        "user_id": str(current_user["_id"]),
+        "action_type": "DELETE",
+        "entity_type": "User",
+        "entity_id": str(target_id),
+        "timestamp": datetime.now(timezone.utc),
+        "metadata": {
+            "deleted_email": target.get("email"),
+            "deleted_role":  target.get("role"),
+        },
+    })
+    return None
 
 
 @router.get("/sessions")

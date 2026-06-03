@@ -2,9 +2,12 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <link rel="icon" type="image/svg+xml" href="/orbit-logo.svg" />
+    <link rel="apple-touch-icon" href="/orbit-logo.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>workspace-app</title>
+    <meta name="description" content="Orbit — Enterprise Quality Management Platform" />
+    <meta name="theme-color" content="#6366f1" />
+    <title>Orbit</title>
   </head>
   <body>
     <script>
@@ -14,7 +17,7 @@
         const body = document.body;
         const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
         const saved = window.localStorage.getItem(storageKey);
-        const mode = saved === 'dark' || saved === 'light' || saved === 'system' ? saved : 'light';
+        const mode = saved === 'dark' || saved === 'light' || saved === 'system' ? saved : 'dark';
         const resolved = mode === 'dark' || (mode === 'system' ? prefersDark : false) ? 'dark' : 'light';
         [root, body].forEach((node) => {
           if (!node) return;

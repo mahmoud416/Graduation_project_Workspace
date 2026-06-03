@@ -49,17 +49,18 @@ def _parse_user_id(value: Optional[str], label: str) -> Optional[str]:
 
 
 def _ensure_admin(current_user):
-    if current_user.get("role") not in ["admin", "manager"]:
+    """Only founder, admin, and manager can create/edit/delete projects."""
+    if current_user.get("role") not in ["founder", "admin", "manager"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin privileges required for this action"
+            detail="Only Admins and Founders can perform this action."
         )
 
 
 def _visibility_filter(current_user) -> dict:
     role = current_user.get("role")
     user_id = current_user.get("_id")
-    if role == "admin":
+    if role in ("founder", "admin"):
         return {}
     if role == "sub_admin":
         clauses = [{"_id": {"$in": list(DEFAULT_GROUP_IDS)}}]
@@ -170,7 +171,8 @@ async def create_project(
         sub_admin_ids=sub_admin_ids,
         staff_ids=staff_ids,
         team_id=_parse_user_id(project_data.team_id, "team_id"),
-        due_date=project_data.due_date
+        due_date=project_data.due_date,
+        priority=project_data.priority,
     )
 
     await TaskBoardService.ensure_board_for_project(db, project)
@@ -289,12 +291,7 @@ async def update_project(
     if not project:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
 
-    is_admin = current_user.get("role") == "admin"
-    assigned_subs = project.get("sub_admin_ids") or []
-    if not assigned_subs and project.get("sub_admin_id"):
-        assigned_subs = [project.get("sub_admin_id")]
-    is_assigned_subadmin = current_user.get("_id") in assigned_subs
-    if not (is_admin or is_assigned_subadmin):
+    if current_user.get("role") not in ["founder", "admin", "manager"]:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
 
     updates = {}

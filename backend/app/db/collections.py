@@ -71,12 +71,8 @@ async def create_indexes(db):
     await _safe_create_index(db[MEMBERSHIPS_COLLECTION], "project_id")
     await _safe_create_index(db[MEMBERSHIPS_COLLECTION], "managed_by")
 
-    # Legacy membership index (team_id) — already exists in DB, skip if conflicts
-    await _safe_create_index(
-        db[MEMBERSHIPS_COLLECTION],
-        [("user_id", 1), ("team_id", 1)],
-        unique=True
-    )
+    # team_id lookup only — not unique (one user can be in same team via multiple projects)
+    await _safe_create_index(db[MEMBERSHIPS_COLLECTION], [("user_id", 1), ("team_id", 1)])
     await _safe_create_index(db[MEMBERSHIPS_COLLECTION], "team_id")
 
     # tasks
@@ -133,8 +129,14 @@ async def create_indexes(db):
     )
 
     # events
-    await _safe_create_index(db[EVENTS_COLLECTION], [("date", 1)])
+    await _safe_create_index(db[EVENTS_COLLECTION], [("date", 1)])              # legacy
+    await _safe_create_index(db[EVENTS_COLLECTION], [("start_date", 1)])
+    await _safe_create_index(db[EVENTS_COLLECTION], [("start_date", 1), ("end_date", 1)])
     await _safe_create_index(db[EVENTS_COLLECTION], "created_by")
+    await _safe_create_index(db[EVENTS_COLLECTION], "owner_id")
+    await _safe_create_index(db[EVENTS_COLLECTION], "type")
+    await _safe_create_index(db[EVENTS_COLLECTION], "visibility")
+    await _safe_create_index(db[EVENTS_COLLECTION], "attendee_ids")
 
     # quality datasets & training artifacts
     await _safe_create_index(db[QUALITY_DATASETS_COLLECTION], [("name", 1), ("version", -1)])

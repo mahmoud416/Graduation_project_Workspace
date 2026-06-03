@@ -41,20 +41,45 @@ async def lifespan(app: FastAPI):
     Application lifespan manager.
     Handles startup and shutdown events.
     """
-    # Startup: Connect to MongoDB and create indexes
+    import asyncio
+
+    # ── 1. Connect to MongoDB ──────────────────────────────────────────────
     await connect_to_mongo()
     db = get_database()
-    await create_indexes(db)
 
-    # RAG warmup: index report specs + rules + patterns in background
-    # (non-blocking — server starts immediately even if OpenAI is unreachable)
-    import asyncio
+    # ── 2. Verify MongoDB is reachable (ping) ──────────────────────────────
+    try:
+        await db.command("ping")
+        print("[OK] MongoDB ping successful")
+    except Exception as exc:
+        # Log the failure but do not crash — endpoints will surface the error
+        print(f"[ERROR] MongoDB ping failed: {exc}")
+
+    # ── 3. Create indexes ──────────────────────────────────────────────────
+    try:
+        await create_indexes(db)
+    except Exception as exc:
+        print(f"[WARN] Index creation skipped (check MongoDB connection): {exc}")
+
+    # ── 4. Bootstrap check + auto-seed (synchronous) ─────────────────────
+    from app.db.collections import USERS_COLLECTION
+    founder = await db[USERS_COLLECTION].find_one({"role": "founder"}, {"name": 1, "email": 1})
+    if founder:
+        display = founder.get("name") or founder.get("email") or str(founder["_id"])
+        print(f"[DB] MongoDB Connected")
+        print(f"[DB] System initialized — Founder: {display}")
+        print(f"[DB] Founder Data Ready")
+    else:
+        print("[DB] MongoDB Connected")
+        print("[DB] WARNING: No founder found. Navigate to /setup to initialize.")
+
+    # ── 5. RAG warmup (non-blocking) ──────────────────────────────────────
     from app.services.rag_service import warmup_rag
     asyncio.create_task(warmup_rag(db))
 
     yield
 
-    # Shutdown: Close MongoDB connection
+    # ── Shutdown: close MongoDB connection ─────────────────────────────────
     await close_mongo_connection()
 
 

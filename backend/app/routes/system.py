@@ -13,6 +13,13 @@ from app.db.collections import (
 
 router = APIRouter(prefix="/system", tags=["System & IT"])
 
+
+@router.get("/init-status")
+async def get_init_status(db=Depends(get_database)):
+    """Public endpoint — returns whether the system has been initialized (founder account exists)."""
+    founder = await db[USERS_COLLECTION].find_one({"role": "founder"})
+    return {"initialized": founder is not None}
+
 def require_it_admin(current_user=Depends(get_current_user)):
     role = current_user.get("role")
     if role not in ["admin", "it_staff"]:

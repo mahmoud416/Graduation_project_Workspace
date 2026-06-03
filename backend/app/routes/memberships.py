@@ -52,7 +52,7 @@ async def add_member(
         )
         
         # Convert ObjectIds to strings
-        new_membership["_id"] = str(new_membership["_id"])
+        new_membership["id"] = str(new_membership.pop("_id"))
         new_membership["user_id"] = str(new_membership["user_id"])
         new_membership["team_id"] = str(new_membership["team_id"])
         if new_membership.get("managed_by"):
@@ -90,7 +90,7 @@ async def list_members(
     
     # Convert ObjectIds to strings
     for member in members:
-        member["_id"] = str(member["_id"])
+        member["id"] = str(member.pop("_id"))
         member["user_id"] = str(member["user_id"])
         member["team_id"] = str(member["team_id"])
         if member.get("managed_by"):
@@ -137,7 +137,7 @@ async def update_member_role(
         )
     
     # Convert ObjectIds to strings
-    updated_membership["_id"] = str(updated_membership["_id"])
+    updated_membership["id"] = str(updated_membership.pop("_id"))
     updated_membership["user_id"] = str(updated_membership["user_id"])
     updated_membership["team_id"] = str(updated_membership["team_id"])
     if updated_membership.get("managed_by"):

@@ -22,7 +22,7 @@ class MembershipUpdate(BaseModel):
 
 class MembershipResponse(BaseModel):
     """Schema for membership data in responses."""
-    id: str = Field(..., alias="_id")
+    id: str
     user_id: str
     team_id: str
     role: str

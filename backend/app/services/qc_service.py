@@ -1138,8 +1138,8 @@ Return FINAL SCORE as percentage.
 ========================================
 STEP 4: DECISION
 ========================================
-- PASS → if score >= 85%
-- FAIL → if score < 85%
+- PASS → if score >= 70%
+- FAIL → if score < 70%
 
 ========================================
 STEP 5: ERROR REPORT (VERY IMPORTANT)
@@ -1270,7 +1270,7 @@ Task Description: {task_description or "(No description provided)"}
     result["compliance_score"] = max(0.0, min(100.0, float(result["compliance_score"])))
 
     if "verdict" not in result:
-        result["verdict"] = "ACCEPTED" if result["compliance_score"] >= 85 else "NOT ACCEPTED"
+        result["verdict"] = "ACCEPTED" if result["compliance_score"] >= 70 else "NOT ACCEPTED"
 
     result["_raw"] = raw
     result["_mode"] = "online"

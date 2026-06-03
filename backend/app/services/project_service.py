@@ -28,7 +28,8 @@ class ProjectService:
         sub_admin_ids: List[Any],
         staff_ids: List[Any],
         team_id: Optional[Any] = None,
-        due_date: Optional[str] = None
+        due_date: Optional[str] = None,
+        priority: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Insert a new project document."""
         project_doc = ProjectModel.create_document(
@@ -40,7 +41,8 @@ class ProjectService:
             sub_admin_ids=sub_admin_ids,
             staff_ids=staff_ids,
             team_id=team_id,
-            due_date=due_date
+            due_date=due_date,
+            priority=priority,
         )
         result = await db[PROJECTS_COLLECTION].insert_one(project_doc)
         project_doc["_id"] = result.inserted_id
@@ -86,12 +88,14 @@ class ProjectService:
         ]
 
         for doc in defaults:
+            # $set and $setOnInsert cannot share the same field path (MongoDB error code 40).
+            # Keep is_system_card only in $set so it backfills existing docs and is set on insert.
+            insert_doc = {k: v for k, v in doc.items() if k != "is_system_card"}
             await db[PROJECTS_COLLECTION].update_one(
                 {"_id": doc["_id"]},
                 {
-                    "$setOnInsert": doc,
-                    # Only touch updated_at on existing docs to avoid owner_id conflicts
-                    "$set": {"updated_at": now},
+                    "$setOnInsert": insert_doc,
+                    "$set": {"updated_at": now, "is_system_card": True},
                 },
                 upsert=True,
             )
@@ -181,7 +185,7 @@ class ProjectService:
         owner_id = project.get("owner_id")
         team_id = project.get("team_id")
         response: Dict[str, Any] = {
-            "_id": str(project["_id"]),
+            "id": str(project["_id"]),
             "title": project.get("title", "Untitled Project"),
             "description": project.get("description", ""),
             "status": ProjectService._display_status(project.get("status", ProjectStatus.ACTIVE.value)),
@@ -192,6 +196,7 @@ class ProjectService:
             "uploads_enabled":  project.get("uploads_enabled", True),
             "is_system_card":   project.get("is_system_card", False),
             "due_date": project.get("due_date"),
+            "priority": project.get("priority"),
             "created_at": project.get("created_at"),
             "updated_at": project.get("updated_at")
         }

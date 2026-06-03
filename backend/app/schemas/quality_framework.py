@@ -23,12 +23,13 @@ class QualityFrameworkUpdate(BaseModel):
 class QualityFrameworkResponse(BaseModel):
     id: str = Field(..., alias="_id")
     name: str
-    description: str
-    ai_prompt_template: str
-    acceptance_threshold: int
-    is_active: bool
-    created_at: datetime
-    updated_at: datetime
+    description: Optional[str] = ""
+    ai_prompt_template: Optional[str] = ""
+    acceptance_threshold: Optional[int] = 70
+    is_active: Optional[bool] = True
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     class Config:
         populate_by_name = True
+        extra = "ignore"

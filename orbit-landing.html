@@ -1,0 +1,1288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Orbit — Stay In Orbit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
+<style>
+:root {
+  --bg: #05050d;
+  --bg2: #080812;
+  --card: rgba(255,255,255,0.03);
+  --border: rgba(255,255,255,0.07);
+  --border-h: rgba(255,255,255,0.14);
+  --blue: #1a6fff;
+  --blue2: #00aaff;
+  --blue-dim: rgba(26,111,255,0.15);
+  --purple: #8b5cf6;
+  --green: #10b981;
+  --amber: #f59e0b;
+  --cyan: #06b6d4;
+  --red: #ef4444;
+  --white: #ffffff;
+  --muted: #94a3b8;
+  --faint: #475569;
+  --font-d: 'Space Grotesk', sans-serif;
+  --font-b: 'Inter', sans-serif;
+  --glow: 0 0 40px rgba(26,111,255,0.25);
+  --glow-s: 0 0 20px rgba(26,111,255,0.2);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;-webkit-font-smoothing:antialiased}
+body{background:var(--bg);color:var(--white);font-family:var(--font-b);overflow-x:hidden}
+img,svg{display:block;max-width:100%}
+a{color:inherit;text-decoration:none}
+ul{list-style:none}
+
+/* LOADER */
+#loader{position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .6s ease,visibility .6s ease}
+#loader.hidden{opacity:0;visibility:hidden}
+.loader-ring{width:60px;height:60px;border:2px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* NAV */
+nav{position:fixed;top:0;left:0;right:0;z-index:1000;padding:0 40px;height:72px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid transparent;transition:all .4s ease}
+nav.scrolled{background:rgba(5,5,13,0.85);backdrop-filter:blur(20px);border-bottom-color:var(--border)}
+.nav-logo{display:flex;align-items:center;gap:10px;font-family:var(--font-d);font-size:20px;font-weight:700;letter-spacing:-.5px}
+.nav-logo-icon{width:32px;height:32px;background:linear-gradient(135deg,var(--blue),var(--purple));border-radius:8px;display:flex;align-items:center;justify-content:center;box-shadow:0 0 20px rgba(26,111,255,0.4)}
+.nav-logo-icon svg{width:18px;height:18px;fill:white}
+.nav-links{display:flex;align-items:center;gap:32px}
+.nav-links a{font-size:14px;font-weight:500;color:var(--muted);transition:color .2s}
+.nav-links a:hover{color:var(--white)}
+.nav-cta{padding:10px 22px;background:var(--blue);border-radius:8px;font-size:14px;font-weight:600;color:white;box-shadow:var(--glow-s);transition:all .2s}
+.nav-cta:hover{background:#2277ff;box-shadow:var(--glow);transform:translateY(-1px)}
+
+/* HERO */
+#hero{position:relative;height:100vh;min-height:700px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+#galaxy-canvas{position:absolute;inset:0;width:100%;height:100%}
+.hero-overlay{position:absolute;inset:0;background:radial-gradient(ellipse 60% 50% at 50% 60%,rgba(5,5,13,0) 0%,rgba(5,5,13,0.7) 100%)}
+.hero-content{position:relative;z-index:2;text-align:center;max-width:860px;padding:0 24px}
+.hero-badge{display:inline-flex;align-items:center;gap:8px;padding:6px 16px;border:1px solid rgba(26,111,255,0.4);border-radius:100px;font-size:12px;font-weight:500;color:var(--blue2);letter-spacing:.08em;text-transform:uppercase;margin-bottom:32px;background:rgba(26,111,255,0.08)}
+.hero-badge-dot{width:6px;height:6px;border-radius:50%;background:var(--blue2);animation:pulse-dot 2s ease infinite}
+@keyframes pulse-dot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.7)}}
+.hero-h1{font-family:var(--font-d);font-size:clamp(48px,7vw,96px);font-weight:700;line-height:1.05;letter-spacing:-2px;margin-bottom:24px}
+.hero-h1 span{background:linear-gradient(135deg,var(--blue) 0%,var(--blue2) 50%,var(--purple) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero-sub{font-size:clamp(16px,2vw,20px);color:var(--muted);line-height:1.7;max-width:580px;margin:0 auto 48px}
+.hero-btns{display:flex;align-items:center;justify-content:center;gap:16px;flex-wrap:wrap}
+.btn-primary{display:inline-flex;align-items:center;gap:8px;padding:14px 32px;background:var(--blue);border-radius:10px;font-size:15px;font-weight:600;color:white;box-shadow:var(--glow);transition:all .25s;border:none;cursor:pointer}
+.btn-primary:hover{background:#2277ff;transform:translateY(-2px);box-shadow:0 0 50px rgba(26,111,255,0.4)}
+.btn-secondary{display:inline-flex;align-items:center;gap:8px;padding:14px 32px;border:1px solid var(--border-h);border-radius:10px;font-size:15px;font-weight:600;color:var(--white);background:transparent;transition:all .25s;cursor:pointer}
+.btn-secondary:hover{border-color:rgba(255,255,255,0.3);background:rgba(255,255,255,0.05);transform:translateY(-2px)}
+.btn-arrow{transition:transform .2s}
+.btn-primary:hover .btn-arrow,.btn-secondary:hover .btn-arrow{transform:translateX(3px)}
+
+/* HERO STATS */
+.hero-stats{position:absolute;bottom:48px;left:50%;transform:translateX(-50%);z-index:2;display:flex;align-items:center;gap:0}
+.stat-item{padding:0 40px;text-align:center;border-right:1px solid var(--border)}
+.stat-item:last-child{border-right:none}
+.stat-num{font-family:var(--font-d);font-size:28px;font-weight:700;color:var(--white);letter-spacing:-1px}
+.stat-label{font-size:12px;color:var(--muted);letter-spacing:.05em;margin-top:4px}
+
+/* SCROLL INDICATOR */
+.scroll-hint{position:absolute;bottom:120px;left:50%;transform:translateX(-50%);z-index:2;display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--faint);font-size:11px;letter-spacing:.1em;text-transform:uppercase}
+.scroll-line{width:1px;height:40px;background:linear-gradient(to bottom,var(--border),transparent);animation:scroll-anim 2s ease infinite}
+@keyframes scroll-anim{0%,100%{opacity:.3;transform:scaleY(1)}50%{opacity:1;transform:scaleY(1.2)}}
+
+/* SECTIONS */
+section{padding:120px 0;position:relative}
+.container{max-width:1200px;margin:0 auto;padding:0 40px}
+.section-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border:1px solid var(--border);border-radius:100px;font-size:11px;font-weight:600;color:var(--blue);letter-spacing:.1em;text-transform:uppercase;margin-bottom:20px;background:var(--blue-dim)}
+.section-title{font-family:var(--font-d);font-size:clamp(32px,4vw,56px);font-weight:700;letter-spacing:-1.5px;line-height:1.1;margin-bottom:16px}
+.section-title span{background:linear-gradient(135deg,var(--blue),var(--blue2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.section-sub{font-size:17px;color:var(--muted);line-height:1.75;max-width:560px}
+.section-header{margin-bottom:72px}
+.reveal{opacity:0;transform:translateY(30px);transition:all .7s cubic-bezier(.16,1,.3,1)}
+.reveal.visible{opacity:1;transform:translateY(0)}
+
+/* GLASS CARD */
+.glass{background:var(--card);border:1px solid var(--border);border-radius:16px;backdrop-filter:blur(10px);transition:all .3s}
+.glass:hover{border-color:var(--border-h);box-shadow:var(--glow-s)}
+
+/* MISSION CONTROL */
+#mission{background:var(--bg2)}
+.mission-grid{display:grid;grid-template-columns:1fr 1fr;gap:80px;align-items:center}
+.mission-hub{position:relative;width:100%;aspect-ratio:1;max-width:520px;margin:0 auto}
+.hub-center{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:100px;height:100px;background:linear-gradient(135deg,var(--blue),var(--purple));border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 0 60px rgba(26,111,255,0.5),0 0 120px rgba(139,92,246,0.2);z-index:5;animation:hub-pulse 3s ease infinite}
+@keyframes hub-pulse{0%,100%{box-shadow:0 0 60px rgba(26,111,255,0.5),0 0 120px rgba(139,92,246,0.2)}50%{box-shadow:0 0 80px rgba(26,111,255,0.7),0 0 160px rgba(139,92,246,0.3)}}
+.hub-center svg{width:40px;height:40px;fill:white}
+.hub-ring{position:absolute;top:50%;left:50%;border-radius:50%;border:1px solid;transform:translate(-50%,-50%);animation:hub-rotate linear infinite}
+.hub-ring:nth-child(2){width:180px;height:180px;border-color:rgba(26,111,255,0.3);animation-duration:8s}
+.hub-ring:nth-child(3){width:280px;height:280px;border-color:rgba(139,92,246,0.2);animation-duration:14s;animation-direction:reverse}
+.hub-ring:nth-child(4){width:380px;height:380px;border-color:rgba(6,182,212,0.15);animation-duration:20s}
+.hub-ring:nth-child(5){width:480px;height:480px;border-color:rgba(255,255,255,0.05);animation-duration:28s;animation-direction:reverse}
+@keyframes hub-rotate{to{transform:translate(-50%,-50%) rotate(360deg)}}
+.hub-dot{position:absolute;width:10px;height:10px;border-radius:50%;top:-5px;left:50%;margin-left:-5px}
+.hub-node{position:absolute;width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);transform:translate(-50%,-50%);cursor:pointer;transition:all .3s}
+.hub-node:hover{transform:translate(-50%,-50%) scale(1.2)}
+.hub-label{position:absolute;font-size:10px;font-weight:600;color:var(--muted);white-space:nowrap;letter-spacing:.05em}
+.mission-features{display:flex;flex-direction:column;gap:20px}
+.mission-feat{padding:20px;border-radius:12px;border:1px solid var(--border);background:var(--card);display:flex;align-items:center;gap:16px;transition:all .3s;cursor:default}
+.mission-feat:hover{border-color:var(--border-h);transform:translateX(4px)}
+.feat-icon{width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.feat-text h4{font-size:15px;font-weight:600;margin-bottom:4px}
+.feat-text p{font-size:13px;color:var(--muted);line-height:1.5}
+
+/* WORKSPACE SECTION */
+.workspace-visual{position:relative;padding:60px;background:var(--card);border:1px solid var(--border);border-radius:24px;overflow:hidden;margin-top:60px}
+.ws-bg-glow{position:absolute;top:-100px;right:-100px;width:400px;height:400px;background:radial-gradient(circle,rgba(26,111,255,0.08) 0%,transparent 70%);pointer-events:none}
+.ws-tree{display:flex;flex-direction:column;gap:0}
+.ws-level{display:flex;gap:16px;padding:16px 0;position:relative}
+.ws-level::before{content:'';position:absolute;left:0;top:0;bottom:0;width:2px;background:linear-gradient(to bottom,var(--blue),transparent)}
+.ws-node{padding:10px 20px;border-radius:8px;border:1px solid var(--border);background:var(--card);font-size:13px;font-weight:500;display:flex;align-items:center;gap:8px;transition:all .3s;white-space:nowrap}
+.ws-node:hover{border-color:var(--border-h);background:rgba(255,255,255,0.05)}
+.ws-node .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.ws-indent{padding-left:32px}
+.ws-indent2{padding-left:64px}
+.ws-indent3{padding-left:96px}
+.ws-connector{display:flex;align-items:center;gap:8px;padding:4px 0 4px 16px;font-size:12px;color:var(--faint)}
+.ws-connector::before{content:'';display:block;width:20px;height:1px;background:var(--border)}
+
+/* PROJECTS SECTION */
+#projects{background:var(--bg2)}
+.kanban-board{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:60px}
+.kanban-col{background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:14px;padding:20px;min-height:340px}
+.kanban-col-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.kanban-col-title{font-size:13px;font-weight:600;letter-spacing:.03em}
+.kanban-count{background:var(--blue-dim);color:var(--blue);border-radius:100px;padding:2px 10px;font-size:11px;font-weight:700}
+.kanban-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px;cursor:pointer;transition:all .3s}
+.kanban-card:hover{border-color:var(--border-h);transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,0.3)}
+.kanban-card-title{font-size:13px;font-weight:600;margin-bottom:8px;line-height:1.4}
+.kanban-card-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.tag{padding:3px 8px;border-radius:4px;font-size:10px;font-weight:600;letter-spacing:.04em}
+.tag-blue{background:rgba(26,111,255,0.15);color:var(--blue2)}
+.tag-green{background:rgba(16,185,129,0.15);color:var(--green)}
+.tag-amber{background:rgba(245,158,11,0.15);color:var(--amber)}
+.tag-red{background:rgba(239,68,68,0.15);color:var(--red)}
+.tag-purple{background:rgba(139,92,246,0.15);color:var(--purple)}
+.kanban-progress{width:100%;height:3px;background:var(--border);border-radius:2px;margin-top:10px;overflow:hidden}
+.kanban-progress-bar{height:100%;border-radius:2px;background:var(--blue);transition:width 1s ease}
+.avatar-stack{display:flex;margin-left:auto}
+.avatar{width:22px;height:22px;border-radius:50%;border:2px solid var(--bg2);margin-left:-6px;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;color:white}
+
+/* QUALITY CONTROL */
+.qc-grid{display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:start;margin-top:60px}
+.qc-panel{padding:32px;border-radius:20px;border:1px solid var(--border);background:var(--card);position:relative;overflow:hidden}
+.qc-panel::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--blue),transparent)}
+.qc-score-ring{position:relative;width:160px;height:160px;margin:0 auto 24px}
+.qc-score-ring svg{width:100%;height:100%;transform:rotate(-90deg)}
+.qc-ring-bg{fill:none;stroke:rgba(255,255,255,0.05);stroke-width:8}
+.qc-ring-fill{fill:none;stroke:url(#scoreGrad);stroke-width:8;stroke-linecap:round;stroke-dasharray:440;stroke-dashoffset:35;transition:stroke-dashoffset 1.5s cubic-bezier(.16,1,.3,1)}
+.qc-ring-text{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center}
+.qc-ring-num{font-family:var(--font-d);font-size:36px;font-weight:700;line-height:1}
+.qc-ring-label{font-size:11px;color:var(--muted);letter-spacing:.05em;margin-top:4px}
+.qc-checks{display:flex;flex-direction:column;gap:10px;margin-top:8px}
+.qc-check{display:flex;align-items:flex-start;gap:10px;padding:12px;border-radius:8px;border:1px solid transparent;font-size:13px}
+.qc-check.pass{border-color:rgba(16,185,129,0.2);background:rgba(16,185,129,0.05)}
+.qc-check.fail{border-color:rgba(239,68,68,0.2);background:rgba(239,68,68,0.05)}
+.qc-check-icon{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0;margin-top:1px}
+.qc-check.pass .qc-check-icon{background:rgba(16,185,129,0.2);color:var(--green)}
+.qc-check.fail .qc-check-icon{background:rgba(239,68,68,0.2);color:var(--red)}
+.qc-ai-box{margin-top:16px;padding:16px;border-radius:10px;background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.2)}
+.qc-ai-label{font-size:11px;font-weight:600;color:var(--purple);letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.qc-ai-label::before{content:'✦';font-size:10px}
+.qc-ai-text{font-size:13px;color:var(--muted);line-height:1.6}
+.qc-metrics{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.qc-metric{padding:20px;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,0.02)}
+.qc-metric-val{font-family:var(--font-d);font-size:28px;font-weight:700;letter-spacing:-1px;margin-bottom:4px}
+.qc-metric-label{font-size:12px;color:var(--muted)}
+.qc-metric-bar{width:100%;height:4px;background:var(--border);border-radius:2px;margin-top:12px;overflow:hidden}
+.qc-metric-bar-fill{height:100%;border-radius:2px}
+
+/* AI ASSISTANT */
+#ai-section{background:var(--bg2)}
+.ai-terminal{background:#0a0a14;border:1px solid var(--border);border-radius:20px;overflow:hidden;font-family:'Courier New',monospace;position:relative}
+.ai-terminal-bar{padding:14px 20px;background:rgba(255,255,255,0.03);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.term-dot{width:12px;height:12px;border-radius:50%}
+.term-dot-r{background:#ef4444}
+.term-dot-y{background:#f59e0b}
+.term-dot-g{background:#10b981}
+.ai-terminal-title{font-family:var(--font-b);font-size:12px;color:var(--faint);margin-left:8px;letter-spacing:.05em}
+.ai-terminal-body{padding:28px;min-height:360px;position:relative;overflow:hidden}
+.ai-terminal-bg{position:absolute;inset:0;background:radial-gradient(ellipse 60% 40% at 30% 50%,rgba(139,92,246,0.06) 0%,transparent 70%)}
+.ai-line{font-size:13px;line-height:2;position:relative;z-index:1}
+.ai-prompt{color:var(--blue)}
+.ai-output{color:var(--muted)}
+.ai-highlight{color:var(--green)}
+.ai-warn{color:var(--amber)}
+.ai-error{color:var(--red)}
+.ai-purple{color:var(--purple)}
+.ai-cursor{display:inline-block;width:8px;height:14px;background:var(--blue);animation:blink .8s ease infinite;vertical-align:middle}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+.ai-grid{display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:center;margin-top:60px}
+.ai-insights{display:flex;flex-direction:column;gap:16px}
+.ai-insight{padding:20px;border-radius:12px;border:1px solid var(--border);background:var(--card);display:flex;gap:14px;transition:all .3s}
+.ai-insight:hover{border-color:var(--border-h);transform:translateX(4px)}
+.ai-insight-icon{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.ai-insight-content h4{font-size:14px;font-weight:600;margin-bottom:4px}
+.ai-insight-content p{font-size:12px;color:var(--muted);line-height:1.5}
+.ai-insight-badge{font-size:10px;font-weight:600;padding:2px 8px;border-radius:4px;margin-top:6px;display:inline-block}
+
+/* ANALYTICS */
+.analytics-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:60px}
+.analytics-grid-2{display:grid;grid-template-columns:2fr 1fr;gap:24px;margin-top:24px}
+.chart-card{padding:24px;border-radius:16px;border:1px solid var(--border);background:var(--card)}
+.chart-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+.chart-title{font-size:14px;font-weight:600}
+.chart-val{font-family:var(--font-d);font-size:28px;font-weight:700;letter-spacing:-1px}
+.chart-change{font-size:12px;color:var(--green);display:flex;align-items:center;gap:4px}
+.mini-chart{height:60px;display:flex;align-items:flex-end;gap:4px}
+.mini-bar{flex:1;border-radius:3px 3px 0 0;background:linear-gradient(to top,var(--blue),rgba(26,111,255,0.4));transition:height .5s ease;min-height:4px}
+.donut-wrap{position:relative;width:120px;height:120px;margin:0 auto}
+.donut-wrap svg{transform:rotate(-90deg)}
+.donut-center{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center}
+.donut-center-val{font-family:var(--font-d);font-size:20px;font-weight:700}
+.donut-center-sub{font-size:10px;color:var(--muted)}
+.heatmap{display:grid;grid-template-columns:repeat(12,1fr);gap:4px;margin-top:12px}
+.heatmap-cell{aspect-ratio:1;border-radius:3px;background:var(--border)}
+.line-chart{width:100%;height:100px;overflow:visible}
+
+/* IT OPS */
+#it-ops{background:var(--bg2)}
+.infra-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:60px}
+.infra-card{padding:24px;border-radius:14px;border:1px solid var(--border);background:var(--card);transition:all .3s}
+.infra-card:hover{border-color:var(--border-h);transform:translateY(-4px);box-shadow:0 20px 40px rgba(0,0,0,0.4)}
+.infra-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.infra-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px}
+.status-badge{padding:4px 10px;border-radius:100px;font-size:10px;font-weight:700;letter-spacing:.05em}
+.status-ok{background:rgba(16,185,129,0.15);color:var(--green)}
+.status-warn{background:rgba(245,158,11,0.15);color:var(--amber)}
+.status-err{background:rgba(239,68,68,0.15);color:var(--red)}
+.infra-metric{font-family:var(--font-d);font-size:24px;font-weight:700;letter-spacing:-.5px;margin-bottom:4px}
+.infra-label{font-size:12px;color:var(--muted)}
+.infra-bar{width:100%;height:4px;background:var(--border);border-radius:2px;margin-top:12px;overflow:hidden}
+.infra-bar-fill{height:100%;border-radius:2px;transition:width 1.2s cubic-bezier(.16,1,.3,1)}
+.monitoring-panel{margin-top:24px;padding:28px;border-radius:16px;border:1px solid var(--border);background:var(--card);display:grid;grid-template-columns:repeat(4,1fr);gap:20px}
+.mon-item{text-align:center}
+.mon-val{font-family:var(--font-d);font-size:22px;font-weight:700;letter-spacing:-.5px}
+.mon-label{font-size:11px;color:var(--muted);margin-top:4px}
+.mon-dot{width:8px;height:8px;border-radius:50%;margin:0 auto 8px;animation:pulse-dot 2s ease infinite}
+
+/* ROADMAP */
+.roadmap-track{display:grid;grid-template-columns:repeat(4,1fr);gap:0;margin-top:72px;position:relative}
+.roadmap-track::before{content:'';position:absolute;top:28px;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--blue),var(--purple),var(--cyan),var(--green))}
+.roadmap-item{text-align:center;padding-top:60px;position:relative}
+.roadmap-dot{position:absolute;top:18px;left:50%;transform:translateX(-50%);width:22px;height:22px;border-radius:50%;border:3px solid;background:var(--bg2);z-index:1}
+.roadmap-dot.active{width:28px;height:28px;top:15px;box-shadow:0 0 20px currentColor}
+.roadmap-q{font-family:var(--font-d);font-size:12px;font-weight:700;letter-spacing:.1em;margin-bottom:8px}
+.roadmap-title{font-size:16px;font-weight:700;margin-bottom:8px}
+.roadmap-items{font-size:13px;color:var(--muted);line-height:1.8}
+
+/* TEAM */
+.team-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:60px}
+.team-card{padding:32px 24px;border-radius:20px;border:1px solid var(--border);background:var(--card);text-align:center;transition:all .4s;position:relative;overflow:hidden}
+.team-card::before{content:'';position:absolute;top:0;left:0;right:0;height:80px;background:linear-gradient(180deg,rgba(26,111,255,0.08),transparent);opacity:0;transition:opacity .3s}
+.team-card:hover{border-color:var(--border-h);transform:translateY(-6px);box-shadow:0 24px 48px rgba(0,0,0,0.5)}
+.team-card:hover::before{opacity:1}
+.team-avatar{width:90px;height:90px;border-radius:50%;margin:0 auto 20px;background:linear-gradient(135deg,var(--blue),var(--purple));border:3px solid var(--border);display:flex;align-items:center;justify-content:center;font-family:var(--font-d);font-size:28px;font-weight:700;color:white;position:relative}
+.team-avatar-ring{position:absolute;inset:-6px;border-radius:50%;border:1px dashed rgba(26,111,255,0.3);animation:hub-rotate 8s linear infinite}
+.team-name{font-family:var(--font-d);font-size:17px;font-weight:700;margin-bottom:6px}
+.team-role{font-size:13px;color:var(--muted);margin-bottom:20px}
+.team-socials{display:flex;align-items:center;justify-content:center;gap:12px}
+.team-social{width:32px;height:32px;border-radius:8px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--muted);transition:all .2s}
+.team-social:hover{border-color:var(--blue);color:var(--blue);background:var(--blue-dim)}
+
+/* TECH STACK */
+.tech-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:16px;margin-top:60px}
+.tech-item{padding:20px 12px;border-radius:14px;border:1px solid var(--border);background:var(--card);text-align:center;transition:all .3s}
+.tech-item:hover{border-color:var(--border-h);transform:translateY(-4px);box-shadow:var(--glow-s)}
+.tech-icon{font-size:28px;margin-bottom:10px}
+.tech-name{font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.04em}
+
+/* CONTACT */
+#contact{background:var(--bg2)}
+.contact-grid{display:grid;grid-template-columns:1fr 1fr;gap:80px;align-items:start}
+.contact-info{display:flex;flex-direction:column;gap:24px;margin-top:32px}
+.contact-item{display:flex;align-items:center;gap:16px}
+.contact-icon{width:44px;height:44px;border-radius:10px;border:1px solid var(--border);background:var(--card);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.contact-text h4{font-size:14px;font-weight:600;margin-bottom:2px}
+.contact-text p{font-size:13px;color:var(--muted)}
+.contact-form{display:flex;flex-direction:column;gap:16px}
+.form-group{display:flex;flex-direction:column;gap:6px}
+.form-label{font-size:13px;font-weight:500;color:var(--muted)}
+.form-input,.form-textarea{background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:10px;padding:12px 16px;font-size:14px;color:var(--white);font-family:var(--font-b);transition:all .2s;outline:none;width:100%}
+.form-input:focus,.form-textarea:focus{border-color:rgba(26,111,255,0.5);background:rgba(26,111,255,0.04);box-shadow:0 0 0 3px rgba(26,111,255,0.1)}
+.form-textarea{resize:vertical;min-height:120px}
+.form-input::placeholder,.form-textarea::placeholder{color:var(--faint)}
+
+/* FOOTER */
+footer{padding:60px 0 40px;border-top:1px solid var(--border)}
+.footer-inner{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:40px;margin-bottom:48px}
+.footer-brand{max-width:260px}
+.footer-brand-name{font-family:var(--font-d);font-size:22px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:10px}
+.footer-brand p{font-size:13px;color:var(--muted);line-height:1.7}
+.footer-links h5{font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-bottom:16px}
+.footer-links a{display:block;font-size:14px;color:var(--muted);margin-bottom:10px;transition:color .2s}
+.footer-links a:hover{color:var(--white)}
+.footer-bottom{border-top:1px solid var(--border);padding-top:24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+.footer-copy{font-size:13px;color:var(--faint)}
+.footer-tagline{font-size:13px;color:var(--blue);font-weight:500;letter-spacing:.05em}
+
+/* DIVIDERS / DECORATIONS */
+.section-glow{position:absolute;pointer-events:none;border-radius:50%;filter:blur(80px)}
+.glow-tl{top:-200px;left:-100px;width:500px;height:500px;background:radial-gradient(circle,rgba(26,111,255,0.06),transparent 70%)}
+.glow-br{bottom:-200px;right:-100px;width:500px;height:500px;background:radial-gradient(circle,rgba(139,92,246,0.06),transparent 70%)}
+
+/* GRADIENT DEFS used by SVG */
+svg defs{display:none}
+
+/* RESPONSIVE */
+@media(max-width:900px){
+  .mission-grid,.qc-grid,.ai-grid,.contact-grid{grid-template-columns:1fr}
+  .kanban-board{grid-template-columns:1fr 1fr}
+  .team-grid{grid-template-columns:1fr 1fr}
+  .tech-grid{grid-template-columns:repeat(4,1fr)}
+  .analytics-grid{grid-template-columns:1fr 1fr}
+  .analytics-grid-2{grid-template-columns:1fr}
+  .roadmap-track{grid-template-columns:1fr 1fr;gap:24px}
+  .roadmap-track::before{display:none}
+  .roadmap-item{padding-top:0;text-align:left;padding-left:48px}
+  .roadmap-dot{left:0;top:0;transform:none}
+  .hero-stats{flex-wrap:wrap;justify-content:center;position:static;transform:none;margin-top:40px}
+  .stat-item{border-right:none;border-bottom:1px solid var(--border);padding:16px 24px}
+  .infra-grid{grid-template-columns:1fr 1fr}
+  .monitoring-panel{grid-template-columns:1fr 1fr}
+}
+@media(max-width:600px){
+  nav{padding:0 20px}
+  .nav-links{display:none}
+  .container{padding:0 20px}
+  .kanban-board{grid-template-columns:1fr}
+  .team-grid{grid-template-columns:1fr}
+  .tech-grid{grid-template-columns:repeat(3,1fr)}
+  .infra-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- LOADER -->
+<div id="loader"><div class="loader-ring"></div></div>
+
+<!-- NAV -->
+<nav id="nav">
+  <a href="#hero" class="nav-logo">
+    <div class="nav-logo-icon">
+      <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>
+    </div>
+    Orbit
+  </a>
+  <ul class="nav-links">
+    <li><a href="#mission">Platform</a></li>
+    <li><a href="#quality">Quality AI</a></li>
+    <li><a href="#analytics">Analytics</a></li>
+    <li><a href="#team">Team</a></li>
+    <li><a href="#contact">Contact</a></li>
+  </ul>
+  <a href="#contact" class="nav-cta">Launch Orbit →</a>
+</nav>
+
+<!-- HERO -->
+<section id="hero">
+  <canvas id="galaxy-canvas"></canvas>
+  <div class="hero-overlay"></div>
+  <div class="hero-content">
+    <div class="hero-badge"><span class="hero-badge-dot"></span>Intelligent Workspace Ecosystem</div>
+    <h1 class="hero-h1">Your Workspace.<br><span>In Perfect Orbit.</span></h1>
+    <p class="hero-sub">An AI-powered workspace ecosystem for projects, teams, quality control, analytics and intelligent operations — all in one command center.</p>
+    <div class="hero-btns">
+      <a href="#contact" class="btn-primary">Launch Orbit <span class="btn-arrow">→</span></a>
+      <a href="#mission" class="btn-secondary">Explore Mission <span class="btn-arrow">↓</span></a>
+    </div>
+  </div>
+  <div class="scroll-hint">DEEP DIVE<div class="scroll-line"></div></div>
+  <div class="hero-stats">
+    <div class="stat-item"><div class="stat-num" data-count="10000">0</div><div class="stat-label">Active Teams</div></div>
+    <div class="stat-item"><div class="stat-num" data-count="250000">0</div><div class="stat-label">Projects Managed</div></div>
+    <div class="stat-item"><div class="stat-num" data-target="99.9" data-suffix="%">99.9%</div><div class="stat-label">System Uptime</div></div>
+    <div class="stat-item"><div class="stat-num">24/7</div><div class="stat-label">Mission Control</div></div>
+  </div>
+</section>
+
+<!-- MISSION CONTROL -->
+<section id="mission">
+  <div class="section-glow glow-tl"></div>
+  <div class="container">
+    <div class="mission-grid">
+      <div class="reveal">
+        <div class="section-badge">● The Platform</div>
+        <h2 class="section-title">The <span>Command Center</span></h2>
+        <p class="section-sub">Orbit unifies every layer of your organization — teams, projects, tasks, quality standards, analytics, and infrastructure — into one living, intelligent ecosystem.</p>
+        <div class="mission-features" style="margin-top:36px">
+          <div class="mission-feat reveal">
+            <div class="feat-icon" style="background:rgba(26,111,255,0.12);color:var(--blue)">🌐</div>
+            <div class="feat-text"><h4>Unified Workspaces</h4><p>One source of truth for all your teams, groups, and departments.</p></div>
+          </div>
+          <div class="mission-feat reveal">
+            <div class="feat-icon" style="background:rgba(16,185,129,0.12);color:var(--green)">⚡</div>
+            <div class="feat-text"><h4>Real-time Collaboration</h4><p>Every action syncs instantly — no lag, no friction, no duplication.</p></div>
+          </div>
+          <div class="mission-feat reveal">
+            <div class="feat-icon" style="background:rgba(139,92,246,0.12);color:var(--purple)">🧠</div>
+            <div class="feat-text"><h4>AI Intelligence Layer</h4><p>Embedded AI reviews quality, surfaces risks, and recommends actions.</p></div>
+          </div>
+          <div class="mission-feat reveal">
+            <div class="feat-icon" style="background:rgba(245,158,11,0.12);color:var(--amber)">📊</div>
+            <div class="feat-text"><h4>Analytics Across the Galaxy</h4><p>From task completions to accreditation scores — all in one dashboard.</p></div>
+          </div>
+        </div>
+      </div>
+      <div class="reveal">
+        <div class="mission-hub">
+          <!-- Rings -->
+          <div class="hub-ring"><div class="hub-dot" style="background:var(--blue)"></div></div>
+          <div class="hub-ring"><div class="hub-dot" style="background:var(--purple)"></div></div>
+          <div class="hub-ring"><div class="hub-dot" style="background:var(--cyan)"></div></div>
+          <div class="hub-ring"><div class="hub-dot" style="background:var(--green)"></div></div>
+          <!-- Center -->
+          <div class="hub-center">
+            <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>
+          </div>
+          <!-- Node labels (positioned via JS) -->
+          <div class="hub-node" id="hn0" style="background:rgba(26,111,255,0.2);border-color:rgba(26,111,255,0.4)">🏢</div>
+          <div class="hub-node" id="hn1" style="background:rgba(16,185,129,0.2);border-color:rgba(16,185,129,0.4)">📁</div>
+          <div class="hub-node" id="hn2" style="background:rgba(139,92,246,0.2);border-color:rgba(139,92,246,0.4)">🧠</div>
+          <div class="hub-node" id="hn3" style="background:rgba(245,158,11,0.2);border-color:rgba(245,158,11,0.4)">✅</div>
+          <div class="hub-node" id="hn4" style="background:rgba(6,182,212,0.2);border-color:rgba(6,182,212,0.4)">📊</div>
+          <div class="hub-node" id="hn5" style="background:rgba(239,68,68,0.2);border-color:rgba(239,68,68,0.4)">🔧</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- WORKSPACE -->
+<section id="workspace">
+  <div class="section-glow glow-br"></div>
+  <div class="container">
+    <div class="section-header reveal">
+      <div class="section-badge">● Workspaces</div>
+      <h2 class="section-title">Built for <span>Deep Focus</span></h2>
+      <p class="section-sub">Orbit organizes every layer of your organization — from enterprise workspace down to individual task — as a connected orbit path.</p>
+    </div>
+    <div class="workspace-visual reveal">
+      <div class="ws-bg-glow"></div>
+      <div class="ws-tree">
+        <div class="ws-level">
+          <div class="ws-node"><span class="dot" style="background:var(--blue)"></span>🌌 Orbit Workspace — University Quality Assurance</div>
+        </div>
+        <div class="ws-indent ws-level">
+          <div class="ws-connector">Department</div>
+          <div class="ws-node"><span class="dot" style="background:var(--purple)"></span>🏛️ Engineering Faculty</div>
+          <div class="ws-node"><span class="dot" style="background:var(--purple)"></span>🏛️ Business Faculty</div>
+          <div class="ws-node"><span class="dot" style="background:var(--purple)"></span>🏛️ Sciences Faculty</div>
+        </div>
+        <div class="ws-indent2 ws-level">
+          <div class="ws-connector">Team</div>
+          <div class="ws-node"><span class="dot" style="background:var(--cyan)"></span>👥 QA Core Team</div>
+          <div class="ws-node"><span class="dot" style="background:var(--cyan)"></span>👥 Accreditation Team</div>
+          <div class="ws-node"><span class="dot" style="background:var(--cyan)"></span>👥 IT Operations</div>
+        </div>
+        <div class="ws-indent3 ws-level">
+          <div class="ws-connector">Projects & Tasks</div>
+          <div class="ws-node" style="border-color:rgba(26,111,255,0.3)"><span class="dot" style="background:var(--blue)"></span>📋 Annual QA Report 2025 <span class="tag tag-green" style="margin-left:auto">Active</span></div>
+          <div class="ws-node" style="border-color:rgba(245,158,11,0.3)"><span class="dot" style="background:var(--amber)"></span>📋 Program Accreditation Review <span class="tag tag-amber" style="margin-left:auto">Review</span></div>
+          <div class="ws-node" style="border-color:rgba(16,185,129,0.3)"><span class="dot" style="background:var(--green)"></span>📋 Course Specification Audit <span class="tag tag-blue" style="margin-left:auto">Done</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PROJECT MANAGEMENT -->
+<section id="projects">
+  <div class="container">
+    <div class="section-header reveal">
+      <div class="section-badge">● Project Management</div>
+      <h2 class="section-title">Projects <span>In Motion</span></h2>
+      <p class="section-sub">Kanban boards, sprint planning, milestones, and deadlines — all animated and alive. Every task tracked from kickoff to delivery.</p>
+    </div>
+    <div class="kanban-board reveal">
+      <!-- BACKLOG -->
+      <div class="kanban-col">
+        <div class="kanban-col-header"><span class="kanban-col-title">📋 Backlog</span><span class="kanban-count">4</span></div>
+        <div class="kanban-card"><div class="kanban-card-title">Research competitive accreditation standards</div><div class="kanban-card-meta"><span class="tag tag-blue">Research</span><div class="avatar-stack"><div class="avatar" style="background:#3b82f6">A</div></div></div><div class="kanban-progress"><div class="kanban-progress-bar" style="width:15%;background:var(--faint)"></div></div></div>
+        <div class="kanban-card"><div class="kanban-card-title">Define KPIs for QA unit annual report</div><div class="kanban-card-meta"><span class="tag tag-purple">Planning</span><div class="avatar-stack"><div class="avatar" style="background:#8b5cf6">M</div></div></div></div>
+        <div class="kanban-card"><div class="kanban-card-title">Setup IT monitoring dashboards</div><div class="kanban-card-meta"><span class="tag tag-red">DevOps</span></div></div>
+      </div>
+      <!-- IN PROGRESS -->
+      <div class="kanban-col" style="border-color:rgba(26,111,255,0.3)">
+        <div class="kanban-col-header"><span class="kanban-col-title" style="color:var(--blue)">⚡ In Progress</span><span class="kanban-count">3</span></div>
+        <div class="kanban-card" style="border-color:rgba(26,111,255,0.25)"><div class="kanban-card-title">Annual QA Report — Section 3: Learning Outcomes</div><div class="kanban-card-meta"><span class="tag tag-blue">QA Report</span><span class="tag tag-amber">High</span></div><div class="kanban-progress"><div class="kanban-progress-bar" style="width:68%"></div></div></div>
+        <div class="kanban-card" style="border-color:rgba(26,111,255,0.2)"><div class="kanban-card-title">Course specification data collection Q4</div><div class="kanban-card-meta"><span class="tag tag-blue">Course Spec</span><div class="avatar-stack"><div class="avatar" style="background:#10b981">S</div><div class="avatar" style="background:#06b6d4">O</div></div></div><div class="kanban-progress"><div class="kanban-progress-bar" style="width:45%"></div></div></div>
+        <div class="kanban-card" style="border-color:rgba(26,111,255,0.2)"><div class="kanban-card-title">Program self-study report drafting</div><div class="kanban-card-meta"><span class="tag tag-purple">Self Study</span></div><div class="kanban-progress"><div class="kanban-progress-bar" style="width:30%"></div></div></div>
+      </div>
+      <!-- REVIEW -->
+      <div class="kanban-col">
+        <div class="kanban-col-header"><span class="kanban-col-title" style="color:var(--amber)">🔍 AI Review</span><span class="kanban-count">2</span></div>
+        <div class="kanban-card"><div class="kanban-card-title">Exam results analysis — Fall 2024</div><div class="kanban-card-meta"><span class="tag tag-amber">Pending AI</span></div><div class="kanban-progress"><div class="kanban-progress-bar" style="width:85%;background:var(--amber)"></div></div></div>
+        <div class="kanban-card"><div class="kanban-card-title">Field training feedback report</div><div class="kanban-card-meta"><span class="tag tag-amber">Under Review</span><div class="avatar-stack"><div class="avatar" style="background:#f59e0b">K</div></div></div><div class="kanban-progress"><div class="kanban-progress-bar" style="width:90%;background:var(--amber)"></div></div></div>
+      </div>
+      <!-- DONE -->
+      <div class="kanban-col">
+        <div class="kanban-col-header"><span class="kanban-col-title" style="color:var(--green)">✅ Completed</span><span class="kanban-count">5</span></div>
+        <div class="kanban-card" style="opacity:.7"><div class="kanban-card-title">Reviewer reports — External Panel 2024</div><div class="kanban-card-meta"><span class="tag tag-green">Approved</span></div><div class="kanban-progress"><div class="kanban-progress-bar" style="width:100%;background:var(--green)"></div></div></div>
+        <div class="kanban-card" style="opacity:.7"><div class="kanban-card-title">Student satisfaction survey analysis</div><div class="kanban-card-meta"><span class="tag tag-green">Done</span></div><div class="kanban-progress"><div class="kanban-progress-bar" style="width:100%;background:var(--green)"></div></div></div>
+        <div class="kanban-card" style="opacity:.7"><div class="kanban-card-title">Research ethics committee report</div><div class="kanban-card-meta"><span class="tag tag-green">Delivered</span></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- QUALITY CONTROL -->
+<section id="quality" style="background:var(--bg2)">
+  <div class="section-glow glow-tl"></div>
+  <div class="container">
+    <div class="section-header reveal">
+      <div class="section-badge">● AI Quality Control</div>
+      <h2 class="section-title">AI-Powered <span>Quality Assurance</span></h2>
+      <p class="section-sub">Orbit's AI engine evaluates every submission against accreditation standards — scoring, flagging, and recommending improvements in real-time.</p>
+    </div>
+    <div class="qc-grid reveal">
+      <!-- Score Panel -->
+      <div class="qc-panel">
+        <h3 style="font-size:15px;font-weight:600;margin-bottom:24px;color:var(--muted)">Quality Analysis Report</h3>
+        <div class="qc-score-ring">
+          <svg viewBox="0 0 160 160">
+            <defs>
+              <linearGradient id="scoreGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" style="stop-color:#1a6fff"/>
+                <stop offset="100%" style="stop-color:#00aaff"/>
+              </linearGradient>
+            </defs>
+            <circle class="qc-ring-bg" cx="80" cy="80" r="70"/>
+            <circle class="qc-ring-fill" cx="80" cy="80" r="70" id="scoreRing"/>
+          </svg>
+          <div class="qc-ring-text">
+            <div class="qc-ring-num" id="scoreNum">0%</div>
+            <div class="qc-ring-label">QUALITY SCORE</div>
+          </div>
+        </div>
+        <div class="qc-checks">
+          <div class="qc-check pass"><div class="qc-check-icon">✓</div><div><strong>Documentation Complete</strong><br><span style="color:var(--muted);font-size:12px">All required sections present and filled</span></div></div>
+          <div class="qc-check pass"><div class="qc-check-icon">✓</div><div><strong>UI Standards Met</strong><br><span style="color:var(--muted);font-size:12px">Format, structure, and layout compliant</span></div></div>
+          <div class="qc-check pass"><div class="qc-check-icon">✓</div><div><strong>Learning Outcomes Mapped</strong><br><span style="color:var(--muted);font-size:12px">All PLOs aligned with course objectives</span></div></div>
+          <div class="qc-check fail"><div class="qc-check-icon">✗</div><div><strong>Testing Evidence Missing</strong><br><span style="color:var(--muted);font-size:12px">Assessment evidence not attached</span></div></div>
+        </div>
+        <div class="qc-ai-box">
+          <div class="qc-ai-label">Orbit Intelligence Suggestion</div>
+          <div class="qc-ai-text">Attach assessment evidence from the last two examination cycles and include at least 3 sample student works to fully satisfy the accreditation standard. Estimated score improvement: +8%</div>
+        </div>
+      </div>
+      <!-- Metrics Panel -->
+      <div style="display:flex;flex-direction:column;gap:20px">
+        <div class="qc-metrics">
+          <div class="qc-metric"><div class="qc-metric-val" style="color:var(--green)">94%</div><div class="qc-metric-label">Structure Score</div><div class="qc-metric-bar"><div class="qc-metric-bar-fill" style="width:94%;background:var(--green)"></div></div></div>
+          <div class="qc-metric"><div class="qc-metric-val" style="color:var(--blue)">89%</div><div class="qc-metric-label">Content Quality</div><div class="qc-metric-bar"><div class="qc-metric-bar-fill" style="width:89%;background:var(--blue)"></div></div></div>
+          <div class="qc-metric"><div class="qc-metric-val" style="color:var(--cyan)">78%</div><div class="qc-metric-label">Completeness</div><div class="qc-metric-bar"><div class="qc-metric-bar-fill" style="width:78%;background:var(--cyan)"></div></div></div>
+          <div class="qc-metric"><div class="qc-metric-val" style="color:var(--amber)">95%</div><div class="qc-metric-label">Formatting</div><div class="qc-metric-bar"><div class="qc-metric-bar-fill" style="width:95%;background:var(--amber)"></div></div></div>
+        </div>
+        <div class="qc-panel" style="margin-top:0">
+          <h4 style="font-size:13px;font-weight:600;margin-bottom:16px;color:var(--muted)">Reports Processed This Month</h4>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;text-align:center">
+            <div><div style="font-family:var(--font-d);font-size:28px;font-weight:700;color:var(--green)">142</div><div style="font-size:11px;color:var(--muted)">Passed</div></div>
+            <div><div style="font-family:var(--font-d);font-size:28px;font-weight:700;color:var(--red)">23</div><div style="font-size:11px;color:var(--muted)">Failed</div></div>
+            <div><div style="font-family:var(--font-d);font-size:28px;font-weight:700;color:var(--blue)">86%</div><div style="font-size:11px;color:var(--muted)">Pass Rate</div></div>
+          </div>
+        </div>
+        <div class="qc-panel" style="margin-top:0">
+          <h4 style="font-size:13px;font-weight:600;margin-bottom:14px;color:var(--muted)">Active Report Types</h4>
+          <div style="display:flex;flex-wrap:wrap;gap:6px">
+            <span class="tag tag-blue">Course Report</span>
+            <span class="tag tag-purple">Program Report</span>
+            <span class="tag tag-green">Self Study</span>
+            <span class="tag tag-amber">Exam Analysis</span>
+            <span class="tag tag-red">HR Performance</span>
+            <span class="tag tag-blue">QA Annual</span>
+            <span class="tag tag-purple">Research Ethics</span>
+            <span class="tag" style="background:rgba(6,182,212,.15);color:var(--cyan)">Field Training</span>
+          </div>
+          <p style="font-size:12px;color:var(--faint);margin-top:12px">+12 more report types supported</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- AI ASSISTANT -->
+<section id="ai-section">
+  <div class="section-glow glow-br"></div>
+  <div class="container">
+    <div class="ai-grid reveal">
+      <div>
+        <div class="section-badge">● Orbit Intelligence</div>
+        <h2 class="section-title">Orbit <span>Intelligence</span></h2>
+        <p class="section-sub">The AI layer that never sleeps. It monitors your projects, tasks, workflows, and quality reports — surfacing risks before they become problems.</p>
+        <div class="ai-insights" style="margin-top:32px">
+          <div class="ai-insight">
+            <div class="ai-insight-icon" style="background:rgba(239,68,68,0.12)">⚠️</div>
+            <div class="ai-insight-content">
+              <h4>Project Alpha — Risk Detected</h4>
+              <p>Documentation missing for 3 course specifications. Testing phase 4 days behind schedule.</p>
+              <span class="ai-insight-badge tag tag-red">High Risk</span>
+            </div>
+          </div>
+          <div class="ai-insight">
+            <div class="ai-insight-icon" style="background:rgba(245,158,11,0.12)">📌</div>
+            <div class="ai-insight-content">
+              <h4>QA Review Deadline Approaching</h4>
+              <p>Annual QA report due in 6 days. 3 sections still pending reviewer sign-off.</p>
+              <span class="ai-insight-badge tag tag-amber">Attention</span>
+            </div>
+          </div>
+          <div class="ai-insight">
+            <div class="ai-insight-icon" style="background:rgba(16,185,129,0.12)">✅</div>
+            <div class="ai-insight-content">
+              <h4>Recommended Action</h4>
+              <p>Assign 2 additional reviewers to Project Alpha. Estimated time to resolution: 2 days.</p>
+              <span class="ai-insight-badge tag tag-green">AI Suggestion</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="ai-terminal">
+        <div class="ai-terminal-bar">
+          <div class="term-dot term-dot-r"></div>
+          <div class="term-dot term-dot-y"></div>
+          <div class="term-dot term-dot-g"></div>
+          <span class="ai-terminal-title">orbit-intelligence — live analysis</span>
+        </div>
+        <div class="ai-terminal-body">
+          <div class="ai-terminal-bg"></div>
+          <div class="ai-line"><span class="ai-prompt">orbit &gt;</span> <span class="ai-output">Analyzing workspace activity...</span></div>
+          <div class="ai-line"><span class="ai-output">━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</span></div>
+          <div class="ai-line"><span class="ai-prompt">▶</span> <span class="ai-output">Scanning 24 active projects</span></div>
+          <div class="ai-line"><span class="ai-prompt">▶</span> <span class="ai-output">Reviewing 347 open tasks</span></div>
+          <div class="ai-line"><span class="ai-prompt">▶</span> <span class="ai-output">Processing 12 pending QA reports</span></div>
+          <div class="ai-line">&nbsp;</div>
+          <div class="ai-line"><span class="ai-error">⚠ RISK:</span> <span class="ai-output">Project Alpha — documentation gap</span></div>
+          <div class="ai-line"><span class="ai-warn">↳</span> <span class="ai-output">Missing: course_spec_ENG301.pdf</span></div>
+          <div class="ai-line"><span class="ai-warn">↳</span> <span class="ai-output">Missing: assessment_evidence_Q4.pdf</span></div>
+          <div class="ai-line">&nbsp;</div>
+          <div class="ai-line"><span class="ai-highlight">✓ ANALYSIS:</span> <span class="ai-output">Quality score would improve to</span></div>
+          <div class="ai-line"><span class="ai-purple">  97% compliance</span> <span class="ai-output">if gaps resolved</span></div>
+          <div class="ai-line">&nbsp;</div>
+          <div class="ai-line"><span class="ai-highlight">✓ ACTION:</span> <span class="ai-output">Assigning @sara.ahmed as reviewer</span></div>
+          <div class="ai-line"><span class="ai-highlight">✓ ACTION:</span> <span class="ai-output">ETA recalculated: 2 days</span></div>
+          <div class="ai-line">&nbsp;</div>
+          <div class="ai-line"><span class="ai-prompt">orbit &gt;</span> <span class="ai-cursor"></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ANALYTICS -->
+<section id="analytics" style="background:var(--bg2)">
+  <div class="section-glow glow-tl"></div>
+  <div class="container">
+    <div class="section-header reveal">
+      <div class="section-badge">● Analytics</div>
+      <h2 class="section-title">Insights Across <span>the Galaxy</span></h2>
+      <p class="section-sub">Every metric, from quality trends to team velocity, visualized in real-time premium dashboards.</p>
+    </div>
+    <div class="analytics-grid reveal">
+      <div class="chart-card">
+        <div class="chart-header"><span class="chart-title">Quality Score Trend</span><span class="tag tag-green">↑ 12%</span></div>
+        <div class="chart-val" style="color:var(--blue)">88.4%</div>
+        <div style="height:70px;margin-top:16px">
+          <svg class="line-chart" viewBox="0 0 200 60" preserveAspectRatio="none">
+            <defs><linearGradient id="lineGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#1a6fff" stop-opacity=".3"/><stop offset="100%" stop-color="#1a6fff" stop-opacity="0"/></linearGradient></defs>
+            <path d="M0,50 L16,45 L33,38 L50,42 L66,30 L83,35 L100,22 L116,28 L133,15 L150,20 L166,12 L183,8 L200,6" fill="none" stroke="var(--blue)" stroke-width="2" stroke-linecap="round"/>
+            <path d="M0,50 L16,45 L33,38 L50,42 L66,30 L83,35 L100,22 L116,28 L133,15 L150,20 L166,12 L183,8 L200,6 L200,60 L0,60 Z" fill="url(#lineGrad)"/>
+          </svg>
+        </div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header"><span class="chart-title">Task Completion</span><span class="tag tag-blue">This Month</span></div>
+        <div class="chart-val">347 <span style="font-size:16px;color:var(--muted);font-weight:400">tasks</span></div>
+        <div class="mini-chart" style="margin-top:16px">
+          <div class="mini-bar" style="height:35%"></div><div class="mini-bar" style="height:55%"></div><div class="mini-bar" style="height:40%"></div><div class="mini-bar" style="height:70%"></div><div class="mini-bar" style="height:60%"></div><div class="mini-bar" style="height:85%"></div><div class="mini-bar" style="height:75%"></div><div class="mini-bar" style="height:90%"></div><div class="mini-bar" style="height:80%"></div><div class="mini-bar" style="height:95%"></div><div class="mini-bar" style="height:88%"></div><div class="mini-bar" style="height:100%"></div>
+        </div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header"><span class="chart-title">Project Health</span></div>
+        <div class="donut-wrap" style="margin-top:8px">
+          <svg viewBox="0 0 120 120" width="120" height="120">
+            <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="12"/>
+            <circle cx="60" cy="60" r="50" fill="none" stroke="var(--green)" stroke-width="12" stroke-dasharray="314" stroke-dashoffset="47" stroke-linecap="round" transform="rotate(-90 60 60)"/>
+            <circle cx="60" cy="60" r="50" fill="none" stroke="var(--amber)" stroke-width="12" stroke-dasharray="314" stroke-dashoffset="267" stroke-linecap="round" transform="rotate(15 60 60)"/>
+            <circle cx="60" cy="60" r="50" fill="none" stroke="var(--red)" stroke-width="12" stroke-dasharray="314" stroke-dashoffset="298" stroke-linecap="round" transform="rotate(60 60 60)"/>
+          </svg>
+          <div class="donut-center"><div class="donut-center-val">85%</div><div class="donut-center-sub">On Track</div></div>
+        </div>
+        <div style="display:flex;gap:12px;margin-top:12px;justify-content:center;font-size:11px">
+          <span style="color:var(--green)">● On Track</span>
+          <span style="color:var(--amber)">● At Risk</span>
+          <span style="color:var(--red)">● Blocked</span>
+        </div>
+      </div>
+    </div>
+    <div class="analytics-grid-2 reveal" style="margin-top:24px">
+      <div class="chart-card">
+        <div class="chart-header"><span class="chart-title">Team Activity Heatmap</span><span style="font-size:12px;color:var(--faint)">Last 12 weeks</span></div>
+        <div class="heatmap" id="heatmap"></div>
+        <div style="display:flex;gap:4px;align-items:center;margin-top:12px;font-size:11px;color:var(--faint)">Less <div style="display:flex;gap:3px;margin:0 8px"><div style="width:10px;height:10px;border-radius:2px;background:rgba(26,111,255,0.1)"></div><div style="width:10px;height:10px;border-radius:2px;background:rgba(26,111,255,0.3)"></div><div style="width:10px;height:10px;border-radius:2px;background:rgba(26,111,255,0.5)"></div><div style="width:10px;height:10px;border-radius:2px;background:rgba(26,111,255,0.8)"></div><div style="width:10px;height:10px;border-radius:2px;background:var(--blue)"></div></div> More</div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header"><span class="chart-title">Productivity Score</span></div>
+        <div class="chart-val" style="color:var(--purple)">92.1</div>
+        <div style="margin-top:16px;display:flex;flex-direction:column;gap:10px">
+          <div><div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:4px"><span>QA Team</span><span style="color:var(--white)">96%</span></div><div style="background:var(--border);height:4px;border-radius:2px"><div style="width:96%;height:100%;background:var(--purple);border-radius:2px"></div></div></div>
+          <div><div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:4px"><span>Engineering</span><span style="color:var(--white)">89%</span></div><div style="background:var(--border);height:4px;border-radius:2px"><div style="width:89%;height:100%;background:var(--blue);border-radius:2px"></div></div></div>
+          <div><div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:4px"><span>IT Ops</span><span style="color:var(--white)">94%</span></div><div style="background:var(--border);height:4px;border-radius:2px"><div style="width:94%;height:100%;background:var(--cyan);border-radius:2px"></div></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- IT OPERATIONS -->
+<section id="it-ops">
+  <div class="section-glow glow-br"></div>
+  <div class="container">
+    <div class="section-header reveal">
+      <div class="section-badge">● IT Operations</div>
+      <h2 class="section-title">Mission <span>Infrastructure</span></h2>
+      <p class="section-sub">Real-time visibility into every server, container, API, and deployment. DevOps meets mission control.</p>
+    </div>
+    <div class="infra-grid reveal">
+      <div class="infra-card"><div class="infra-header"><div class="infra-icon" style="background:rgba(26,111,255,0.12)">🖥️</div><span class="status-badge status-ok">ONLINE</span></div><div class="infra-metric">99.98%</div><div class="infra-label">API Server Uptime</div><div class="infra-bar"><div class="infra-bar-fill" style="width:99%;background:var(--green)"></div></div></div>
+      <div class="infra-card"><div class="infra-header"><div class="infra-icon" style="background:rgba(6,182,212,0.12)">🐳</div><span class="status-badge status-ok">RUNNING</span></div><div class="infra-metric">12 / 12</div><div class="infra-label">Docker Containers Active</div><div class="infra-bar"><div class="infra-bar-fill" style="width:100%;background:var(--cyan)"></div></div></div>
+      <div class="infra-card"><div class="infra-header"><div class="infra-icon" style="background:rgba(16,185,129,0.12)">🗄️</div><span class="status-badge status-ok">HEALTHY</span></div><div class="infra-metric">2.4 TB</div><div class="infra-label">MongoDB Storage Used</div><div class="infra-bar"><div class="infra-bar-fill" style="width:48%;background:var(--green)"></div></div></div>
+      <div class="infra-card"><div class="infra-header"><div class="infra-icon" style="background:rgba(245,158,11,0.12)">⚙️</div><span class="status-badge status-warn">SCALING</span></div><div class="infra-metric">78%</div><div class="infra-label">CPU Load Average</div><div class="infra-bar"><div class="infra-bar-fill" style="width:78%;background:var(--amber)"></div></div></div>
+      <div class="infra-card"><div class="infra-header"><div class="infra-icon" style="background:rgba(139,92,246,0.12)">🔒</div><span class="status-badge status-ok">SECURE</span></div><div class="infra-metric">0</div><div class="infra-label">Security Alerts</div><div class="infra-bar"><div class="infra-bar-fill" style="width:5%;background:var(--purple)"></div></div></div>
+      <div class="infra-card"><div class="infra-header"><div class="infra-icon" style="background:rgba(239,68,68,0.12)">🚀</div><span class="status-badge status-ok">LIVE</span></div><div class="infra-metric">14 ms</div><div class="infra-label">API Response Time</div><div class="infra-bar"><div class="infra-bar-fill" style="width:14%;background:var(--blue)"></div></div></div>
+    </div>
+    <div class="monitoring-panel reveal">
+      <div class="mon-item"><div class="mon-dot" style="background:var(--green)"></div><div class="mon-val" style="color:var(--green)">100%</div><div class="mon-label">Frontend CDN</div></div>
+      <div class="mon-item"><div class="mon-dot" style="background:var(--blue)"></div><div class="mon-val" style="color:var(--blue)">4.8K</div><div class="mon-label">API Req/min</div></div>
+      <div class="mon-item"><div class="mon-dot" style="background:var(--purple)"></div><div class="mon-val" style="color:var(--purple)">3.2K</div><div class="mon-label">AI Analyses/day</div></div>
+      <div class="mon-item"><div class="mon-dot" style="background:var(--cyan)"></div><div class="mon-val" style="color:var(--cyan)">99.9%</div><div class="mon-label">SLA Compliance</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ROADMAP -->
+<section id="roadmap" style="background:var(--bg2)">
+  <div class="section-glow glow-tl"></div>
+  <div class="container">
+    <div class="section-header reveal" style="text-align:center">
+      <div class="section-badge" style="margin:0 auto 20px">● Mission Timeline</div>
+      <h2 class="section-title">The <span>Cosmic Roadmap</span></h2>
+      <p class="section-sub" style="margin:0 auto">From launch to enterprise-grade intelligence — each quarter a new orbit unlocked.</p>
+    </div>
+    <div class="roadmap-track reveal">
+      <div class="roadmap-item">
+        <div class="roadmap-dot active" style="color:var(--blue);border-color:var(--blue)"></div>
+        <div class="roadmap-q" style="color:var(--blue)">Q1 — COMPLETE</div>
+        <div class="roadmap-title">Core Platform</div>
+        <div class="roadmap-items">Workspace Management<br>Team Collaboration<br>Project Tracking<br>User Authentication<br>Role-based Access</div>
+      </div>
+      <div class="roadmap-item">
+        <div class="roadmap-dot active" style="color:var(--purple);border-color:var(--purple)"></div>
+        <div class="roadmap-q" style="color:var(--purple)">Q2 — COMPLETE</div>
+        <div class="roadmap-title">AI Integration</div>
+        <div class="roadmap-items">Gemini AI Engine<br>Document Analysis<br>RAG Pipeline<br>Intelligent Insights<br>Workflow Automation</div>
+      </div>
+      <div class="roadmap-item">
+        <div class="roadmap-dot active" style="color:var(--cyan);border-color:var(--cyan)"></div>
+        <div class="roadmap-q" style="color:var(--cyan)">Q3 — IN PROGRESS</div>
+        <div class="roadmap-title">Quality Control</div>
+        <div class="roadmap-items">20 Report Types<br>AI QC Scoring<br>Accreditation Workflows<br>Standards Compliance<br>Analytics Dashboard</div>
+      </div>
+      <div class="roadmap-item">
+        <div class="roadmap-dot" style="color:var(--green);border-color:var(--faint)"></div>
+        <div class="roadmap-q" style="color:var(--faint)">Q4 — PLANNED</div>
+        <div class="roadmap-title">Enterprise Features</div>
+        <div class="roadmap-items">Multi-tenant SaaS<br>Advanced DevOps<br>Custom AI Models<br>API Marketplace<br>Global Deployment</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TEAM -->
+<section id="team">
+  <div class="section-glow glow-br"></div>
+  <div class="container">
+    <div class="section-header reveal" style="text-align:center">
+      <div class="section-badge" style="margin:0 auto 20px">● The Crew</div>
+      <h2 class="section-title">Meet The <span>Mission Crew</span></h2>
+      <p class="section-sub" style="margin:0 auto">The visionaries and engineers behind Orbit — building the future of intelligent workspaces.</p>
+    </div>
+    <div class="team-grid reveal">
+      <div class="team-card">
+        <div class="team-avatar"><div class="team-avatar-ring"></div>AM</div>
+        <div class="team-name">Ahmed Mohamed</div>
+        <div class="team-role">Founder & CEO</div>
+        <div class="team-socials">
+          <a class="team-social" href="#" title="LinkedIn">in</a>
+          <a class="team-social" href="#" title="GitHub">⌥</a>
+          <a class="team-social" href="#" title="Email">✉</a>
+        </div>
+      </div>
+      <div class="team-card">
+        <div class="team-avatar" style="background:linear-gradient(135deg,var(--purple),var(--blue))">SA</div>
+        <div class="team-name">Sara Ahmed</div>
+        <div class="team-role">Lead Backend Engineer</div>
+        <div class="team-socials">
+          <a class="team-social" href="#" title="LinkedIn">in</a>
+          <a class="team-social" href="#" title="GitHub">⌥</a>
+          <a class="team-social" href="#" title="Email">✉</a>
+        </div>
+      </div>
+      <div class="team-card">
+        <div class="team-avatar" style="background:linear-gradient(135deg,var(--green),var(--cyan))">OH</div>
+        <div class="team-name">Omar Hassan</div>
+        <div class="team-role">AI / ML Engineer</div>
+        <div class="team-socials">
+          <a class="team-social" href="#" title="LinkedIn">in</a>
+          <a class="team-social" href="#" title="GitHub">⌥</a>
+          <a class="team-social" href="#" title="Email">✉</a>
+        </div>
+      </div>
+      <div class="team-card">
+        <div class="team-avatar" style="background:linear-gradient(135deg,var(--amber),var(--red))">NA</div>
+        <div class="team-name">Nour Ali</div>
+        <div class="team-role">UX / UI Designer</div>
+        <div class="team-socials">
+          <a class="team-social" href="#" title="LinkedIn">in</a>
+          <a class="team-social" href="#" title="GitHub">⌥</a>
+          <a class="team-social" href="#" title="Email">✉</a>
+        </div>
+      </div>
+      <div class="team-card">
+        <div class="team-avatar" style="background:linear-gradient(135deg,var(--cyan),var(--purple))">KI</div>
+        <div class="team-name">Khaled Ibrahim</div>
+        <div class="team-role">DevOps Engineer</div>
+        <div class="team-socials">
+          <a class="team-social" href="#" title="LinkedIn">in</a>
+          <a class="team-social" href="#" title="GitHub">⌥</a>
+          <a class="team-social" href="#" title="Email">✉</a>
+        </div>
+      </div>
+      <div class="team-card">
+        <div class="team-avatar" style="background:linear-gradient(135deg,var(--red),var(--purple))">AY</div>
+        <div class="team-name">Aya Youssef</div>
+        <div class="team-role">QA & Accreditation Lead</div>
+        <div class="team-socials">
+          <a class="team-social" href="#" title="LinkedIn">in</a>
+          <a class="team-social" href="#" title="GitHub">⌥</a>
+          <a class="team-social" href="#" title="Email">✉</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TECH STACK -->
+<section id="tech" style="background:var(--bg2)">
+  <div class="container">
+    <div class="section-header reveal" style="text-align:center">
+      <div class="section-badge" style="margin:0 auto 20px">● Technology</div>
+      <h2 class="section-title">Powered by <span>Precision Technology</span></h2>
+      <p class="section-sub" style="margin:0 auto">Enterprise-grade technologies assembled to deliver a mission-critical platform.</p>
+    </div>
+    <div class="tech-grid reveal">
+      <div class="tech-item"><div class="tech-icon">⚡</div><div class="tech-name">FastAPI</div></div>
+      <div class="tech-item"><div class="tech-icon">🍃</div><div class="tech-name">MongoDB</div></div>
+      <div class="tech-item"><div class="tech-icon">⚛️</div><div class="tech-name">React</div></div>
+      <div class="tech-item"><div class="tech-icon">🐳</div><div class="tech-name">Docker</div></div>
+      <div class="tech-item"><div class="tech-icon">☸️</div><div class="tech-name">Kubernetes</div></div>
+      <div class="tech-item"><div class="tech-icon">🧠</div><div class="tech-name">Gemini AI</div></div>
+      <div class="tech-item"><div class="tech-icon">☁️</div><div class="tech-name">Cloud</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- CONTACT -->
+<section id="contact">
+  <div class="section-glow glow-tl"></div>
+  <div class="container">
+    <div class="contact-grid">
+      <div class="reveal">
+        <div class="section-badge">● Launch With Orbit</div>
+        <h2 class="section-title">Ready to <span>Enter Orbit?</span></h2>
+        <p class="section-sub">Join the teams already operating at mission-critical performance. Get in touch and we'll onboard your workspace.</p>
+        <div class="contact-info">
+          <div class="contact-item"><div class="contact-icon">✉️</div><div class="contact-text"><h4>Email</h4><p>hexacore037@gmail.com</p></div></div>
+          <div class="contact-item"><div class="contact-icon">⌥</div><div class="contact-text"><h4>GitHub</h4><p>github.com/mahmoud416</p></div></div>
+          <div class="contact-item"><div class="contact-icon">in</div><div class="contact-text"><h4>LinkedIn</h4><p>linkedin.com/in/orbit-platform</p></div></div>
+          <div class="contact-item"><div class="contact-icon">📍</div><div class="contact-text"><h4>Location</h4><p>Egypt — Building for the world</p></div></div>
+        </div>
+      </div>
+      <div class="reveal">
+        <div class="qc-panel" style="border-color:rgba(26,111,255,0.2)">
+          <h3 style="font-size:18px;font-weight:700;margin-bottom:24px">Mission Contact</h3>
+          <form class="contact-form" onsubmit="return false">
+            <div class="form-group"><label class="form-label">Full Name</label><input class="form-input" placeholder="Your name" type="text"></div>
+            <div class="form-group"><label class="form-label">Email Address</label><input class="form-input" placeholder="you@organization.com" type="email"></div>
+            <div class="form-group"><label class="form-label">Organization</label><input class="form-input" placeholder="University / Company" type="text"></div>
+            <div class="form-group"><label class="form-label">Message</label><textarea class="form-textarea" placeholder="Tell us about your workspace needs..."></textarea></div>
+            <button type="submit" class="btn-primary" style="width:100%;justify-content:center">Launch Orbit <span class="btn-arrow">→</span></button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="container">
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <div class="footer-brand-name">
+          <div class="nav-logo-icon"><svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:white"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg></div>
+          Orbit
+        </div>
+        <p>Empowering the next generation of intelligent workspaces — from universities to enterprises.</p>
+      </div>
+      <div class="footer-links"><h5>Platform</h5><a href="#mission">Mission Control</a><a href="#workspace">Workspaces</a><a href="#quality">Quality AI</a><a href="#analytics">Analytics</a><a href="#it-ops">IT Operations</a></div>
+      <div class="footer-links"><h5>Company</h5><a href="#team">The Crew</a><a href="#roadmap">Roadmap</a><a href="#tech">Technology</a><a href="#contact">Contact</a></div>
+      <div class="footer-links"><h5>Connect</h5><a href="#">GitHub</a><a href="#">LinkedIn</a><a href="#">Email</a></div>
+    </div>
+    <div class="footer-bottom">
+      <div class="footer-copy">© 2025 Orbit Aerospace. All rights reserved.</div>
+      <div class="footer-tagline">— Stay In Orbit —</div>
+    </div>
+  </div>
+</footer>
+
+<script>
+// ── INIT ──────────────────────────────────────────────────────────────────────
+gsap.registerPlugin(ScrollTrigger);
+
+// Hide loader after page ready
+window.addEventListener('load', () => {
+  setTimeout(() => {
+    document.getElementById('loader').classList.add('hidden');
+    initHeroAnimations();
+  }, 400);
+});
+
+// ── THREE.JS GALAXY ───────────────────────────────────────────────────────────
+(function() {
+  const canvas = document.getElementById('galaxy-canvas');
+  const W = () => window.innerWidth;
+  const H = () => window.innerHeight;
+
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(W(), H());
+  renderer.setClearColor(0x000000, 0);
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(60, W() / H(), 0.1, 1000);
+  camera.position.z = 10;
+
+  // Lights
+  scene.add(new THREE.AmbientLight(0x1a2040, 3));
+  const coreLight = new THREE.PointLight(0x1a6fff, 8, 30);
+  scene.add(coreLight);
+  const rimLight = new THREE.PointLight(0x8b5cf6, 3, 20);
+  rimLight.position.set(-5, 3, -3);
+  scene.add(rimLight);
+
+  // Stars
+  const starGeo = new THREE.BufferGeometry();
+  const SC = 10000;
+  const sPos = new Float32Array(SC * 3);
+  for (let i = 0; i < SC; i++) {
+    const r = Math.random() * 120 + 20;
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(2 * Math.random() - 1);
+    sPos[i*3]   = r * Math.sin(phi) * Math.cos(theta);
+    sPos[i*3+1] = r * Math.sin(phi) * Math.sin(theta);
+    sPos[i*3+2] = r * Math.cos(phi);
+  }
+  starGeo.setAttribute('position', new THREE.BufferAttribute(sPos, 3));
+  const stars = new THREE.Points(starGeo, new THREE.PointsMaterial({
+    color: 0xffffff, size: 0.12, sizeAttenuation: true, transparent: true, opacity: 0.75
+  }));
+  scene.add(stars);
+
+  // Nebula clouds
+  [[0x1a6fff, -8, 2], [0x8b5cf6, 6, -2], [0x06b6d4, 0, 5]].forEach(([col, ox, oy]) => {
+    const g = new THREE.BufferGeometry();
+    const n = 300; const p = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) {
+      p[i*3]   = (Math.random()-0.5)*50 + ox;
+      p[i*3+1] = (Math.random()-0.5)*25 + oy;
+      p[i*3+2] = (Math.random()-0.5)*30 - 8;
+    }
+    g.setAttribute('position', new THREE.BufferAttribute(p, 3));
+    scene.add(new THREE.Points(g, new THREE.PointsMaterial({
+      color: col, size: 1.2, transparent: true, opacity: 0.12, sizeAttenuation: true
+    })));
+  });
+
+  // Central planet
+  const planetMat = new THREE.MeshStandardMaterial({
+    color: 0x0a2fff, emissive: 0x1a3fff, emissiveIntensity: 0.9,
+    roughness: 0.15, metalness: 0.85
+  });
+  const planet = new THREE.Mesh(new THREE.SphereGeometry(1.4, 64, 64), planetMat);
+  scene.add(planet);
+
+  // Planet atmosphere glow
+  const atmosMat = new THREE.MeshBasicMaterial({ color: 0x1a6fff, transparent: true, opacity: 0.08, side: THREE.BackSide });
+  const atmos = new THREE.Mesh(new THREE.SphereGeometry(1.9, 32, 32), atmosMat);
+  scene.add(atmos);
+
+  // Orbit modules
+  const DEG = Math.PI / 180;
+  const modules = [
+    { color: 0x3b82f6, r: 2.8, tilt: 5,  speed: 0.007, sz: 0.22, a: 0   },
+    { color: 0x10b981, r: 3.8, tilt: 28,  speed: 0.005, sz: 0.2,  a: 60  },
+    { color: 0x8b5cf6, r: 4.9, tilt:-42,  speed: 0.003, sz: 0.25, a: 120 },
+    { color: 0xf59e0b, r: 3.3, tilt: 55,  speed: 0.006, sz: 0.18, a: 200 },
+    { color: 0x06b6d4, r: 5.6, tilt:-18,  speed: 0.002, sz: 0.22, a: 240 },
+    { color: 0xef4444, r: 4.2, tilt: 68,  speed: 0.004, sz: 0.19, a: 300 },
+  ];
+
+  const orbPlanets = modules.map(m => {
+    // Ring
+    const ringGeo = new THREE.TorusGeometry(m.r, 0.012, 16, 120);
+    const ring = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({
+      color: m.color, transparent: true, opacity: 0.28
+    }));
+    ring.rotation.x = Math.PI / 2 + m.tilt * DEG;
+    scene.add(ring);
+
+    // Module sphere
+    const mp = new THREE.Mesh(
+      new THREE.SphereGeometry(m.sz, 24, 24),
+      new THREE.MeshStandardMaterial({ color: m.color, emissive: m.color, emissiveIntensity: 0.8, roughness: 0.2, metalness: 0.7 })
+    );
+    // Glow shell
+    const gsh = new THREE.Mesh(new THREE.SphereGeometry(m.sz * 2, 12, 12),
+      new THREE.MeshBasicMaterial({ color: m.color, transparent: true, opacity: 0.12, side: THREE.BackSide }));
+    mp.add(gsh);
+    scene.add(mp);
+
+    return { mesh: mp, angle: m.a * DEG, tiltRad: m.tilt * DEG, r: m.r, speed: m.speed };
+  });
+
+  // Shooting stars
+  const shooters = [];
+  function spawnStar() {
+    const g = new THREE.BufferGeometry();
+    const sx = (Math.random()-0.5)*80, sy = (Math.random()-0.5)*40, sz2 = (Math.random()-0.5)*20-5;
+    const arr = new Float32Array([sx, sy, sz2, sx-6, sy-2, sz2]);
+    g.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+    const line = new THREE.Line(g, new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 }));
+    scene.add(line);
+    shooters.push({ mesh: line, vx: -0.35, vy: -0.12, life: 1 });
+  }
+
+  // Mouse
+  let mx = 0, my = 0;
+  document.addEventListener('mousemove', e => {
+    mx = (e.clientX / window.innerWidth  - 0.5) * 2;
+    my = (e.clientY / window.innerHeight - 0.5) * 2;
+  });
+
+  let t = 0;
+  function animate() {
+    requestAnimationFrame(animate);
+    t += 0.016;
+
+    stars.rotation.y = t * 0.015;
+    stars.rotation.x = t * 0.005;
+    planet.rotation.y += 0.004;
+
+    const pulse = 1 + Math.sin(t * 1.8) * 0.04;
+    atmos.scale.setScalar(pulse);
+    coreLight.intensity = 8 + Math.sin(t * 2.5) * 2;
+
+    // Module orbits
+    orbPlanets.forEach(op => {
+      op.angle += op.speed;
+      const cosA = Math.cos(op.angle), sinA = Math.sin(op.angle);
+      const cosTilt = Math.cos(op.tiltRad), sinTilt = Math.sin(op.tiltRad);
+      op.mesh.position.x = op.r * cosA;
+      op.mesh.position.y = op.r * sinA * sinTilt;
+      op.mesh.position.z = op.r * sinA * cosTilt;
+      op.mesh.rotation.y += 0.02;
+    });
+
+    // Camera parallax
+    camera.position.x += (mx * 1.8 - camera.position.x) * 0.04;
+    camera.position.y += (-my * 1.0 - camera.position.y) * 0.04;
+    camera.lookAt(scene.position);
+
+    // Shooting stars
+    if (Math.random() < 0.004) spawnStar();
+    for (let i = shooters.length - 1; i >= 0; i--) {
+      const s = shooters[i];
+      s.mesh.position.x += s.vx;
+      s.mesh.position.y += s.vy;
+      s.life -= 0.025;
+      s.mesh.material.opacity = s.life;
+      if (s.life <= 0) { scene.remove(s.mesh); shooters.splice(i, 1); }
+    }
+
+    renderer.render(scene, camera);
+  }
+  animate();
+
+  window.addEventListener('resize', () => {
+    camera.aspect = W() / H();
+    camera.updateProjectionMatrix();
+    renderer.setSize(W(), H());
+  });
+})();
+
+// ── NAV SCROLL ────────────────────────────────────────────────────────────────
+window.addEventListener('scroll', () => {
+  document.getElementById('nav').classList.toggle('scrolled', window.scrollY > 40);
+});
+
+// ── HUB NODES POSITIONING ─────────────────────────────────────────────────────
+function positionHubNodes() {
+  const hub = document.querySelector('.mission-hub');
+  if (!hub) return;
+  const cx = hub.offsetWidth / 2, cy = hub.offsetHeight / 2;
+  const radii = [240, 240, 240, 240, 240, 240];
+  const angles = [270, 330, 30, 90, 150, 210];
+  for (let i = 0; i < 6; i++) {
+    const el = document.getElementById('hn' + i);
+    if (!el) continue;
+    const rad = (angles[i] - 90) * Math.PI / 180;
+    const r = radii[i] / 2;
+    el.style.left = (cx + r * Math.cos(rad)) + 'px';
+    el.style.top  = (cy + r * Math.sin(rad)) + 'px';
+  }
+}
+window.addEventListener('resize', positionHubNodes);
+positionHubNodes();
+
+// ── HERO ANIMATIONS ───────────────────────────────────────────────────────────
+function initHeroAnimations() {
+  gsap.from('.hero-badge',   { duration: 1,    y: 20, opacity: 0, ease: 'power3.out', delay: 0.2 });
+  gsap.from('.hero-h1',      { duration: 1.2,  y: 40, opacity: 0, ease: 'power3.out', delay: 0.4 });
+  gsap.from('.hero-sub',     { duration: 1,    y: 30, opacity: 0, ease: 'power3.out', delay: 0.7 });
+  gsap.from('.hero-btns',    { duration: 1,    y: 30, opacity: 0, ease: 'power3.out', delay: 0.9 });
+  gsap.from('.hero-stats',   { duration: 1,    y: 20, opacity: 0, ease: 'power3.out', delay: 1.1 });
+  gsap.from('.scroll-hint',  { duration: 1,    opacity: 0, delay: 1.5 });
+
+  // Stat counters
+  document.querySelectorAll('.stat-num[data-count]').forEach(el => {
+    const target = +el.dataset.count;
+    const isLarge = target >= 1000;
+    gsap.to({ val: 0 }, {
+      val: target, duration: 2.5, delay: 1.2, ease: 'power2.out',
+      onUpdate: function() {
+        const v = Math.round(this.targets()[0].val);
+        el.textContent = isLarge ? (v >= 1000 ? Math.floor(v/1000) + 'K+' : v) : v + '+';
+      }
+    });
+  });
+}
+
+// ── SCROLL REVEAL ─────────────────────────────────────────────────────────────
+const revealEls = document.querySelectorAll('.reveal');
+const revealObs = new IntersectionObserver((entries) => {
+  entries.forEach((e, i) => {
+    if (e.isIntersecting) {
+      setTimeout(() => e.target.classList.add('visible'), i * 80);
+      revealObs.unobserve(e.target);
+    }
+  });
+}, { threshold: 0.12 });
+revealEls.forEach(el => revealObs.observe(el));
+
+// ── GSAP SCROLL TRIGGERS ──────────────────────────────────────────────────────
+// QC score ring animation
+ScrollTrigger.create({
+  trigger: '#quality',
+  start: 'top 70%',
+  onEnter: () => {
+    const ring = document.getElementById('scoreRing');
+    const numEl = document.getElementById('scoreNum');
+    if (!ring || !numEl) return;
+    // circumference = 2 * PI * 70 = 439.82
+    const circ = 2 * Math.PI * 70;
+    ring.style.strokeDasharray = circ;
+    ring.style.strokeDashoffset = circ; // start at 0%
+    const score = 92;
+    setTimeout(() => {
+      ring.style.transition = 'stroke-dashoffset 1.6s cubic-bezier(.16,1,.3,1)';
+      ring.style.strokeDashoffset = circ * (1 - score / 100);
+    }, 200);
+    gsap.to({ v: 0 }, {
+      v: score, duration: 1.8, ease: 'power2.out',
+      onUpdate: function() { numEl.textContent = Math.round(this.targets()[0].v) + '%'; }
+    });
+  }
+});
+
+// Infra bars
+ScrollTrigger.create({
+  trigger: '#it-ops',
+  start: 'top 70%',
+  onEnter: () => {
+    document.querySelectorAll('.infra-bar-fill').forEach(el => {
+      const w = el.style.width;
+      el.style.width = '0';
+      setTimeout(() => { el.style.transition = 'width 1.2s cubic-bezier(.16,1,.3,1)'; el.style.width = w; }, 200);
+    });
+    document.querySelectorAll('.qc-metric-bar-fill').forEach(el => {
+      const w = el.style.width;
+      el.style.width = '0';
+      setTimeout(() => { el.style.transition = 'width 1s ease'; el.style.width = w; }, 300);
+    });
+  }
+});
+
+// ── HEATMAP ───────────────────────────────────────────────────────────────────
+const hm = document.getElementById('heatmap');
+if (hm) {
+  const opacities = [.05,.1,.15,.3,.5,.65,.8,1];
+  for (let i = 0; i < 84; i++) {
+    const d = document.createElement('div');
+    d.className = 'heatmap-cell';
+    const op = opacities[Math.floor(Math.random() * opacities.length)];
+    d.style.background = `rgba(26,111,255,${op})`;
+    hm.appendChild(d);
+  }
+}
+
+// ── KANBAN CARD HOVER FLOAT ───────────────────────────────────────────────────
+document.querySelectorAll('.kanban-card').forEach(card => {
+  card.addEventListener('mouseenter', () => gsap.to(card, { y: -4, duration: 0.3, ease: 'power2.out' }));
+  card.addEventListener('mouseleave', () => gsap.to(card, { y: 0,  duration: 0.3, ease: 'power2.out' }));
+});
+
+// ── TYPEWRITER FOR AI TERMINAL ─────────────────────────────────────────────────
+ScrollTrigger.create({
+  trigger: '#ai-section',
+  start: 'top 60%',
+  onEnter: () => {
+    const lines = document.querySelectorAll('.ai-line');
+    lines.forEach((line, i) => {
+      line.style.opacity = '0';
+      setTimeout(() => {
+        line.style.transition = 'opacity .3s';
+        line.style.opacity = '1';
+      }, i * 120 + 200);
+    });
+  }
+});
+
+// ── CONTACT FORM ──────────────────────────────────────────────────────────────
+document.querySelector('.contact-form')?.addEventListener('submit', e => {
+  e.preventDefault();
+  const btn = e.target.querySelector('button');
+  btn.textContent = '✓ Message Sent — Stay In Orbit';
+  btn.style.background = 'var(--green)';
+});
+</script>
+</body>
+</html>

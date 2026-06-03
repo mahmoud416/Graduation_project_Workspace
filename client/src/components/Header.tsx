@@ -9,210 +9,437 @@ interface HeaderProps {
 
 const USER_UPDATE_EVENT = 'workspace:user-update';
 
+const API = (import.meta.env.VITE_API_BASE ?? 'http://localhost:8000/api/v1').replace(/\/$/, '');
+
+type NotifType = 'info' | 'success' | 'warning' | 'error' | 'mention';
+
+interface Notif {
+    id: string;          // MongoDB _id
+    type: NotifType;
+    read: boolean;
+    title: string;
+    body: string;
+    time: string;
+    raw_type?: string;   // original backend type string
+}
+
+const notifColors: Record<NotifType, string> = {
+    info:    '#1d6ef5',
+    success: '#10b981',
+    warning: '#f59e0b',
+    error:   '#ef4444',
+    mention: '#8b5cf6',
+};
+const notifIcons: Record<NotifType, string> = {
+    info:    '🔵',
+    success: '✅',
+    warning: '⚠️',
+    error:   '🔴',
+    mention: '@',
+};
+
+/* ─── Header ─────────────────────────────────────────────────────────────── */
 const Header = ({ title, subtitle }: HeaderProps) => {
     const { setTheme, isDark } = useTheme();
     const navigate = useNavigate();
-    const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+    const [profileOpen, setProfileOpen] = useState(false);
+    const [notifOpen,   setNotifOpen]   = useState(false);
+    const [notifs,      setNotifs]      = useState<Notif[]>([]);
+
     const [fullName, setFullName] = useState(() => (typeof window !== 'undefined' ? localStorage.getItem('fullName') ?? '' : ''));
-    const [email, setEmail] = useState(() => (typeof window !== 'undefined' ? localStorage.getItem('email') ?? '' : ''));
-    const [role, setRole] = useState<string | null>(() => (typeof window !== 'undefined' ? localStorage.getItem('role') : null));
-    const profileButtonRef = useRef<HTMLButtonElement | null>(null);
-    const menuRef = useRef<HTMLDivElement | null>(null);
+    const [email,    setEmail]    = useState(() => (typeof window !== 'undefined' ? localStorage.getItem('email') ?? '' : ''));
+    const [role,     setRole]     = useState<string | null>(() => (typeof window !== 'undefined' ? localStorage.getItem('role') : null));
 
-    const toggleTheme = () => {
-        const nextTheme = isDark ? 'light' : 'dark';
-        setTheme(nextTheme);
-    };
+    const profileRef = useRef<HTMLDivElement>(null);
+    const notifRef   = useRef<HTMLDivElement>(null);
 
+    /* ── Sync user from localStorage ── */
     useEffect(() => {
         if (typeof window === 'undefined') return;
-        const syncUser = () => {
+        const sync = () => {
             setFullName(localStorage.getItem('fullName') ?? '');
             setEmail(localStorage.getItem('email') ?? '');
             setRole(localStorage.getItem('role') ?? null);
         };
-
-        window.addEventListener('storage', syncUser);
-        window.addEventListener(USER_UPDATE_EVENT, syncUser);
+        window.addEventListener('storage', sync);
+        window.addEventListener(USER_UPDATE_EVENT, sync);
         return () => {
-            window.removeEventListener('storage', syncUser);
-            window.removeEventListener(USER_UPDATE_EVENT, syncUser);
+            window.removeEventListener('storage', sync);
+            window.removeEventListener(USER_UPDATE_EVENT, sync);
         };
     }, []);
 
+    /* ── Close dropdowns on outside click ── */
     useEffect(() => {
-        if (!isMenuOpen) return;
-        const handleClickOutside = (event: MouseEvent) => {
-            const target = event.target as Node;
-            if (menuRef.current?.contains(target)) return;
-            if (profileButtonRef.current?.contains(target)) return;
-            setIsMenuOpen(false);
+        if (!profileOpen && !notifOpen) return;
+        const handler = (e: MouseEvent) => {
+            const t = e.target as Node;
+            if (!profileRef.current?.contains(t)) setProfileOpen(false);
+            if (!notifRef.current?.contains(t))   setNotifOpen(false);
         };
-
-        const handleEscape = (event: KeyboardEvent) => {
-            if (event.key === 'Escape') {
-                setIsMenuOpen(false);
-            }
-        };
-
-        document.addEventListener('mousedown', handleClickOutside);
-        document.addEventListener('keydown', handleEscape);
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside);
-            document.removeEventListener('keydown', handleEscape);
-        };
-    }, [isMenuOpen]);
+        const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') { setProfileOpen(false); setNotifOpen(false); } };
+        document.addEventListener('mousedown', handler);
+        document.addEventListener('keydown', esc);
+        return () => { document.removeEventListener('mousedown', handler); document.removeEventListener('keydown', esc); };
+    }, [profileOpen, notifOpen]);
 
     const initials = useMemo(() => {
-        if (!fullName.trim()) return 'W';
-        const segments = fullName.trim().split(/\s+/).slice(0, 2);
-        return segments.map((segment) => segment[0]?.toUpperCase() ?? '').join('');
+        if (!fullName.trim()) return 'U';
+        return fullName.trim().split(/\s+/).slice(0, 2).map(s => s[0]?.toUpperCase() ?? '').join('');
     }, [fullName]);
 
-    const firstName = useMemo(() => {
-        if (!fullName.trim()) return 'there';
-        return fullName.trim().split(/\s+/)[0];
-    }, [fullName]);
+    const firstName = useMemo(() => fullName.trim().split(/\s+/)[0] || 'Commander', [fullName]);
 
-    const isQualityRole = role === 'quality_control' || role === 'quality_manager';
+    /* ── Fetch notifications from real API ── */
+    const fetchNotifs = async () => {
+        try {
+            const token  = localStorage.getItem('token');
+            const userId = localStorage.getItem('userId');
+            if (!token || !userId) return;
+            const res = await fetch(`${API}/notifications`, {
+                headers: { Authorization: `Bearer ${token}`, 'X-User-Id': userId },
+            });
+            if (!res.ok) return;
+            const data: Array<{ _id: string; type: string; payload: Record<string, string>; is_read: boolean; created_at?: string }> = await res.json();
+            const mapped: Notif[] = data.map(n => {
+                const notifType: NotifType = (['info','success','warning','error','mention'] as string[]).includes(n.type) ? n.type as NotifType : 'info';
+                const createdAt = n.created_at ? new Date(n.created_at) : null;
+                const now = Date.now();
+                let time = 'Just now';
+                if (createdAt) {
+                    const diff = now - createdAt.getTime();
+                    const mins = Math.floor(diff / 60000);
+                    if (mins < 2) time = 'Just now';
+                    else if (mins < 60) time = `${mins}m ago`;
+                    else if (mins < 1440) time = `${Math.floor(mins / 60)}h ago`;
+                    else time = createdAt.toLocaleDateString();
+                }
+                return { id: n._id, type: notifType, read: n.is_read, title: n.payload?.title ?? 'Notification', body: n.payload?.body ?? '', time, raw_type: n.type };
+            });
+            setNotifs(mapped);
+        } catch { /* silent */ }
+    };
 
-    const handleProfileNavigation = () => {
-        setIsMenuOpen(false);
-        navigate('/settings', { state: { tab: 'profile' } });
+    useEffect(() => {
+        fetchNotifs();
+        const interval = setInterval(fetchNotifs, 30000); // poll every 30s
+        return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const unreadCount = notifs.filter(n => !n.read).length;
+
+    const markAllRead = async () => {
+        setNotifs(p => p.map(n => ({ ...n, read: true })));
+        try {
+            const token = localStorage.getItem('token');
+            const userId = localStorage.getItem('userId');
+            if (!token || !userId) return;
+            await fetch(`${API}/notifications/read-all`, {
+                method: 'PATCH',
+                headers: { Authorization: `Bearer ${token}`, 'X-User-Id': userId },
+            });
+        } catch { /* silent */ }
+    };
+
+    const dismissNotif = async (id: string) => {
+        setNotifs(p => p.filter(n => n.id !== id));
+        try {
+            const token = localStorage.getItem('token');
+            const userId = localStorage.getItem('userId');
+            if (!token || !userId) return;
+            await fetch(`${API}/notifications/${id}/read`, {
+                method: 'PATCH',
+                headers: { Authorization: `Bearer ${token}`, 'X-User-Id': userId },
+            });
+        } catch { /* silent */ }
     };
 
     const handleLogout = () => {
-        try {
-            localStorage.removeItem('token');
-            localStorage.removeItem('userId');
-            localStorage.removeItem('role');
-            localStorage.removeItem('fullName');
-            localStorage.removeItem('email');
-            localStorage.removeItem('jobTitle');
-            localStorage.removeItem('phone');
-            localStorage.removeItem('bio');
-            sessionStorage.clear();
-        } catch (error) {
-            console.error('Failed to clear storage on logout', error);
-        }
-
+        ['token','userId','role','fullName','email','jobTitle','phone','bio'].forEach(k => localStorage.removeItem(k));
+        sessionStorage.clear();
         window.dispatchEvent(new Event(USER_UPDATE_EVENT));
-        setIsMenuOpen(false);
-
-        const loginUrl = `${window.location.origin}/login`;
-        window.location.replace(loginUrl);
+        window.location.replace(`${window.location.origin}/login`);
     };
 
+    /* ── Theme tokens ── */
+    const bg      = isDark ? 'var(--header-dark-bg)'  : 'var(--header-lite-bg)';
+    const border  = isDark ? 'rgba(255,255,255,.06)' : 'rgba(0,0,0,.08)';
+    const popupBg = isDark ? '#070a1a'            : '#ffffff';
+    const popupBd = isDark ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.1)';
+    const textH   = isDark ? 'white'              : '#0f172a';
+    const textM   = isDark ? 'rgba(255,255,255,.5)'  : 'rgba(15,23,42,.5)';
+    const hoverBg = isDark ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.04)';
+    const btnBg   = isDark ? 'rgba(255,255,255,.06)' : 'rgba(0,0,0,.05)';
+    const btnBd   = isDark ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.08)';
+
+    const sharedBtn: React.CSSProperties = {
+        width: 36, height: 36, borderRadius: 9,
+        background: btnBg, border: `1px solid ${btnBd}`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        cursor: 'pointer', color: textM,
+        transition: 'all .15s',
+        flexShrink: 0,
+    };
+
+    const formatRole = (r: string | null) => r ? r.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Member';
+
     return (
-        <header
-            className="h-16 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 fixed top-0 right-0 z-50 transition-[left] duration-200"
-            style={{ left: 'var(--sidebar-width)' }}
-        >
-            <div className="h-full px-8 flex items-center justify-between">
-                <div>
-                    <h1 className="text-sm font-semibold text-text-dark dark:text-gray-100">{title}</h1>
-                    {subtitle && <p className="text-xs text-text-gray dark:text-gray-400">{subtitle}</p>}
+        <>
+
+            <header style={{
+                '--hd-hover': hoverBg,
+                position: 'fixed', top: 0, right: 0, zIndex: 50,
+                left: 'var(--sidebar-width)',
+                height: 58,
+                background: bg,
+                borderBottom: `1px solid ${border}`,
+                backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
+                display: 'flex', alignItems: 'center',
+                padding: '0 22px',
+                transition: 'left .2s cubic-bezier(.25,.46,.45,.94)',
+            } as React.CSSProperties}>
+
+                {/* ── Left: title ── */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {/* Accent dot */}
+                        <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#1d6ef5', boxShadow: '0 0 8px rgba(29,110,245,.8)', flexShrink: 0 }} />
+                        <h1 style={{ fontSize: 14, fontWeight: 700, color: textH, letterSpacing: '-.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {title}
+                        </h1>
+                        {subtitle && (
+                            <>
+                                <span style={{ color: isDark ? 'rgba(255,255,255,.15)' : 'rgba(0,0,0,.15)', fontSize: 14 }}>/</span>
+                                <span style={{ fontSize: 12, color: textM, whiteSpace: 'nowrap' }}>{subtitle}</span>
+                            </>
+                        )}
+                    </div>
                 </div>
 
-                <div className="flex items-center gap-4">
-                    <button
-                        type="button"
-                        onClick={toggleTheme}
-                        className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-text-gray dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                        title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-                        aria-pressed={isDark}
-                        aria-label="Toggle color theme"
-                    >
-                        {isDark ? (
-                            <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                                <path d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                            </svg>
-                        ) : (
-                            <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                                <path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-                            </svg>
-                        )}
-                    </button>
+                {/* ── Right: controls ── */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
 
-                    {!isQualityRole && (
-                        <>
-                            <div className="relative">
-                                <input
-                                    type="text"
-                                    placeholder="Search projects..."
-                                    className="w-[280px] h-9 pl-9 pr-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-text-dark dark:text-gray-200 placeholder:text-text-gray dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                                />
-                                <svg
-                                    className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-gray dark:text-gray-400"
-                                    fill="none"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth="2"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
-                                >
-                                    <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                </svg>
-                            </div>
-
-                            <button className="w-9 h-9 flex items-center justify-center hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition-colors">
-                                <svg className="w-5 h-5 text-text-gray dark:text-gray-400" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                                </svg>
-                            </button>
-
-                            <button className="w-9 h-9 flex items-center justify-center hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition-colors">
-                                <svg className="w-5 h-5 text-text-gray dark:text-gray-400" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-                                </svg>
-                            </button>
-                        </>
-                    )}
-
-                    {/* Profile */}
-                    <div className="relative">
+                    {/* ── Notifications ── */}
+                    <div ref={notifRef} style={{ position: 'relative' }}>
                         <button
-                            ref={profileButtonRef}
                             type="button"
-                            onClick={() => setIsMenuOpen((prev) => !prev)}
-                            className="w-9 h-9 rounded-full bg-gradient-to-br from-orange-400 to-pink-500 flex items-center justify-center text-white font-semibold text-sm hover:opacity-90 transition-opacity"
-                            aria-haspopup="menu"
-                            aria-expanded={isMenuOpen}
-                            aria-label="Account menu"
+                            onClick={() => { setNotifOpen(p => !p); setProfileOpen(false); }}
+                            className="hd-btn"
+                            style={{ ...sharedBtn, position: 'relative' }}
+                            title="Notifications"
+                        >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"/>
+                            </svg>
+                            {unreadCount > 0 && (
+                                <span style={{
+                                    position: 'absolute', top: -3, right: -3,
+                                    width: 16, height: 16, borderRadius: '50%',
+                                    background: '#1d6ef5', color: 'white',
+                                    fontSize: 9, fontWeight: 800,
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    border: `2px solid ${isDark ? '#05060f' : '#fff'}`,
+                                }}>
+                                    {unreadCount}
+                                </span>
+                            )}
+                        </button>
+
+                        {/* Notifications panel */}
+                        {notifOpen && (
+                            <div style={{
+                                position: 'absolute', top: 'calc(100% + 10px)', right: 0,
+                                width: 340, maxHeight: 440,
+                                background: popupBg,
+                                border: `1px solid ${popupBd}`,
+                                borderRadius: 14,
+                                boxShadow: isDark ? '0 24px 64px rgba(0,0,0,.65), 0 0 0 1px rgba(29,110,245,.08)' : '0 24px 64px rgba(0,0,0,.15)',
+                                overflow: 'hidden',
+                                animation: 'slideDown .2s ease-out both',
+                                zIndex: 60,
+                            }}>
+                                {/* Header */}
+                                <div style={{
+                                    padding: '14px 16px 12px',
+                                    borderBottom: `1px solid ${popupBd}`,
+                                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                }}>
+                                    <div>
+                                        <div style={{ fontSize: 13, fontWeight: 700, color: textH }}>Notifications</div>
+                                        <div style={{ fontSize: 11, color: textM, marginTop: 1 }}>{unreadCount} unread</div>
+                                    </div>
+                                    {unreadCount > 0 && (
+                                        <button
+                                            type="button"
+                                            onClick={markAllRead}
+                                            style={{
+                                                background: 'none', border: 'none', cursor: 'pointer',
+                                                fontSize: 11, color: '#1d6ef5', fontWeight: 600, padding: 0,
+                                            }}
+                                        >
+                                            Mark all read
+                                        </button>
+                                    )}
+                                </div>
+
+                                {/* List */}
+                                <div style={{ maxHeight: 340, overflowY: 'auto' }}>
+                                    {notifs.length === 0 ? (
+                                        <div style={{ padding: 32, textAlign: 'center', color: textM, fontSize: 12 }}>
+                                            All caught up! 🎉
+                                        </div>
+                                    ) : (
+                                        notifs.map(n => (
+                                            <div key={n.id} className="hd-notif-row" style={{
+                                                display: 'flex', gap: 12, padding: '12px 16px',
+                                                borderBottom: `1px solid ${popupBd}`,
+                                                background: !n.read && isDark ? 'rgba(29,110,245,.04)' : 'transparent',
+                                                transition: 'background .15s', cursor: 'default',
+                                            }}>
+                                                {/* Icon */}
+                                                <div style={{
+                                                    width: 32, height: 32, borderRadius: 9, flexShrink: 0,
+                                                    background: `${notifColors[n.type]}14`,
+                                                    border: `1px solid ${notifColors[n.type]}25`,
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                    fontSize: 14,
+                                                }}>{notifIcons[n.type]}</div>
+
+                                                {/* Content */}
+                                                <div style={{ flex: 1, minWidth: 0 }}>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                                                        <span style={{ fontSize: 12, fontWeight: n.read ? 500 : 700, color: textH, lineHeight: 1.3 }}>{n.title}</span>
+                                                        {!n.read && (
+                                                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#1d6ef5', flexShrink: 0, marginTop: 3 }} />
+                                                        )}
+                                                    </div>
+                                                    <div style={{ fontSize: 11, color: textM, marginTop: 3, lineHeight: 1.4 }}>{n.body}</div>
+                                                    <div style={{ fontSize: 10, color: isDark ? 'rgba(255,255,255,.25)' : 'rgba(0,0,0,.3)', marginTop: 4 }}>{n.time}</div>
+                                                </div>
+
+                                                {/* Dismiss */}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => dismissNotif(n.id)}
+                                                    style={{
+                                                        background: 'none', border: 'none', cursor: 'pointer',
+                                                        color: textM, padding: '2px 4px', borderRadius: 4,
+                                                        fontSize: 14, lineHeight: 1, flexShrink: 0, alignSelf: 'flex-start',
+                                                        transition: 'color .15s',
+                                                    }}
+                                                    title="Dismiss"
+                                                >×</button>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* ── Profile ── */}
+                    <div ref={profileRef} style={{ position: 'relative' }}>
+                        <button
+                            type="button"
+                            onClick={() => { setProfileOpen(p => !p); setNotifOpen(false); }}
+                            style={{
+                                width: 34, height: 34, borderRadius: '50%',
+                                background: 'linear-gradient(135deg, #1d6ef5, #8b5cf6)',
+                                border: profileOpen ? '2px solid rgba(29,110,245,.7)' : '2px solid transparent',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                fontSize: 12, fontWeight: 800, color: 'white', cursor: 'pointer',
+                                boxShadow: profileOpen ? '0 0 16px rgba(29,110,245,.45)' : '0 2px 8px rgba(29,110,245,.25)',
+                                transition: 'all .18s',
+                                fontFamily: '"Inter",sans-serif',
+                            }}
                         >
                             {initials}
                         </button>
 
-                        {isMenuOpen && (
-                            <div
-                                ref={menuRef}
-                                className="absolute right-0 mt-3 w-72 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-xl overflow-hidden z-50"
-                                role="menu"
-                                aria-label="Account options"
-                            >
-                                <div className="p-4 bg-gradient-to-br from-gray-50 to-white dark:from-gray-800 dark:to-gray-900 border-b border-gray-200 dark:border-gray-800">
-                                    <p className="text-xs font-semibold text-text-gray dark:text-gray-400 mb-1">Hi, {firstName}!</p>
-                                    <p className="text-base font-bold text-text-dark dark:text-gray-100 break-words">
-                                        {fullName || 'Workspace Member'}
-                                    </p>
-                                    <p className="text-xs text-text-gray dark:text-gray-400 break-words">
-                                        {email || 'No email connected'}
-                                    </p>
+                        {/* Profile dropdown */}
+                        {profileOpen && (
+                            <div style={{
+                                position: 'absolute', top: 'calc(100% + 10px)', right: 0,
+                                width: 270,
+                                background: popupBg,
+                                border: `1px solid ${popupBd}`,
+                                borderRadius: 14,
+                                boxShadow: isDark ? '0 24px 64px rgba(0,0,0,.65), 0 0 0 1px rgba(29,110,245,.06)' : '0 24px 64px rgba(0,0,0,.15)',
+                                overflow: 'hidden',
+                                animation: 'slideDown .2s ease-out both',
+                                zIndex: 60,
+                            }}>
+                                {/* User card */}
+                                <div style={{
+                                    padding: '16px',
+                                    background: isDark ? 'rgba(29,110,245,.05)' : 'rgba(29,110,245,.03)',
+                                    borderBottom: `1px solid ${popupBd}`,
+                                    display: 'flex', gap: 12, alignItems: 'center',
+                                }}>
+                                    <div style={{
+                                        width: 40, height: 40, borderRadius: '50%', flexShrink: 0,
+                                        background: 'linear-gradient(135deg, #1d6ef5, #8b5cf6)',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        fontSize: 14, fontWeight: 800, color: 'white',
+                                        boxShadow: '0 0 16px rgba(29,110,245,.3)',
+                                    }}>{initials}</div>
+                                    <div style={{ minWidth: 0 }}>
+                                        <div style={{ fontSize: 13, fontWeight: 700, color: textH, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                            {fullName || 'Orbit Member'}
+                                        </div>
+                                        <div style={{ fontSize: 11, color: textM, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 1 }}>
+                                            {email || 'No email'}
+                                        </div>
+                                        <div style={{
+                                            marginTop: 5, display: 'inline-flex', alignItems: 'center', gap: 4,
+                                            padding: '2px 8px', borderRadius: 20,
+                                            background: 'rgba(29,110,245,.12)', border: '1px solid rgba(29,110,245,.2)',
+                                        }}>
+                                            <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#10b981' }} />
+                                            <span style={{ fontSize: 9, fontWeight: 700, color: '#1d6ef5', letterSpacing: '.1em', fontFamily: 'monospace' }}>
+                                                {formatRole(role).toUpperCase()}
+                                            </span>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div className="p-2">
+
+                                {/* Menu items */}
+                                <div style={{ padding: '6px 8px' }}>
+                                        {/* Profile Settings */}
                                     <button
                                         type="button"
-                                        onClick={handleProfileNavigation}
-                                        className="w-full flex items-center justify-between px-4 py-2 rounded-xl text-sm font-medium text-text-dark dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800"
+                                        onClick={() => { setProfileOpen(false); navigate('/settings', { state: { tab: 'profile' } }); }}
+                                        className="hd-row"
+                                        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px', borderRadius: 9, background: 'transparent', border: 'none', cursor: 'pointer', color: textH, fontSize: 13, fontWeight: 500, textAlign: 'left', transition: 'background .15s' }}
                                     >
-                                        Profile settings
-                                        <span className="text-xs text-text-gray dark:text-gray-400">&gt;</span>
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                                        </svg>
+                                        Profile Settings
                                     </button>
+
+                                    {/* Divider */}
+                                    <div style={{ height: 1, background: popupBd, margin: '6px 4px' }} />
+
+                                    {/* Logout */}
                                     <button
                                         type="button"
                                         onClick={handleLogout}
-                                        className="w-full mt-2 px-4 py-2 rounded-xl text-sm font-semibold text-danger hover:bg-red-50 dark:hover:bg-red-900/30"
+                                        style={{
+                                            width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                                            padding: '9px 10px', borderRadius: 9,
+                                            background: 'transparent', border: 'none', cursor: 'pointer',
+                                            color: '#ef4444', fontSize: 13, fontWeight: 600,
+                                            transition: 'background .15s',
+                                        }}
+                                        onMouseEnter={e => (e.currentTarget.style.background = 'rgba(239,68,68,.08)')}
+                                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                                     >
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+                                        </svg>
                                         Log out
                                     </button>
                                 </div>
@@ -220,8 +447,8 @@ const Header = ({ title, subtitle }: HeaderProps) => {
                         )}
                     </div>
                 </div>
-            </div>
-        </header>
+            </header>
+        </>
     );
 };
 

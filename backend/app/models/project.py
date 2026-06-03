@@ -41,6 +41,7 @@ class ProjectModel:
         staff_ids: Optional[List[Any]] = None,
         team_id: Optional[Any] = None,
         due_date: Optional[str] = None,
+        priority: Optional[str] = None,
         comments_enabled: bool = True,
         uploads_enabled: bool = True,
     ) -> dict:
@@ -53,6 +54,7 @@ class ProjectModel:
             "type":             card_type.value,
             "status":           status.value,
             "progress":         progress,
+            "priority":         priority,
             "owner_id":         owner_id,
             "sub_admin_ids":    sub_admin_ids or [],
             "staff_ids":        staff_ids or [],

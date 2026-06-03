@@ -23,6 +23,7 @@ from app.schemas.task_board import (
 )
 from app.services.task_board_service import TaskBoardService, StoredUpload
 from app.services.todo_audit_service import TodoAuditService
+from app.services.notification_service import NotificationService
 
 router = APIRouter(prefix="/task-boards", tags=["Task Boards"])
 
@@ -98,6 +99,17 @@ async def add_task_board_todo(
         done=payload.done,
         submitted_by=submitted_by,
         submitted_by_name=submitted_by_name,
+        extra_fields={
+            "visibility": payload.visibility or "team",
+            "report_type": payload.report_type,
+            "description": payload.description,
+            "assignee_ids": payload.assignee_ids or [],
+            "created_by": submitted_by,
+            "completed_by": [],
+            "completed_by_names": [],
+            "status": payload.status or "todo",
+            "priority": payload.priority or "medium",
+        },
     )
     if not updated:
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Unable to create to-do entry")
@@ -119,14 +131,37 @@ async def update_task_board_todo(
     if not board:
         board = await TaskBoardService.ensure_board_for_project(db, project)
 
-    _ensure_task_privileges(project, current_user, board)
+    # Structural edits (title, assignees, due, report_type, visibility, priority) are
+    # manager-only.  Status/completion updates are allowed for all project members.
+    role = (current_user.get("role") or "").lower()
+    is_mgr = role in {"admin", "sub_admin", "manager"}
+    structural_fields = {"title", "description", "assignee", "assignee_ids",
+                         "due", "visibility", "report_type", "priority"}
+    wants_structural = any(
+        getattr(payload, f, None) is not None for f in structural_fields
+    )
+    if wants_structural and not is_mgr:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            detail="Only managers can edit task details. You can still update status and completion."
+        )
 
     updates = {
         "title": payload.title,
+        "description": payload.description,
         "assignee": payload.assignee,
+        "assignee_ids": payload.assignee_ids,
         "due": payload.due,
         "done": payload.done,
+        "visibility": payload.visibility,
+        "report_type": payload.report_type,
+        "completed_by": payload.completed_by,
+        "completed_by_names": payload.completed_by_names,
+        "status": payload.status,
+        "priority": payload.priority,
     }
+    # Remove None values so we don't overwrite existing fields with null
+    updates = {k: v for k, v in updates.items() if v is not None}
     updated = await TaskBoardService.update_task(db, normalized_id, task_id, updates)
     if not updated:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Task entry not found")
@@ -262,9 +297,17 @@ async def add_task_board_comment(
     project_id: str,
     message: Annotated[Optional[str], Form()] = None,
     attachments: Annotated[Optional[Union[UploadFile, List[UploadFile]]], File()] = None,
+    mentioned_user_ids: Annotated[Optional[Union[str, List[str]]], Form()] = None,
+    reply_to_id: Annotated[Optional[str], Form()] = None,
+    reply_to_preview: Annotated[Optional[str], Form()] = None,
+    reply_to_author: Annotated[Optional[str], Form()] = None,
     current_user=Depends(get_current_user),
     db=Depends(get_database),
 ):
+    # Normalize mentioned_user_ids: single string → list (happens when only 1 mention)
+    if isinstance(mentioned_user_ids, str):
+        mentioned_user_ids = [mentioned_user_ids] if mentioned_user_ids else []
+
     project = await _get_project_or_404(db, project_id)
     _ensure_project_visibility(project, current_user)
     normalized_id = _stringify_project_id(project)
@@ -272,7 +315,6 @@ async def add_task_board_comment(
     if not board:
         board = await TaskBoardService.ensure_board_for_project(db, project)
 
-    # Check if comments are enabled
     role = current_user.get("role", "staff")
     if role == "staff" and not project.get("comments_enabled", True):
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Comments are disabled for this project")
@@ -286,9 +328,39 @@ async def add_task_board_comment(
     if not message_value and not attachment_payloads:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Comment text or attachment required")
 
-    updated = await TaskBoardService.add_comment(db, normalized_id, message_value, current_user, attachment_payloads)
+    updated = await TaskBoardService.add_comment(
+        db, normalized_id, message_value, current_user, attachment_payloads,
+        reply_to_id=reply_to_id or None,
+        reply_to_preview=reply_to_preview or None,
+        reply_to_author=reply_to_author or None,
+    )
     if not updated:
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Unable to add comment")
+
+    # ── Create mention notifications ──────────────────────────────────────
+    sender_name = current_user.get("name") or current_user.get("email", "Someone")
+    board_title = (board.get("overview") or {}).get("title", "a channel")
+    for uid_str in (mentioned_user_ids or []):
+        try:
+            uid_oid = ObjectId(uid_str)
+            # Don't notify yourself
+            if uid_oid == current_user.get("_id"):
+                continue
+            await NotificationService.create(
+                db,
+                user_id=uid_oid,
+                notification_type="mention",
+                payload={
+                    "title": f"@{sender_name} mentioned you",
+                    "body": f"In {board_title}: \"{message_value[:80]}{'…' if len(message_value) > 80 else ''}\"",
+                    "project_id": normalized_id,
+                    "sender_id": str(current_user.get("_id", "")),
+                    "sender_name": sender_name,
+                },
+            )
+        except Exception:
+            pass  # Invalid ID or DB error — skip silently
+
     return TaskBoardService.serialize(updated, current_user)
 
 
@@ -454,10 +526,21 @@ def _stringify_project_id(project: dict[str, Any]) -> str:
 def _ensure_project_visibility(project: dict[str, Any], current_user: dict[str, Any]) -> None:
     role = current_user.get("role")
     user_id = current_user.get("_id")
-    if _stringify_project_id(project) == TaskBoardService.PUBLIC_PROJECT_ID:
+    project_str_id = _stringify_project_id(project)
+
+    # Public channel — open to all authenticated users
+    if project_str_id == TaskBoardService.PUBLIC_PROJECT_ID:
         return
-    if role == "admin":
+
+    # Founder and admin see everything
+    if role in ("founder", "admin"):
         return
+
+    # Sub-admin channel — only founder/admin (handled above) and sub_admin
+    if project_str_id == TaskBoardService.SUBADMIN_PROJECT_ID:
+        if role == "sub_admin":
+            return
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Access denied")
 
     if role == "sub_admin":
         if user_id in (project.get("sub_admin_ids") or []) or project.get("owner_id") == user_id:
