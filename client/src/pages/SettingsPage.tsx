@@ -36,6 +36,32 @@ const fmtDate = (iso?: string | null) => {
     return new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 };
 
+const parseFriendlyUA = (ua: string): string => {
+    if (!ua) return 'Unknown Browser';
+    // Already a friendly string from new backend (e.g. "Chrome on Windows 10/11")
+    if (/\s+on\s+/i.test(ua) && !ua.startsWith('Mozilla')) return ua;
+    // Parse raw user-agent
+    const u = ua.toLowerCase();
+    let browser = 'Browser';
+    if (/edg\/|edge\//.test(u))               browser = 'Microsoft Edge';
+    else if (/brave\//.test(u))               browser = 'Brave';
+    else if (/opr\/|opera\//.test(u))         browser = 'Opera';
+    else if (/chrome\//.test(u))              browser = 'Chrome';
+    else if (/firefox\//.test(u))             browser = 'Firefox';
+    else if (/safari\//.test(u))              browser = 'Safari';
+    let os = 'Unknown OS';
+    if (/iphone/.test(u))                     os = 'iPhone';
+    else if (/ipad/.test(u))                  os = 'iPad';
+    else if (/android/.test(u))               os = 'Android';
+    else if (/windows nt 10|windows nt 11/.test(u)) os = 'Windows 10/11';
+    else if (/windows nt 6\.3/.test(u))       os = 'Windows 8.1';
+    else if (/windows nt 6\.1/.test(u))       os = 'Windows 7';
+    else if (/windows/.test(u))               os = 'Windows';
+    else if (/mac os x/.test(u))              os = 'macOS';
+    else if (/linux/.test(u))                 os = 'Linux';
+    return `${browser} on ${os}`;
+};
+
 /* ── Reusable primitives ────────────────────────────────────────────────────── */
 
 function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
@@ -535,24 +561,29 @@ const SettingsPage = () => {
                                                 <div style={{ padding: '20px 0', textAlign: 'center', color: muted, fontSize: 13 }}>No session records found.</div>
                                             ) : (
                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                                    {sessions.slice(0, 8).map((s, i) => (
-                                                        <div key={s._id ?? i} className="session-row" style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 14px', borderRadius: 10, transition: 'background .15s' }}>
-                                                            <div style={{ width: 36, height: 36, borderRadius: 10, background: isDark ? 'rgba(29,110,245,.1)' : 'rgba(29,110,245,.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>
-                                                                {(s.user_agent ?? '').toLowerCase().includes('mobile') ? '📱' : '💻'}
-                                                            </div>
-                                                            <div style={{ flex: 1, minWidth: 0 }}>
-                                                                <div style={{ fontSize: 12, fontWeight: 600, color: text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                                    {s.user_agent ? s.user_agent.slice(0, 60) : 'Unknown Browser'}
+                                                    {sessions.slice(0, 8).map((s, i) => {
+                                                        const ua = s.user_agent ?? '';
+                                                        const friendly = parseFriendlyUA(ua);
+                                                        const isMobile = /iphone|ipad|android/i.test(ua);
+                                                        return (
+                                                            <div key={s._id ?? i} className="session-row" style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 14px', borderRadius: 10, transition: 'background .15s' }}>
+                                                                <div style={{ width: 36, height: 36, borderRadius: 10, background: isDark ? 'rgba(29,110,245,.1)' : 'rgba(29,110,245,.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>
+                                                                    {isMobile ? '📱' : '💻'}
                                                                 </div>
-                                                                <div style={{ fontSize: 11, color: muted, marginTop: 2 }}>
-                                                                    {s.ip_address ?? '—'} · {fmtDate(s.login_time ?? s.created_at)}
+                                                                <div style={{ flex: 1, minWidth: 0 }}>
+                                                                    <div style={{ fontSize: 12, fontWeight: 600, color: text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                        {friendly}
+                                                                    </div>
+                                                                    <div style={{ fontSize: 11, color: muted, marginTop: 2 }}>
+                                                                        {s.ip_address ? <span style={{ fontFamily: 'monospace' }}>{s.ip_address}</span> : '—'} · {fmtDate(s.login_time ?? s.created_at)}
+                                                                    </div>
+                                                                </div>
+                                                                <div style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 20, background: i === 0 ? 'rgba(16,185,129,.1)' : (isDark ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.04)'), color: i === 0 ? '#10b981' : muted }}>
+                                                                    {i === 0 ? 'Current' : relTime(s.login_time ?? s.created_at)}
                                                                 </div>
                                                             </div>
-                                                            <div style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 20, background: i === 0 ? 'rgba(16,185,129,.1)' : (isDark ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.04)'), color: i === 0 ? '#10b981' : muted }}>
-                                                                {i === 0 ? 'Current' : relTime(s.login_time ?? s.created_at)}
-                                                            </div>
-                                                        </div>
-                                                    ))}
+                                                        );
+                                                    })}
                                                 </div>
                                             )}
                                         </SectionCard>
@@ -575,8 +606,8 @@ const SettingsPage = () => {
                                                             {sessions.slice(0, 10).map((s, i) => (
                                                                 <tr key={s._id ?? i} className="session-row" style={{ transition: 'background .1s' }}>
                                                                     <td style={{ padding: '10px 12px', fontSize: 12, color: text, borderBottom: `1px solid ${bd}`, whiteSpace: 'nowrap' }}>{fmtDate(s.login_time ?? s.created_at)}</td>
-                                                                    <td style={{ padding: '10px 12px', fontSize: 12, color: muted, borderBottom: `1px solid ${bd}` }}>{s.ip_address ?? '—'}</td>
-                                                                    <td style={{ padding: '10px 12px', fontSize: 11, color: muted, borderBottom: `1px solid ${bd}`, maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.user_agent ?? 'Unknown'}</td>
+                                                                    <td style={{ padding: '10px 12px', fontSize: 12, color: muted, borderBottom: `1px solid ${bd}`, fontFamily: 'monospace' }}>{s.ip_address ?? '—'}</td>
+                                                                    <td style={{ padding: '10px 12px', fontSize: 12, color: muted, borderBottom: `1px solid ${bd}` }}>{parseFriendlyUA(s.user_agent ?? '')}</td>
                                                                     <td style={{ padding: '10px 12px', fontSize: 12, color: muted, borderBottom: `1px solid ${bd}` }}>{s.duration_minutes != null ? `${s.duration_minutes}m` : '—'}</td>
                                                                 </tr>
                                                             ))}

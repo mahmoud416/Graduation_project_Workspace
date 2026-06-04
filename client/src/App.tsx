@@ -31,6 +31,7 @@ import PublicProjectsPage from './pages/PublicProjectsPage';
 import PortfolioPage from './pages/PortfolioPage';
 import FounderDashboard from './pages/FounderDashboard';
 import CredentialsPage from './pages/CredentialsPage';
+import HelpPage from './pages/HelpPage';
 
 const USER_UPDATE_EVENT = 'workspace:user-update';
 const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:8000') + '/api/v1';
@@ -294,6 +295,7 @@ function App() {
         <Route path="/founder" element={restrictToFounder(<FounderDashboard />)} />
         <Route path="/founder/accounts" element={restrictToFounder(<FounderAccountsPage />)} />
         <Route path="/founder/credentials" element={restrictToFounder(<CredentialsPage />)} />
+        <Route path="/help" element={<HelpPage />} />
       </Routes>
       {role && <ChatbotWidget />}
     </BrowserRouter>

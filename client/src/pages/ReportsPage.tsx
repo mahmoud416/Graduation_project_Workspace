@@ -4,6 +4,7 @@
  * Auto-seeds demo data when the platform is empty.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 
@@ -415,7 +416,7 @@ const ReportsPage = () => {
     /* ════════════════════════════════════════════════════════════════════════
        PDF PRINT LAYOUT
     ════════════════════════════════════════════════════════════════════════ */
-    const PrintReport = () => (
+    const PrintReport = () => createPortal(
         <div id="orbit-print-report">
             {/* Cover page */}
             <div className="pdf-page" style={{ fontFamily: 'Arial,sans-serif', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center', background: 'linear-gradient(135deg,#1e1b4b,#312e81,#1e40af)', color: '#fff', padding: 60 }}>
@@ -498,7 +499,8 @@ const ReportsPage = () => {
                     <div style={{ fontSize: 11, fontWeight: 700, color: '#374151' }}>{reportDate} · {reportTime}</div>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 
     /* ════════════════════════════════════════════════════════════════════════
@@ -507,11 +509,11 @@ const ReportsPage = () => {
     return (
         <>
             <PrintReport />
-            <div className="app-layout">
+            <div style={{ display: 'flex', minHeight: '100vh', background: th.bg }}>
                 <Sidebar />
-                <div className="main-content">
-                    <Header />
-                    <main style={{ padding: '20px 24px', background: th.bg, minHeight: '100vh', fontFamily: '"Inter",-apple-system,sans-serif' }}>
+                <div style={{ flex: 1, marginLeft: 'var(--sidebar-width)', transition: 'margin .22s', minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+                    <Header title="Reports Center" />
+                    <main className="page-main" style={{ padding: '20px 24px', background: th.bg, minHeight: '100vh', fontFamily: '"Inter",-apple-system,sans-serif' }}>
 
                         {/* ── HEADER ── */}
                         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
