@@ -826,6 +826,19 @@ REPORT_TYPES: dict = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Default quality-system tagging.
+# Every report type that does NOT declare its own allowed_roles belongs to the
+# default NAQAAE quality system (الهيئة القومية لضمان جودة التعليم والاعتماد —
+# the original Egyptian academic-accreditation report types). The ISO 9001
+# types declare allowed_roles=["iso-9001"] explicitly, so setdefault leaves
+# them untouched. This gates the original reports to users whose institution's
+# quality_system is "naqaae", mirroring how ISO reports are gated to "iso-9001".
+# ---------------------------------------------------------------------------
+for _rt in REPORT_TYPES.values():
+    _rt.setdefault("allowed_roles", ["naqaae"])
+
+
 def get_report_type_context(report_type_key: str) -> str:
     """Build a comprehensive prompt context string for the given report type."""
     rt = REPORT_TYPES.get(report_type_key)
