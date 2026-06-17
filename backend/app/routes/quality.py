@@ -3,6 +3,9 @@ Quality Control API routes.
 Handles quality rules, AI task evaluation, training datasets, and reports.
 Only accessible to quality_manager and admin roles (except report reads for sub_admin).
 """
+import asyncio
+import base64
+
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import FileResponse
 from bson import ObjectId
@@ -27,6 +30,42 @@ from app.services import qc_service
 
 
 router = APIRouter(prefix="/quality", tags=["Quality Control"])
+
+
+# ---------------------------------------------------------------------------
+# Thread-safe file-processing helper (runs in a worker thread via asyncio.to_thread)
+# ---------------------------------------------------------------------------
+
+def _process_file_sync(file_name: str, content_b64: str, file_type: str) -> dict:
+    """Decode base64 and extract text from a single file — CPU-bound, safe to thread."""
+    from app.routes.qc import _extract_pdf_text, _extract_docx_text
+
+    try:
+        content_bytes = base64.b64decode(content_b64)
+    except Exception as exc:
+        return {"file_name": file_name, "content": f"[Decode error: {exc}]", "file_type": file_type}
+
+    is_pdf = file_name.lower().endswith(".pdf") or "pdf" in file_type.lower()
+    is_docx = (
+        file_name.lower().endswith(".docx")
+        or "word" in file_type.lower()
+        or "document" in file_type.lower()
+    )
+
+    if is_pdf:
+        extracted_text = _extract_pdf_text(content_bytes)
+    elif is_docx:
+        extracted_text = _extract_docx_text(content_bytes)
+    else:
+        try:
+            extracted_text = content_bytes.decode("utf-8")
+        except UnicodeDecodeError:
+            extracted_text = "[Binary file, cannot extract text]"
+
+    entry: dict = {"file_name": file_name, "content": extracted_text, "file_type": file_type}
+    if is_pdf:
+        entry["raw_b64"] = content_b64
+    return entry
 
 
 # ---------------------------------------------------------------------------
@@ -264,8 +303,7 @@ async def evaluate_task(
     # Load all active rules
     rules = await db[QUALITY_RULES_COLLECTION].find({"is_active": True}).to_list(length=500)
 
-    # Decode images
-    import base64
+    # Decode images (small, kept synchronous)
     image_bytes_list = []
     for b64 in body.image_base64:
         try:
@@ -273,37 +311,24 @@ async def evaluate_task(
         except Exception:
             pass
 
-    # Decode and extract text from files
-    file_texts = []
+    # Decode + extract text from all files in parallel (thread pool — avoids blocking event loop)
+    file_texts: list = []
     if body.files:
-        from app.routes.qc import _extract_pdf_text, _extract_docx_text
-        for f in body.files:
-            file_name = f.get("file_name", "")
-            content_b64 = f.get("content", "")
-            file_type = f.get("file_type", "")
-            try:
-                content_bytes = base64.b64decode(content_b64)
-                extracted_text = ""
-                if file_name.lower().endswith(".pdf") or "pdf" in file_type.lower():
-                    extracted_text = _extract_pdf_text(content_bytes)
-                elif file_name.lower().endswith(".docx") or "word" in file_type.lower() or "document" in file_type.lower():
-                    extracted_text = _extract_docx_text(content_bytes)
-                else:
-                    try:
-                        extracted_text = content_bytes.decode('utf-8')
-                    except UnicodeDecodeError:
-                        extracted_text = "[Binary file, cannot extract text]"
-                
-                entry = {
-                    "file_name": file_name,
-                    "content": extracted_text,
-                    "file_type": file_type,
-                }
-                if file_name.lower().endswith(".pdf") or "pdf" in file_type.lower():
-                    entry["raw_b64"] = content_b64
-                file_texts.append(entry)
-            except Exception as e:
-                print(f"Error decoding file {file_name}: {e}")
+        processing_tasks = [
+            asyncio.to_thread(
+                _process_file_sync,
+                f.get("file_name", ""),
+                f.get("content", ""),
+                f.get("file_type", ""),
+            )
+            for f in body.files
+        ]
+        results = await asyncio.gather(*processing_tasks, return_exceptions=True)
+        for idx, res in enumerate(results):
+            if isinstance(res, Exception):
+                print(f"Error processing file #{idx}: {res}")
+            else:
+                file_texts.append(res)
 
     result = await qc_service.analyze_task_against_standards(
         task_title=body.task_title,

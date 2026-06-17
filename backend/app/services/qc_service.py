@@ -406,6 +406,423 @@ REPORT_TYPES: dict = {
             "Impact assessment on community",
         ],
     },
+
+    # -----------------------------------------------------------------------
+    # ISO 9001:2015 Report Types — visible only to users with the "iso-9001" role.
+    # Each description embeds the full ISO-auditor evaluation context that
+    # get_report_type_context() feeds to the LLM: persona, purpose, weighted
+    # compliance criteria (totaling 100%), failure conditions, optional fields,
+    # and evidence-extraction rules. required_elements = mandatory fields.
+    # -----------------------------------------------------------------------
+    "iso_ncr": {
+        "name_ar": "تقرير عدم المطابقة",
+        "name_en": "Non-Conformity Report (NCR)",
+        "description": (
+            "PERSONA: Act as a senior ISO 9001:2015 lead auditor. Evaluate the uploaded PDF "
+            "strictly against ISO 9001:2015 Clause 10.2 (Nonconformity and corrective action). "
+            "Rely ONLY on evidence found in the document; never invent facts. If a field is "
+            "missing or ambiguous, mark it as NOT FOUND rather than assuming.\n\n"
+            "PURPOSE: Document a detected nonconformity — what failed, where, when, against which "
+            "requirement — so it can be contained and routed to corrective action.\n\n"
+            "WEIGHTED COMPLIANCE CRITERIA (total 100%):\n"
+            "  - NCR identification & traceability (unique ID, date, raised-by, source): 15%\n"
+            "  - Clear description of the nonconformity (what, where, when): 25%\n"
+            "  - Reference to the violated requirement (ISO clause / procedure / spec): 20%\n"
+            "  - Immediate containment / correction taken: 20%\n"
+            "  - Severity / classification (major vs minor) with justification: 10%\n"
+            "  - Disposition of affected product/process and responsible owner: 10%\n\n"
+            "FAILURE CONDITIONS (auto non-compliant if any are true): no unique NCR ID; "
+            "nonconformity not described in objective terms; no reference to a violated "
+            "requirement; no containment/correction recorded; no responsible owner assigned.\n\n"
+            "OPTIONAL FIELDS (do not penalize if absent): photos/attachments, cost impact, "
+            "customer-notification flag, related CAPA reference.\n\n"
+            "EVIDENCE EXTRACTION RULES: Quote the exact text proving each criterion. For dates "
+            "and IDs extract verbatim. If the violated requirement is implied but not cited, "
+            "treat the clause-reference criterion as partially met, not fully met."
+        ),
+        "required_elements": [
+            "Unique NCR identifier and date raised",
+            "Objective description of the nonconformity (what, where, when)",
+            "Reference to the violated requirement (ISO clause, procedure, or specification)",
+            "Immediate containment or correction action taken",
+            "Severity classification (major / minor) with justification",
+            "Disposition of affected product/process and responsible owner",
+        ],
+        "allowed_roles": ["iso-9001"],
+    },
+    "iso_capa": {
+        "name_ar": "تقرير الإجراء التصحيحي والوقائي",
+        "name_en": "Corrective Action Report (CAPA)",
+        "description": (
+            "PERSONA: Act as a senior ISO 9001:2015 lead auditor. Evaluate the uploaded PDF "
+            "against Clause 10.2 (corrective action) and Clause 10.3 (continual improvement). "
+            "Use only evidence in the document; flag missing/ambiguous data as NOT FOUND.\n\n"
+            "PURPOSE: Demonstrate that a nonconformity was investigated to root cause, that "
+            "actions were taken to eliminate recurrence, and that effectiveness was verified.\n\n"
+            "WEIGHTED COMPLIANCE CRITERIA (total 100%):\n"
+            "  - Link to originating NCR / problem statement: 10%\n"
+            "  - Root-cause analysis using a recognized method (5-Whys, fishbone, etc.): 25%\n"
+            "  - Defined corrective action(s) addressing the root cause: 20%\n"
+            "  - Responsibilities and target completion dates: 15%\n"
+            "  - Implementation evidence (actions actually completed): 15%\n"
+            "  - Effectiveness verification / recurrence check: 15%\n\n"
+            "FAILURE CONDITIONS: no root-cause analysis (only symptom fixing); corrective "
+            "action does not address the stated root cause; no owner or due date; no "
+            "effectiveness verification recorded.\n\n"
+            "OPTIONAL FIELDS: preventive actions for similar processes, updates to risk "
+            "register, lessons-learned, cost of poor quality.\n\n"
+            "EVIDENCE EXTRACTION RULES: Extract the stated root cause verbatim and confirm the "
+            "corrective action logically targets it. If effectiveness verification is planned "
+            "but not yet evidenced, score that criterion as partial."
+        ),
+        "required_elements": [
+            "Reference to the originating nonconformity or problem statement",
+            "Root-cause analysis using a recognized method",
+            "Corrective action(s) that address the identified root cause",
+            "Assigned responsibilities and target completion dates",
+            "Evidence of implementation",
+            "Effectiveness verification confirming no recurrence",
+        ],
+        "allowed_roles": ["iso-9001"],
+    },
+    "iso_internal_audit": {
+        "name_ar": "تقرير التدقيق الداخلي",
+        "name_en": "Internal Audit Report",
+        "description": (
+            "PERSONA: Act as a senior ISO 9001:2015 lead auditor. Evaluate the uploaded PDF "
+            "against Clause 9.2 (Internal audit). Rely solely on documented evidence.\n\n"
+            "PURPOSE: Provide objective evidence that the QMS conforms to ISO 9001 and to the "
+            "organization's own requirements, and that it is effectively implemented.\n\n"
+            "WEIGHTED COMPLIANCE CRITERIA (total 100%):\n"
+            "  - Audit scope, criteria, and objectives defined: 15%\n"
+            "  - Audit plan / schedule and auditor independence stated: 15%\n"
+            "  - Areas / processes / clauses audited with dates: 15%\n"
+            "  - Findings classified (conformity, NC, OFI) with objective evidence: 25%\n"
+            "  - Nonconformities linked to corrective-action requests: 15%\n"
+            "  - Audit conclusion / overall QMS effectiveness statement: 15%\n\n"
+            "FAILURE CONDITIONS: no defined scope or criteria; auditor not independent of the "
+            "area audited; findings stated without objective evidence; no conclusion on QMS "
+            "effectiveness.\n\n"
+            "OPTIONAL FIELDS: opening/closing meeting records, auditee acknowledgements, "
+            "follow-up audit reference, positive observations.\n\n"
+            "EVIDENCE EXTRACTION RULES: For each finding extract the clause referenced and the "
+            "objective evidence cited. Distinguish nonconformities from opportunities for "
+            "improvement; do not upgrade an OFI to an NC without explicit evidence."
+        ),
+        "required_elements": [
+            "Audit scope, criteria, and objectives",
+            "Audit plan/schedule and statement of auditor independence",
+            "Processes/areas/clauses audited with dates",
+            "Findings classified as conformity, nonconformity, or opportunity for improvement, each with objective evidence",
+            "Nonconformities linked to corrective-action requests",
+            "Overall audit conclusion on QMS effectiveness",
+        ],
+        "allowed_roles": ["iso-9001"],
+    },
+    "iso_supplier_evaluation": {
+        "name_ar": "تقرير تقييم الموردين",
+        "name_en": "Supplier Evaluation Report",
+        "description": (
+            "PERSONA: Act as a senior ISO 9001:2015 lead auditor. Evaluate the uploaded PDF "
+            "against Clause 8.4 (Control of externally provided processes, products, services). "
+            "Use only documented evidence.\n\n"
+            "PURPOSE: Demonstrate that suppliers are selected, evaluated, and re-evaluated based "
+            "on their ability to meet requirements, with controls proportional to risk.\n\n"
+            "WEIGHTED COMPLIANCE CRITERIA (total 100%):\n"
+            "  - Supplier identification and scope of supply: 10%\n"
+            "  - Defined evaluation criteria (quality, delivery, price, compliance): 20%\n"
+            "  - Performance data / scoring against criteria: 25%\n"
+            "  - Approval status / classification (approved, conditional, rejected): 15%\n"
+            "  - Risk assessment of the supplier and controls applied: 15%\n"
+            "  - Re-evaluation period and corrective actions for poor performers: 15%\n\n"
+            "FAILURE CONDITIONS: no defined evaluation criteria; rating given without supporting "
+            "data; no approval decision; no re-evaluation cycle defined.\n\n"
+            "OPTIONAL FIELDS: certifications held by supplier (ISO 9001, etc.), audit history, "
+            "alternative-supplier notes, escrow/contingency arrangements.\n\n"
+            "EVIDENCE EXTRACTION RULES: Extract each metric with its measured value and target. "
+            "If a score is asserted without underlying data, mark the performance-data criterion "
+            "as partial."
+        ),
+        "required_elements": [
+            "Supplier identification and scope of products/services supplied",
+            "Defined evaluation criteria (quality, delivery, price, compliance)",
+            "Performance data scored against the criteria",
+            "Approval status / classification decision",
+            "Supplier risk assessment and controls applied",
+            "Re-evaluation period and actions for under-performing suppliers",
+        ],
+        "allowed_roles": ["iso-9001"],
+    },
+    "iso_risk_assessment": {
+        "name_ar": "تقرير تقييم المخاطر",
+        "name_en": "Risk Assessment Report",
+        "description": (
+            "PERSONA: Act as a senior ISO 9001:2015 lead auditor. Evaluate the uploaded PDF "
+            "against Clause 6.1 (Actions to address risks and opportunities). Use only "
+            "documented evidence.\n\n"
+            "PURPOSE: Show that risks and opportunities affecting the QMS and its objectives are "
+            "identified, analyzed, prioritized, and treated with planned actions.\n\n"
+            "WEIGHTED COMPLIANCE CRITERIA (total 100%):\n"
+            "  - Scope/context and process(es) covered: 10%\n"
+            "  - Risk identification (hazards, threats, opportunities): 20%\n"
+            "  - Risk analysis method (likelihood x severity / risk rating): 20%\n"
+            "  - Risk evaluation and prioritization against acceptance criteria: 15%\n"
+            "  - Treatment / mitigation actions with owners: 20%\n"
+            "  - Residual risk and monitoring/review plan: 15%\n\n"
+            "FAILURE CONDITIONS: no risk-rating methodology; risks listed without analysis; no "
+            "mitigation actions or owners; no review/monitoring plan.\n\n"
+            "OPTIONAL FIELDS: opportunities register, risk-appetite statement, link to objectives, "
+            "trigger thresholds, contingency plans.\n\n"
+            "EVIDENCE EXTRACTION RULES: For each risk extract its likelihood, severity, and "
+            "resulting rating. Confirm the rating method is stated; if ratings appear without a "
+            "defined scale, mark the analysis-method criterion as partial."
+        ),
+        "required_elements": [
+            "Scope/context and processes covered",
+            "Identified risks and opportunities",
+            "Risk analysis method with likelihood and severity",
+            "Risk evaluation and prioritization against acceptance criteria",
+            "Treatment/mitigation actions with assigned owners",
+            "Residual risk and monitoring/review plan",
+        ],
+        "allowed_roles": ["iso-9001"],
+    },
+    "iso_customer_complaint": {
+        "name_ar": "تقرير شكوى العميل",
+        "name_en": "Customer Complaint Report",
+        "description": (
+            "PERSONA: Act as a senior ISO 9001:2015 lead auditor. Evaluate the uploaded PDF "
+            "against Clause 9.1.2 (Customer satisfaction) and Clause 8.2.1 (Customer "
+            "communication). Use only documented evidence.\n\n"
+            "PURPOSE: Record a customer complaint and demonstrate timely handling, resolution, "
+            "and feedback into improvement.\n\n"
+            "WEIGHTED COMPLIANCE CRITERIA (total 100%):\n"
+            "  - Complaint identification (ID, date received, customer, channel): 15%\n"
+            "  - Clear description of the complaint and affected product/service: 20%\n"
+            "  - Acknowledgement and response timeliness: 15%\n"
+            "  - Investigation / root-cause where applicable: 20%\n"
+            "  - Resolution / action taken and customer communication: 20%\n"
+            "  - Closure status and customer satisfaction confirmation: 10%\n\n"
+            "FAILURE CONDITIONS: complaint not uniquely logged; no resolution recorded; no "
+            "communication back to the customer; complaint left open without status.\n\n"
+            "OPTIONAL FIELDS: compensation/goodwill, severity rating, link to NCR/CAPA, trend "
+            "analysis reference.\n\n"
+            "EVIDENCE EXTRACTION RULES: Extract dates received, responded, and closed to assess "
+            "timeliness. If resolution is described but customer communication is absent, mark "
+            "that criterion as partial."
+        ),
+        "required_elements": [
+            "Complaint identifier, date received, customer, and channel",
+            "Description of the complaint and affected product/service",
+            "Acknowledgement and response timeliness",
+            "Investigation or root-cause analysis where applicable",
+            "Resolution/action taken and communication back to the customer",
+            "Closure status and customer satisfaction confirmation",
+        ],
+        "allowed_roles": ["iso-9001"],
+    },
+    "iso_training_record": {
+        "name_ar": "تقرير سجل التدريب",
+        "name_en": "Training Record Report",
+        "description": (
+            "PERSONA: Act as a senior ISO 9001:2015 lead auditor. Evaluate the uploaded PDF "
+            "against Clause 7.2 (Competence) and Clause 7.3 (Awareness). Use only documented "
+            "evidence.\n\n"
+            "PURPOSE: Provide evidence that personnel are competent based on appropriate "
+            "education, training, or experience, and that training effectiveness is evaluated.\n\n"
+            "WEIGHTED COMPLIANCE CRITERIA (total 100%):\n"
+            "  - Trainee identification and role/competence requirement: 15%\n"
+            "  - Training topic/course and objectives: 15%\n"
+            "  - Trainer/provider and date(s): 15%\n"
+            "  - Attendance / completion evidence: 20%\n"
+            "  - Evaluation of training effectiveness (test, assessment, on-job): 25%\n"
+            "  - Competence/certification outcome and validity period: 10%\n\n"
+            "FAILURE CONDITIONS: no link between training and a required competence; no "
+            "attendance/completion evidence; no effectiveness evaluation recorded.\n\n"
+            "OPTIONAL FIELDS: training cost, CEU/credits, re-training schedule, feedback scores.\n\n"
+            "EVIDENCE EXTRACTION RULES: Extract the competence requirement and confirm the "
+            "training maps to it. If completion is recorded but effectiveness is not evaluated, "
+            "mark the effectiveness criterion as non-compliant."
+        ),
+        "required_elements": [
+            "Trainee identification and required competence/role",
+            "Training topic/course and objectives",
+            "Trainer/provider and training date(s)",
+            "Attendance or completion evidence",
+            "Evaluation of training effectiveness",
+            "Resulting competence/certification and validity period",
+        ],
+        "allowed_roles": ["iso-9001"],
+    },
+    "iso_calibration": {
+        "name_ar": "تقرير المعايرة",
+        "name_en": "Calibration Report",
+        "description": (
+            "PERSONA: Act as a senior ISO 9001:2015 lead auditor. Evaluate the uploaded PDF "
+            "against Clause 7.1.5 (Monitoring and measuring resources, including measurement "
+            "traceability). Use only documented evidence.\n\n"
+            "PURPOSE: Confirm that measuring equipment is calibrated/verified against traceable "
+            "standards, is fit for use, and its status is identifiable.\n\n"
+            "WEIGHTED COMPLIANCE CRITERIA (total 100%):\n"
+            "  - Equipment identification (ID, type, serial, location): 15%\n"
+            "  - Calibration standard used and traceability to national/international standards: 20%\n"
+            "  - Calibration method/procedure and environmental conditions: 10%\n"
+            "  - Measurement results vs acceptance tolerances: 25%\n"
+            "  - Pass/fail determination and calibration status label: 15%\n"
+            "  - Calibration date, due date, and authorized signatory: 15%\n\n"
+            "FAILURE CONDITIONS: no traceability to a recognized standard; results without "
+            "tolerances; no pass/fail decision; no next-due date.\n\n"
+            "OPTIONAL FIELDS: measurement uncertainty, as-found/as-left data, adjustment notes, "
+            "out-of-tolerance impact assessment.\n\n"
+            "EVIDENCE EXTRACTION RULES: Extract each measured value with its tolerance and "
+            "compare. If uncertainty or traceability chain is missing, mark the traceability "
+            "criterion as partial."
+        ),
+        "required_elements": [
+            "Equipment identification (ID, type, serial, location)",
+            "Calibration standard used with traceability to recognized standards",
+            "Calibration method/procedure and conditions",
+            "Measurement results compared against acceptance tolerances",
+            "Pass/fail determination and calibration status label",
+            "Calibration date, due date, and authorized signatory",
+        ],
+        "allowed_roles": ["iso-9001"],
+    },
+    "iso_management_review": {
+        "name_ar": "تقرير المراجعة الإدارية",
+        "name_en": "Management Review Report",
+        "description": (
+            "PERSONA: Act as a senior ISO 9001:2015 lead auditor. Evaluate the uploaded PDF "
+            "against Clause 9.3 (Management review). Use only documented evidence.\n\n"
+            "PURPOSE: Evidence that top management reviewed the QMS for continuing suitability, "
+            "adequacy, effectiveness, and alignment with strategic direction.\n\n"
+            "WEIGHTED COMPLIANCE CRITERIA (total 100%):\n"
+            "  - Review meeting details (date, attendees incl. top management): 10%\n"
+            "  - Status of actions from previous reviews: 10%\n"
+            "  - Required INPUTS covered (audit results, customer feedback, process "
+            "performance, NC/CA status, monitoring, supplier performance, risks/opportunities, "
+            "resources): 30%\n"
+            "  - Performance against quality objectives/KPIs: 15%\n"
+            "  - Required OUTPUTS (improvement decisions, QMS change needs, resource needs): 25%\n"
+            "  - Assigned actions with owners and due dates: 10%\n\n"
+            "FAILURE CONDITIONS: top management not evidenced as present; one or more mandatory "
+            "inputs missing; no decisions/outputs; no assigned actions.\n\n"
+            "OPTIONAL FIELDS: strategic-context discussion, benchmarking, stakeholder feedback "
+            "beyond customers.\n\n"
+            "EVIDENCE EXTRACTION RULES: Checklist each required input/output (Clause 9.3.2 and "
+            "9.3.3); mark any not explicitly evidenced as NOT FOUND. Do not assume an input was "
+            "covered because the meeting occurred."
+        ),
+        "required_elements": [
+            "Meeting date and attendees including top management",
+            "Status of actions from previous management reviews",
+            "All required review inputs (audit results, customer feedback, process performance, NC/CA status, monitoring results, supplier performance, risks/opportunities, resource adequacy)",
+            "Performance against quality objectives/KPIs",
+            "Review outputs (improvement decisions, QMS change needs, resource needs)",
+            "Assigned actions with owners and due dates",
+        ],
+        "allowed_roles": ["iso-9001"],
+    },
+    "iso_document_control": {
+        "name_ar": "تقرير ضبط الوثائق",
+        "name_en": "Document Control Report",
+        "description": (
+            "PERSONA: Act as a senior ISO 9001:2015 lead auditor. Evaluate the uploaded PDF "
+            "against Clause 7.5 (Documented information — creation, update, and control). Use "
+            "only documented evidence.\n\n"
+            "PURPOSE: Demonstrate that documented information is identified, approved, version-"
+            "controlled, distributed, protected, and that obsolete documents are controlled.\n\n"
+            "WEIGHTED COMPLIANCE CRITERIA (total 100%):\n"
+            "  - Document identification (title, unique ID, version/revision): 15%\n"
+            "  - Approval/authorization before issue: 20%\n"
+            "  - Revision history / change control: 20%\n"
+            "  - Distribution and access control: 15%\n"
+            "  - Control of obsolete documents and retention/disposal: 15%\n"
+            "  - Review status and next review date: 15%\n\n"
+            "FAILURE CONDITIONS: documents without version/revision; no approval evidence; no "
+            "change history; obsolete documents not controlled.\n\n"
+            "OPTIONAL FIELDS: document owner, storage medium, language/translation control, "
+            "external-document register.\n\n"
+            "EVIDENCE EXTRACTION RULES: Extract version numbers, approval signatures/dates, and "
+            "revision entries. If approval is implied but no signatory/date is shown, mark the "
+            "approval criterion as partial."
+        ),
+        "required_elements": [
+            "Document identification (title, unique ID, version/revision)",
+            "Approval/authorization before issue",
+            "Revision history and change control",
+            "Distribution and access control",
+            "Control of obsolete documents and retention/disposal",
+            "Review status and next review date",
+        ],
+        "allowed_roles": ["iso-9001"],
+    },
+    "iso_kpi": {
+        "name_ar": "تقرير مؤشرات الأداء",
+        "name_en": "KPI Report",
+        "description": (
+            "PERSONA: Act as a senior ISO 9001:2015 lead auditor. Evaluate the uploaded PDF "
+            "against Clause 9.1.1 (Monitoring, measurement, analysis, evaluation) and Clause 6.2 "
+            "(Quality objectives). Use only documented evidence.\n\n"
+            "PURPOSE: Show that quality objectives are measured via KPIs, results are analyzed, "
+            "and actions are taken when targets are not met.\n\n"
+            "WEIGHTED COMPLIANCE CRITERIA (total 100%):\n"
+            "  - KPI definitions linked to quality objectives: 15%\n"
+            "  - Measurement method, formula, and data source: 15%\n"
+            "  - Target/threshold for each KPI: 15%\n"
+            "  - Actual results for the period: 20%\n"
+            "  - Analysis of trends and gaps vs target: 20%\n"
+            "  - Actions for KPIs not meeting target with owners: 15%\n\n"
+            "FAILURE CONDITIONS: KPIs without targets; results reported without analysis; no "
+            "action where targets are missed; no link to objectives.\n\n"
+            "OPTIONAL FIELDS: data-quality notes, benchmarking, forecast, visualization/charts.\n\n"
+            "EVIDENCE EXTRACTION RULES: Extract each KPI's target and actual and compute the "
+            "gap. If a KPI misses target but no action is recorded, mark the action criterion as "
+            "non-compliant for that KPI."
+        ),
+        "required_elements": [
+            "KPI definitions linked to quality objectives",
+            "Measurement method, formula, and data source",
+            "Target/threshold for each KPI",
+            "Actual results for the reporting period",
+            "Analysis of trends and gaps versus target",
+            "Actions for KPIs not meeting target with assigned owners",
+        ],
+        "allowed_roles": ["iso-9001"],
+    },
+    "iso_preventive_maintenance": {
+        "name_ar": "تقرير الصيانة الوقائية",
+        "name_en": "Preventive Maintenance Report",
+        "description": (
+            "PERSONA: Act as a senior ISO 9001:2015 lead auditor. Evaluate the uploaded PDF "
+            "against Clause 7.1.3 (Infrastructure). Use only documented evidence.\n\n"
+            "PURPOSE: Demonstrate that infrastructure and equipment are maintained on a planned "
+            "preventive schedule to ensure conforming products/services.\n\n"
+            "WEIGHTED COMPLIANCE CRITERIA (total 100%):\n"
+            "  - Asset/equipment identification and location: 15%\n"
+            "  - Maintenance plan/schedule and frequency: 20%\n"
+            "  - Maintenance tasks performed vs planned: 20%\n"
+            "  - Date performed, technician, and next-due date: 15%\n"
+            "  - Findings, parts replaced, and equipment status after maintenance: 15%\n"
+            "  - Follow-up actions for defects found / unplanned breakdowns: 15%\n\n"
+            "FAILURE CONDITIONS: no maintenance schedule; tasks performed not traceable to a "
+            "plan; no next-due date; defects found with no follow-up.\n\n"
+            "OPTIONAL FIELDS: downtime, cost, spare-parts inventory, predictive-maintenance "
+            "data, warranty references.\n\n"
+            "EVIDENCE EXTRACTION RULES: Compare planned vs performed tasks and extract performed "
+            "and next-due dates. If breakdowns are recorded without corrective follow-up, mark "
+            "the follow-up criterion as non-compliant."
+        ),
+        "required_elements": [
+            "Asset/equipment identification and location",
+            "Maintenance plan/schedule and frequency",
+            "Maintenance tasks performed compared against the plan",
+            "Date performed, technician, and next-due date",
+            "Findings, parts replaced, and post-maintenance equipment status",
+            "Follow-up actions for defects or unplanned breakdowns",
+        ],
+        "allowed_roles": ["iso-9001"],
+    },
 }
 
 
@@ -1037,11 +1454,10 @@ async def _online_analyze_task(
             ftype = ft.get("file_type", "")
             raw_b64 = ft.get("raw_b64")
             if raw_b64 and len(raw_b64) <= MAX_PDF_B64_LEN:
+                # Send PDF as Gemini native inline_data — Gemini reads the full file directly.
+                # Do NOT also include extracted text: it's redundant and doubles the payload size.
                 pdf_inline_parts.append({"inline_data": {"mime_type": "application/pdf", "data": raw_b64}})
-                file_context += f"\n\nFile: {fname} (PDF attached below — analyse its full content)"
-                extracted = ft.get("content", "")
-                if extracted and not extracted.startswith("["):
-                    file_context += f"\n[Extracted text preview]\n{extracted[:2000]}"
+                file_context += f"\n\nFile: {fname} (PDF attached as inline_data — analyse its full content natively)"
             elif raw_b64:
                 file_context += f"\n\nFile: {fname} (PDF too large for inline analysis, using extracted text)"
                 file_context += f"\n{ft.get('content', '[No text extracted]')}"
@@ -1214,7 +1630,7 @@ Task Description: {task_description or "(No description provided)"}
         content_parts,
         generation_config=genai.GenerationConfig(
             temperature=0.3,
-            max_output_tokens=8192,
+            max_output_tokens=3072,  # was 8192 — trimmed to cut generation time ~60%
         ),
     )
 
