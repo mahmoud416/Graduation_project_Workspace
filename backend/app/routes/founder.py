@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import PlainTextResponse
 from typing import List, Dict, Any, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from app.dependencies.rbac import require_founder, ensure_roles
 from app.dependencies.auth import get_current_user
 from app.db.mongodb import get_database
@@ -241,10 +241,21 @@ async def download_credentials(current_user=Depends(get_current_user)):
 # IT ACCOUNT MANAGEMENT  (Founder-only)
 # ═══════════════════════════════════════════════════════════════════════════
 
+ALLOWED_QUALITY_SYSTEMS = ["iso-9001", "iso-27001", "iso-45001", "iso-14001", "naqaae"]
+
+
 class CreateITAccountPayload(BaseModel):
     full_name: str
     email: str
     password: str
+    quality_system: str
+
+    @field_validator("quality_system")
+    @classmethod
+    def validate_quality_system(cls, v: str) -> str:
+        if v not in ALLOWED_QUALITY_SYSTEMS:
+            raise ValueError(f"quality_system must be one of {ALLOWED_QUALITY_SYSTEMS}")
+        return v
 
 
 class UpdateITAccountPayload(BaseModel):
@@ -298,11 +309,12 @@ async def create_it_account(
     hashed = hash_password(payload.password)
     now = datetime.now(timezone.utc)
     doc = {
-        "name":       payload.full_name,
-        "email":      payload.email.lower(),
-        "password":   hashed,
-        "role":       "it_staff",
-        "status":     "active",
+        "name":           payload.full_name,
+        "email":          payload.email.lower(),
+        "password":       hashed,
+        "role":           "it_staff",
+        "quality_system": payload.quality_system,
+        "status":         "active",
         "is_active":  True,
         "created_at": now,
         "updated_at": now,
@@ -310,6 +322,14 @@ async def create_it_account(
     }
     result = await db[USERS_COLLECTION].insert_one(doc)
     doc["_id"] = result.inserted_id
+
+    # The IT account is the root of its own tenant — tenant_id = own id.
+    tenant_id = str(result.inserted_id)
+    await db[USERS_COLLECTION].update_one(
+        {"_id": result.inserted_id},
+        {"$set": {"tenant_id": tenant_id}},
+    )
+    doc["tenant_id"] = tenant_id
 
     # Record credentials
     try:

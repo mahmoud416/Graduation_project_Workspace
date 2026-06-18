@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, s
 from fastapi.responses import FileResponse
 
 from app.dependencies.auth import get_current_user
+from app.dependencies.tenant import scope_query
 from app.db.mongodb import get_database
 from app.db.collections import PROJECTS_COLLECTION, USERS_COLLECTION
 from app.schemas.task_board import (
@@ -109,6 +110,7 @@ async def add_task_board_todo(
             "completed_by_names": [],
             "status": payload.status or "todo",
             "priority": payload.priority or "medium",
+            "tenant_id": current_user.get("tenant_id"),
         },
     )
     if not updated:
@@ -278,7 +280,9 @@ async def list_available_members(
     if existing_ids:
         query["_id"] = {"$nin": [ObjectId(uid) for uid in existing_ids if len(uid) == 24]}
 
-    users = await db[USERS_COLLECTION].find(query or {}).sort("name", 1).limit(25).to_list(length=None)
+    users = await db[USERS_COLLECTION].find(
+        scope_query(current_user, query or {})
+    ).sort("name", 1).limit(25).to_list(length=None)
     members = [
         {
             "user_id": str(user["_id"]),

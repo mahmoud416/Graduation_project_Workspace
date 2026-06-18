@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pymongo import ReturnDocument
 
 from app.dependencies.auth import get_current_user
+from app.dependencies.tenant import scope_query
 from app.db.mongodb import get_database
 from app.db.collections import USERS_COLLECTION, USER_SESSIONS_COLLECTION
 from app.schemas.user import UserResponse, UserUpdate, SelfProfileUpdate
@@ -217,6 +218,7 @@ async def list_users(
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot query this role")
         query["role"] = role
 
+    query = scope_query(current_user, query)
     users = await db[USERS_COLLECTION].find(query).sort("name", 1).to_list(length=None)
 
     return [_serialize_user(user) for user in users]
@@ -233,7 +235,9 @@ async def get_users_count(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only admins can access the user directory"
         )
-    count = await db[USERS_COLLECTION].count_documents({"role": {"$nin": ["admin", "founder"]}})
+    count = await db[USERS_COLLECTION].count_documents(
+        scope_query(current_user, {"role": {"$nin": ["admin", "founder"]}})
+    )
     return {"count": count}
 
 

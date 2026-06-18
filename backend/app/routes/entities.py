@@ -65,7 +65,8 @@ async def create_entity(
         quality_framework_ids=qf_ids,
         subscription_tier=entity_data.subscription_tier or "Basic",
         max_teams=50 if entity_data.subscription_tier == "Enterprise" else (15 if entity_data.subscription_tier == "Pro" else 5),
-        ai_quota=50000 if entity_data.subscription_tier == "Enterprise" else (10000 if entity_data.subscription_tier == "Pro" else 1000)
+        ai_quota=50000 if entity_data.subscription_tier == "Enterprise" else (10000 if entity_data.subscription_tier == "Pro" else 1000),
+        quality_system=entity_data.quality_system or current_user.get("quality_system"),
     )
     
     result = await db[ENTITIES_COLLECTION].insert_one(doc)

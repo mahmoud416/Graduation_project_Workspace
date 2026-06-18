@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from app.schemas.user import UserCreate, UserLogin, UserResponse, PasswordUpdateRequest
 from app.services.auth_service import AuthService
 from app.services.task_board_service import TaskBoardService
-from app.dependencies.auth import get_current_user
+from app.dependencies.auth import get_current_user, get_optional_current_user
 from app.db.mongodb import get_database
 from app.db.collections import (
     USERS_COLLECTION,
@@ -25,10 +25,29 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 async def register(
     user_data: UserCreate,
+    caller: dict | None = Depends(get_optional_current_user),
     db=Depends(get_database)
 ):
     """Register a new user account."""
     try:
+        # Inherit quality_system + tenant_id: explicit admin_id first, else the authenticated caller
+        inherited_qs: str | None = None
+        inherited_tenant: str | None = None
+        if user_data.admin_id:
+            from bson import ObjectId
+            if ObjectId.is_valid(user_data.admin_id):
+                creator = await db[USERS_COLLECTION].find_one(
+                    {"_id": ObjectId(user_data.admin_id)},
+                    {"quality_system": 1, "tenant_id": 1},
+                )
+                if creator:
+                    inherited_qs = creator.get("quality_system")
+                    inherited_tenant = creator.get("tenant_id")
+        if not inherited_qs and caller:
+            inherited_qs = caller.get("quality_system")
+        if not inherited_tenant and caller:
+            inherited_tenant = caller.get("tenant_id")
+
         user = await AuthService.register_user(
             db,
             email=user_data.email,
@@ -38,7 +57,9 @@ async def register(
             admin_id=user_data.admin_id,
             sub_admin_id=user_data.sub_admin_id,
             phone=user_data.phone,
-            status=user_data.status or "active"
+            status=user_data.status or "active",
+            quality_system=inherited_qs,
+            tenant_id=inherited_tenant,
         )
 
         await TaskBoardService.ensure_public_membership_for_user(db, user)

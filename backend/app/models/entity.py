@@ -21,6 +21,7 @@ class EntityModel:
         subscription_tier: str = "Basic",
         max_teams: int = 5,
         ai_quota: int = 1000,
+        quality_system: Optional[str] = None,
     ) -> dict:
         """Create a new entity document."""
         return {
@@ -34,6 +35,7 @@ class EntityModel:
             "max_teams": max_teams,
             "ai_quota": ai_quota,
             "ai_tokens_used": 0,
+            "quality_system": quality_system,
             "created_at": datetime.utcnow(),
             "updated_at": datetime.utcnow(),
         }

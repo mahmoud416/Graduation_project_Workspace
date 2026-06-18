@@ -78,6 +78,7 @@ async def create_task(
             report_type=task_data.report_type,
             template_id=task_data.template_id,
             assign_to_all=task_data.assign_to_all,
+            tenant_id=current_user.get("tenant_id"),
         )
 
         # Populate assignees_names

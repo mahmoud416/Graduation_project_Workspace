@@ -18,7 +18,8 @@ class TeamService:
         db,
         name: str,
         created_by_id: ObjectId,
-        description: str = ""
+        description: str = "",
+        tenant_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Create a new team and add the creator as Admin.
@@ -38,7 +39,8 @@ class TeamService:
             created_by=created_by_id,
             description=description
         )
-        
+        team_doc["tenant_id"] = tenant_id
+
         # Insert team
         result = await db[TEAMS_COLLECTION].insert_one(team_doc)
         team_doc["_id"] = result.inserted_id

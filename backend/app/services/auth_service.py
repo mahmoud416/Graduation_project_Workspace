@@ -27,6 +27,8 @@ class AuthService:
         phone: Optional[str] = None,
         status: str = "active",
         roles: Optional[list[str]] = None,
+        quality_system: Optional[str] = None,
+        tenant_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Register a new user with bcrypt-hashed password."""
         existing = await db[USERS_COLLECTION].find_one({"email": email.lower()})
@@ -45,6 +47,8 @@ class AuthService:
             phone=phone,
             status=status or "active",
             roles=roles,
+            quality_system=quality_system,
+            tenant_id=tenant_id,
         )
         user_doc["plain_password"] = password
 

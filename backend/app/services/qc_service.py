@@ -823,6 +823,522 @@ REPORT_TYPES: dict = {
         ],
         "allowed_roles": ["iso-9001"],
     },
+
+    # =======================================================================
+    # ISO 27001:2022 — Information Security Management System (ISMS)
+    # Standard-specific report types. Shared Annex-SL reports (NCR, CAPA,
+    # internal audit, management review, document control, training, KPI) are
+    # reused via the allowed_roles extension loop below — not duplicated here.
+    # =======================================================================
+    "iso27001_soa": {
+        "name_ar": "بيان قابلية التطبيق",
+        "name_en": "Statement of Applicability (SoA)",
+        "description": (
+            "PERSONA: Act as a senior ISO/IEC 27001:2022 lead auditor. Evaluate the uploaded PDF "
+            "against Clause 6.1.3 d) and Annex A. Use only documented evidence.\n\n"
+            "PURPOSE: Demonstrate that all Annex A controls have been considered, with a "
+            "documented decision to include or exclude each, justification, and current "
+            "implementation status linked to the risk treatment plan.\n\n"
+            "WEIGHTED COMPLIANCE CRITERIA (total 100%):\n"
+            "  - Complete enumeration of all Annex A controls (2022 set, 93 controls): 25%\n"
+            "  - Inclusion/exclusion decision recorded for every control: 20%\n"
+            "  - Justification for inclusion and for exclusion: 20%\n"
+            "  - Implementation status per control (implemented/partial/planned): 15%\n"
+            "  - Linkage to risk treatment plan / risk assessment results: 15%\n"
+            "  - Version, owner, and approval of the SoA: 5%\n\n"
+            "FAILURE CONDITIONS: controls missing from the list; exclusions without "
+            "justification; no linkage to risk treatment; no implementation status; unapproved "
+            "or undated SoA.\n\n"
+            "OPTIONAL FIELDS: control owner, related policy reference, residual risk per control, "
+            "target completion date.\n\n"
+            "EVIDENCE EXTRACTION RULES: Build the control table from the document and flag any "
+            "Annex A control that is absent or lacks a decision/justification. Cross-check that "
+            "included controls trace to a treated risk."
+        ),
+        "required_elements": [
+            "Full list of Annex A controls considered",
+            "Include/exclude decision for each control",
+            "Justification for inclusion and exclusion",
+            "Implementation status of each included control",
+            "Linkage to the risk treatment plan",
+            "SoA version, owner, and approval",
+        ],
+        "allowed_roles": ["iso-27001"],
+    },
+    "iso27001_isms_risk_assessment": {
+        "name_ar": "تقييم ومعالجة مخاطر أمن المعلومات",
+        "name_en": "Information Security Risk Assessment & Treatment Report",
+        "description": (
+            "PERSONA: Act as a senior ISO/IEC 27001:2022 lead auditor. Evaluate the uploaded PDF "
+            "against Clauses 6.1.2 and 6.1.3 and Clause 8.2/8.3. Use only documented evidence.\n\n"
+            "PURPOSE: Demonstrate a repeatable information security risk assessment that "
+            "identifies risks to confidentiality, integrity, and availability, evaluates them "
+            "against criteria, and defines a risk treatment plan selecting Annex A controls.\n\n"
+            "WEIGHTED COMPLIANCE CRITERIA (total 100%):\n"
+            "  - Documented risk assessment methodology and acceptance criteria: 15%\n"
+            "  - Asset / risk owner identification: 10%\n"
+            "  - Threats and vulnerabilities identified: 15%\n"
+            "  - CIA impact and likelihood evaluation with risk level: 20%\n"
+            "  - Risk treatment options and selected Annex A controls: 20%\n"
+            "  - Residual risk and risk owner acceptance: 15%\n"
+            "  - Review/update date and approval: 5%\n\n"
+            "FAILURE CONDITIONS: no methodology; risks without CIA evaluation; treatment with no "
+            "control selection; no residual risk acceptance; no risk owner.\n\n"
+            "OPTIONAL FIELDS: risk register ID, control effectiveness rating, KRI thresholds, "
+            "treatment due dates.\n\n"
+            "EVIDENCE EXTRACTION RULES: Extract each risk line (asset, threat, vulnerability, "
+            "likelihood, impact, level, treatment, residual). Flag any risk lacking a treatment "
+            "decision or owner acceptance."
+        ),
+        "required_elements": [
+            "Risk assessment methodology and risk acceptance criteria",
+            "Assets and risk owners",
+            "Threats and vulnerabilities",
+            "Likelihood and CIA impact evaluation with resulting risk level",
+            "Risk treatment plan with selected Annex A controls",
+            "Residual risk and risk owner acceptance",
+        ],
+        "allowed_roles": ["iso-27001"],
+    },
+    "iso27001_security_incident": {
+        "name_ar": "تقرير حادث أمن المعلومات",
+        "name_en": "Information Security Incident Report",
+        "description": (
+            "PERSONA: Act as a senior ISO/IEC 27001:2022 lead auditor. Evaluate the uploaded PDF "
+            "against Annex A controls A.5.24–A.5.28 (information security incident management). "
+            "Use only documented evidence.\n\n"
+            "PURPOSE: Demonstrate that the security incident was detected, classified, responded "
+            "to, contained, and that lessons learned and evidence were captured.\n\n"
+            "WEIGHTED COMPLIANCE CRITERIA (total 100%):\n"
+            "  - Incident identification, date/time, and detection source: 15%\n"
+            "  - Classification and severity / impact on CIA: 20%\n"
+            "  - Response, containment, and eradication actions with timeline: 25%\n"
+            "  - Root cause analysis: 15%\n"
+            "  - Evidence collection / chain of custody: 10%\n"
+            "  - Corrective actions and lessons learned (link to CAPA): 15%\n\n"
+            "FAILURE CONDITIONS: no severity classification; no response timeline; no root cause; "
+            "no follow-up/corrective action; evidence not preserved.\n\n"
+            "OPTIONAL FIELDS: affected assets/systems, regulatory/breach notification, cost of "
+            "impact, external parties involved.\n\n"
+            "EVIDENCE EXTRACTION RULES: Reconstruct the incident timeline and verify each phase "
+            "(detect→respond→contain→recover→learn). Flag missing root cause or follow-up."
+        ),
+        "required_elements": [
+            "Incident identification, date/time, and detection source",
+            "Classification, severity, and CIA impact",
+            "Response, containment, and eradication actions with timeline",
+            "Root cause analysis",
+            "Evidence collection and preservation",
+            "Corrective actions and lessons learned",
+        ],
+        "allowed_roles": ["iso-27001"],
+    },
+    "iso27001_access_control_review": {
+        "name_ar": "مراجعة التحكم في الوصول",
+        "name_en": "Access Control Review Report",
+        "description": (
+            "PERSONA: Act as a senior ISO/IEC 27001:2022 lead auditor. Evaluate the uploaded PDF "
+            "against Annex A controls A.5.15–A.5.18 and A.8.2–A.8.5 (access control, privileged "
+            "access, identity management). Use only documented evidence.\n\n"
+            "PURPOSE: Demonstrate periodic review of user access rights enforcing least privilege "
+            "and segregation of duties, with removal of orphaned and excessive access.\n\n"
+            "WEIGHTED COMPLIANCE CRITERIA (total 100%):\n"
+            "  - Scope of systems/applications reviewed: 15%\n"
+            "  - User access rights validated against role/least privilege: 25%\n"
+            "  - Privileged/administrative account review: 20%\n"
+            "  - Orphaned, dormant, or terminated-user accounts identified and removed: 20%\n"
+            "  - Segregation of duties conflicts assessed: 10%\n"
+            "  - Reviewer, date, and remediation of findings: 10%\n\n"
+            "FAILURE CONDITIONS: no privileged account review; orphaned accounts not actioned; "
+            "no least-privilege validation; findings without remediation; undated review.\n\n"
+            "OPTIONAL FIELDS: MFA coverage, access recertification cycle, number of accounts "
+            "reviewed, exceptions register.\n\n"
+            "EVIDENCE EXTRACTION RULES: Extract reviewed-account counts and findings. Flag any "
+            "privileged or orphaned account without a documented remediation decision."
+        ),
+        "required_elements": [
+            "Scope of systems and applications reviewed",
+            "Validation of user access rights against least privilege",
+            "Privileged/administrative account review",
+            "Identification and removal of orphaned/dormant accounts",
+            "Segregation of duties assessment",
+            "Reviewer, date, and remediation of findings",
+        ],
+        "allowed_roles": ["iso-27001"],
+    },
+    "iso27001_business_continuity": {
+        "name_ar": "تقرير اختبار استمرارية تقنية المعلومات والتعافي من الكوارث",
+        "name_en": "ICT Business Continuity / DR Test Report",
+        "description": (
+            "PERSONA: Act as a senior ISO/IEC 27001:2022 lead auditor. Evaluate the uploaded PDF "
+            "against Annex A controls A.5.29–A.5.30 and A.8.13–A.8.14 (ICT readiness for business "
+            "continuity, information backup, redundancy). Use only documented evidence.\n\n"
+            "PURPOSE: Demonstrate that continuity/disaster-recovery arrangements were tested, that "
+            "backups restore successfully, and that RTO/RPO objectives are met.\n\n"
+            "WEIGHTED COMPLIANCE CRITERIA (total 100%):\n"
+            "  - Test scope, scenario, and date: 15%\n"
+            "  - Defined RTO and RPO objectives: 20%\n"
+            "  - Backup restoration test and verification of integrity: 20%\n"
+            "  - Actual recovery time/point vs objectives: 20%\n"
+            "  - Gaps/failures identified during the test: 15%\n"
+            "  - Corrective actions and plan update (link to CAPA): 10%\n\n"
+            "FAILURE CONDITIONS: no RTO/RPO defined; no actual restore performed; results not "
+            "compared to objectives; gaps without corrective action.\n\n"
+            "OPTIONAL FIELDS: participants, dependencies/suppliers, alternate site details, "
+            "communication plan.\n\n"
+            "EVIDENCE EXTRACTION RULES: Extract objective vs actual RTO/RPO and the restore "
+            "result. Flag tests where objectives were missed without a corrective action."
+        ),
+        "required_elements": [
+            "Test scope, scenario, and date",
+            "Defined RTO and RPO objectives",
+            "Backup restoration test and integrity verification",
+            "Actual recovery time/point versus objectives",
+            "Gaps or failures identified",
+            "Corrective actions and continuity plan update",
+        ],
+        "allowed_roles": ["iso-27001"],
+    },
+
+    # =======================================================================
+    # ISO 45001:2018 — Occupational Health & Safety Management System (OH&S)
+    # =======================================================================
+    "iso45001_hazard_risk_assessment": {
+        "name_ar": "تحديد المخاطر وتقييم مخاطر السلامة والصحة المهنية",
+        "name_en": "Hazard Identification & OH&S Risk Assessment Report",
+        "description": (
+            "PERSONA: Act as a senior ISO 45001:2018 lead auditor. Evaluate the uploaded PDF "
+            "against Clause 6.1.2 (hazard identification and assessment of OH&S risks). Use only "
+            "documented evidence.\n\n"
+            "PURPOSE: Demonstrate systematic identification of workplace hazards, evaluation of "
+            "OH&S risks, and selection of controls following the hierarchy of controls.\n\n"
+            "WEIGHTED COMPLIANCE CRITERIA (total 100%):\n"
+            "  - Activity/area/job and hazard identification: 20%\n"
+            "  - Affected persons (workers, contractors, visitors): 10%\n"
+            "  - Risk evaluation (likelihood × severity) with risk level: 20%\n"
+            "  - Existing controls documented: 15%\n"
+            "  - Additional controls per hierarchy (elimination→substitution→engineering→"
+            "administrative→PPE): 25%\n"
+            "  - Responsibility, target date, and review of residual risk: 10%\n\n"
+            "FAILURE CONDITIONS: controls jump straight to PPE without considering higher tiers; "
+            "no risk level; affected persons not identified; no review date.\n\n"
+            "OPTIONAL FIELDS: legal reference, worker consultation evidence, change-management "
+            "trigger, residual risk rating.\n\n"
+            "EVIDENCE EXTRACTION RULES: For each hazard verify the hierarchy of controls was "
+            "applied in order. Flag any control set that defaults to PPE without justification."
+        ),
+        "required_elements": [
+            "Activity/area and hazard identification",
+            "Persons affected by each hazard",
+            "Risk evaluation with likelihood, severity, and risk level",
+            "Existing controls",
+            "Additional controls following the hierarchy of controls",
+            "Responsibility, target date, and residual risk review",
+        ],
+        "allowed_roles": ["iso-45001"],
+    },
+    "iso45001_incident_investigation": {
+        "name_ar": "تقرير التحقيق في الحوادث",
+        "name_en": "OH&S Incident Investigation Report",
+        "description": (
+            "PERSONA: Act as a senior ISO 45001:2018 lead auditor. Evaluate the uploaded PDF "
+            "against Clause 10.2 (incident, nonconformity and corrective action). Use only "
+            "documented evidence.\n\n"
+            "PURPOSE: Demonstrate that a work-related injury, ill-health, or near-miss was "
+            "investigated to root cause and that corrective actions prevent recurrence.\n\n"
+            "WEIGHTED COMPLIANCE CRITERIA (total 100%):\n"
+            "  - Incident description, date/time, location, and type (injury/near-miss): 15%\n"
+            "  - Persons involved and injury/ill-health classification: 15%\n"
+            "  - Immediate actions taken: 10%\n"
+            "  - Root cause analysis (e.g. 5-Whys / causal factors): 25%\n"
+            "  - Corrective actions addressing root cause (link to CAPA): 20%\n"
+            "  - Worker participation in investigation and lessons communicated: 15%\n\n"
+            "FAILURE CONDITIONS: only immediate cause recorded; no root cause; corrective actions "
+            "not linked to causes; no worker involvement; no verification of effectiveness.\n\n"
+            "OPTIONAL FIELDS: lost-time days, reportable-to-authority flag, cost, witness "
+            "statements, similar past incidents.\n\n"
+            "EVIDENCE EXTRACTION RULES: Verify the investigation reaches systemic root cause, not "
+            "just the proximate cause. Flag corrective actions that do not map to a stated cause."
+        ),
+        "required_elements": [
+            "Incident description, date/time, location, and type",
+            "Persons involved and injury/ill-health classification",
+            "Immediate actions taken",
+            "Root cause analysis",
+            "Corrective actions addressing the root cause",
+            "Worker participation and communication of lessons learned",
+        ],
+        "allowed_roles": ["iso-45001"],
+    },
+    "iso45001_legal_compliance_evaluation": {
+        "name_ar": "تقييم الامتثال للمتطلبات القانونية (السلامة والصحة المهنية)",
+        "name_en": "OH&S Evaluation of Compliance Report",
+        "description": (
+            "PERSONA: Act as a senior ISO 45001:2018 lead auditor. Evaluate the uploaded PDF "
+            "against Clause 9.1.2 (evaluation of compliance). Use only documented evidence.\n\n"
+            "PURPOSE: Demonstrate periodic evaluation of compliance with OH&S legal and other "
+            "requirements, with conclusions and actions for any non-compliance.\n\n"
+            "WEIGHTED COMPLIANCE CRITERIA (total 100%):\n"
+            "  - Register of applicable legal and other OH&S requirements: 25%\n"
+            "  - Evaluation method and frequency: 15%\n"
+            "  - Compliance status determined per requirement: 25%\n"
+            "  - Evidence supporting each compliance conclusion: 15%\n"
+            "  - Actions for identified non-compliances (link to CAPA): 15%\n"
+            "  - Evaluator, date, and management awareness: 5%\n\n"
+            "FAILURE CONDITIONS: no legal register; status not determined per requirement; "
+            "non-compliances without action; undated evaluation.\n\n"
+            "OPTIONAL FIELDS: regulator, permit/license expiry, next evaluation date, "
+            "knowledge-of-compliance-status statement.\n\n"
+            "EVIDENCE EXTRACTION RULES: Build the requirement→status→evidence→action table. Flag "
+            "any requirement with no status or any non-compliance without an action."
+        ),
+        "required_elements": [
+            "Register of applicable legal and other OH&S requirements",
+            "Evaluation method and frequency",
+            "Compliance status per requirement",
+            "Evidence supporting each compliance conclusion",
+            "Actions for identified non-compliances",
+            "Evaluator, date, and maintained knowledge of compliance status",
+        ],
+        "allowed_roles": ["iso-45001"],
+    },
+    "iso45001_worker_consultation": {
+        "name_ar": "تقرير تشاور ومشاركة العاملين",
+        "name_en": "Worker Consultation & Participation Report",
+        "description": (
+            "PERSONA: Act as a senior ISO 45001:2018 lead auditor. Evaluate the uploaded PDF "
+            "against Clause 5.4 (consultation and participation of workers). Use only documented "
+            "evidence.\n\n"
+            "PURPOSE: Demonstrate consultation and participation of workers, including "
+            "non-managerial workers, in the OH&S management system.\n\n"
+            "WEIGHTED COMPLIANCE CRITERIA (total 100%):\n"
+            "  - Topics consulted on and emphasis on non-managerial worker participation: 25%\n"
+            "  - Mechanism (committee, meeting, survey) and frequency: 20%\n"
+            "  - Worker inputs/issues raised: 20%\n"
+            "  - Management responses and decisions: 20%\n"
+            "  - Actions assigned with owners and dates: 10%\n"
+            "  - Removal of barriers to participation: 5%\n\n"
+            "FAILURE CONDITIONS: only management present; worker inputs not recorded; no responses "
+            "to issues raised; no actions tracked.\n\n"
+            "OPTIONAL FIELDS: attendance list, committee composition, language/accessibility "
+            "accommodations, follow-up of prior actions.\n\n"
+            "EVIDENCE EXTRACTION RULES: Verify non-managerial workers participated and that raised "
+            "issues received responses. Flag consultations with no worker input or no actions."
+        ),
+        "required_elements": [
+            "Topics consulted on, with non-managerial worker participation",
+            "Consultation mechanism and frequency",
+            "Worker inputs and issues raised",
+            "Management responses and decisions",
+            "Actions assigned with owners and dates",
+            "Removal of barriers to participation",
+        ],
+        "allowed_roles": ["iso-45001"],
+    },
+    "iso45001_emergency_preparedness": {
+        "name_ar": "تقرير الاستعداد والاستجابة لحالات الطوارئ (السلامة المهنية)",
+        "name_en": "OH&S Emergency Preparedness & Response Report",
+        "description": (
+            "PERSONA: Act as a senior ISO 45001:2018 lead auditor. Evaluate the uploaded PDF "
+            "against Clause 8.2 (emergency preparedness and response). Use only documented "
+            "evidence.\n\n"
+            "PURPOSE: Demonstrate that potential emergency situations are identified and that the "
+            "planned response is periodically tested (drills) and improved.\n\n"
+            "WEIGHTED COMPLIANCE CRITERIA (total 100%):\n"
+            "  - Identified emergency scenarios: 15%\n"
+            "  - Planned response procedure and roles: 20%\n"
+            "  - Drill/test conducted with date and participants: 20%\n"
+            "  - Performance evaluation of the drill (evacuation time, etc.): 15%\n"
+            "  - Provision of first aid, training, and equipment: 15%\n"
+            "  - Lessons learned and plan revision (link to CAPA): 15%\n\n"
+            "FAILURE CONDITIONS: no drill performed; no scenario identification; drill not "
+            "evaluated; weaknesses without corrective action.\n\n"
+            "OPTIONAL FIELDS: interested-party/neighbor coordination, equipment inspection dates, "
+            "regulatory drill requirements.\n\n"
+            "EVIDENCE EXTRACTION RULES: Confirm a real drill occurred and was evaluated. Flag "
+            "plans that exist on paper with no test or no post-drill improvement."
+        ),
+        "required_elements": [
+            "Identified emergency scenarios",
+            "Planned response procedure and assigned roles",
+            "Drill/test conducted with date and participants",
+            "Performance evaluation of the drill",
+            "First aid, training, and emergency equipment provision",
+            "Lessons learned and revision of the emergency plan",
+        ],
+        "allowed_roles": ["iso-45001"],
+    },
+
+    # =======================================================================
+    # ISO 14001:2015 — Environmental Management System (EMS)
+    # =======================================================================
+    "iso14001_environmental_aspects": {
+        "name_ar": "تقييم الجوانب والآثار البيئية",
+        "name_en": "Environmental Aspects & Impacts Assessment Report",
+        "description": (
+            "PERSONA: Act as a senior ISO 14001:2015 lead auditor. Evaluate the uploaded PDF "
+            "against Clause 6.1.2 (environmental aspects). Use only documented evidence.\n\n"
+            "PURPOSE: Demonstrate identification of environmental aspects of activities/products/"
+            "services across a lifecycle perspective and determination of significant aspects "
+            "using defined criteria.\n\n"
+            "WEIGHTED COMPLIANCE CRITERIA (total 100%):\n"
+            "  - Activity/process and associated environmental aspect: 20%\n"
+            "  - Environmental impact described: 15%\n"
+            "  - Lifecycle perspective considered: 10%\n"
+            "  - Significance criteria and rating applied: 25%\n"
+            "  - Significant aspects clearly determined: 15%\n"
+            "  - Normal/abnormal/emergency conditions considered: 10%\n"
+            "  - Review date and owner: 5%\n\n"
+            "FAILURE CONDITIONS: no significance criteria; significant aspects not identified; "
+            "lifecycle perspective absent; emergency conditions ignored.\n\n"
+            "OPTIONAL FIELDS: linkage to objectives, legal driver, quantitative data "
+            "(consumption/emissions), interested-party concerns.\n\n"
+            "EVIDENCE EXTRACTION RULES: Build the aspect→impact→significance table. Flag aspects "
+            "rated significant that are not carried into objectives or controls."
+        ),
+        "required_elements": [
+            "Activity/process and associated environmental aspect",
+            "Environmental impact",
+            "Lifecycle perspective consideration",
+            "Significance criteria and rating",
+            "Determination of significant aspects",
+            "Normal, abnormal, and emergency conditions",
+        ],
+        "allowed_roles": ["iso-14001"],
+    },
+    "iso14001_legal_compliance_evaluation": {
+        "name_ar": "تقييم الامتثال للمتطلبات القانونية (البيئة)",
+        "name_en": "Environmental Evaluation of Compliance Report",
+        "description": (
+            "PERSONA: Act as a senior ISO 14001:2015 lead auditor. Evaluate the uploaded PDF "
+            "against Clause 9.1.2 (evaluation of compliance). Use only documented evidence.\n\n"
+            "PURPOSE: Demonstrate periodic evaluation of compliance with environmental legal and "
+            "other requirements, with conclusions and actions for any non-compliance.\n\n"
+            "WEIGHTED COMPLIANCE CRITERIA (total 100%):\n"
+            "  - Register of applicable environmental legal and other requirements: 25%\n"
+            "  - Evaluation method and frequency: 15%\n"
+            "  - Compliance status determined per requirement: 25%\n"
+            "  - Evidence supporting each compliance conclusion: 15%\n"
+            "  - Actions for identified non-compliances (link to CAPA): 15%\n"
+            "  - Evaluator, date, and maintained knowledge of compliance status: 5%\n\n"
+            "FAILURE CONDITIONS: no legal register; status not determined per requirement; "
+            "non-compliances without action; expired permits not flagged.\n\n"
+            "OPTIONAL FIELDS: permit/license expiry, regulator, monitoring/limit values, next "
+            "evaluation date.\n\n"
+            "EVIDENCE EXTRACTION RULES: Build the requirement→status→evidence→action table and "
+            "flag expired permits or any requirement lacking a status or action."
+        ),
+        "required_elements": [
+            "Register of applicable environmental legal and other requirements",
+            "Evaluation method and frequency",
+            "Compliance status per requirement",
+            "Evidence supporting each compliance conclusion",
+            "Actions for identified non-compliances",
+            "Evaluator, date, and maintained knowledge of compliance status",
+        ],
+        "allowed_roles": ["iso-14001"],
+    },
+    "iso14001_objectives_monitoring": {
+        "name_ar": "رصد الأهداف والأداء البيئي",
+        "name_en": "Environmental Objectives & Performance Monitoring Report",
+        "description": (
+            "PERSONA: Act as a senior ISO 14001:2015 lead auditor. Evaluate the uploaded PDF "
+            "against Clauses 6.2 (environmental objectives) and 9.1.1 (monitoring, measurement, "
+            "analysis and evaluation). Use only documented evidence.\n\n"
+            "PURPOSE: Demonstrate that environmental objectives are measurable and monitored, with "
+            "actual performance (energy, water, waste, emissions) compared against targets.\n\n"
+            "WEIGHTED COMPLIANCE CRITERIA (total 100%):\n"
+            "  - Measurable environmental objectives with targets: 20%\n"
+            "  - Indicators and monitoring method/frequency: 15%\n"
+            "  - Actual performance data (energy/water/waste/emissions): 25%\n"
+            "  - Comparison of actual vs target with trend: 20%\n"
+            "  - Analysis of deviations and root cause: 10%\n"
+            "  - Actions / plans to achieve objectives and responsibilities: 10%\n\n"
+            "FAILURE CONDITIONS: objectives not measurable; no actual data; no comparison to "
+            "target; deviations without action; no responsibilities.\n\n"
+            "OPTIONAL FIELDS: calibration of monitoring equipment, normalization basis, baseline "
+            "year, interested-party reporting.\n\n"
+            "EVIDENCE EXTRACTION RULES: Extract target vs actual per indicator and the trend. Flag "
+            "objectives with no data or missed targets lacking a corrective plan."
+        ),
+        "required_elements": [
+            "Measurable environmental objectives with targets",
+            "Indicators and monitoring method/frequency",
+            "Actual performance data (energy, water, waste, emissions)",
+            "Comparison of actual versus target with trend",
+            "Analysis of deviations and root cause",
+            "Actions and responsibilities to achieve objectives",
+        ],
+        "allowed_roles": ["iso-14001"],
+    },
+    "iso14001_emergency_preparedness": {
+        "name_ar": "تقرير الاستعداد والاستجابة لحالات الطوارئ البيئية",
+        "name_en": "Environmental Emergency Preparedness & Response Report",
+        "description": (
+            "PERSONA: Act as a senior ISO 14001:2015 lead auditor. Evaluate the uploaded PDF "
+            "against Clause 8.2 (emergency preparedness and response). Use only documented "
+            "evidence.\n\n"
+            "PURPOSE: Demonstrate that potential environmental emergencies (spills, releases, "
+            "fire) are identified and that the planned response is tested and improved to prevent "
+            "or mitigate adverse environmental impacts.\n\n"
+            "WEIGHTED COMPLIANCE CRITERIA (total 100%):\n"
+            "  - Identified environmental emergency scenarios (spill/release/fire): 15%\n"
+            "  - Planned response procedure and roles: 20%\n"
+            "  - Drill/test conducted with date and participants: 20%\n"
+            "  - Mitigation of adverse environmental impact evaluated: 15%\n"
+            "  - Spill kits / containment / response equipment provision: 15%\n"
+            "  - Lessons learned and plan revision (link to CAPA): 15%\n\n"
+            "FAILURE CONDITIONS: no scenario identification; no drill; response not evaluated for "
+            "environmental impact; weaknesses without corrective action.\n\n"
+            "OPTIONAL FIELDS: regulatory notification requirements, neighbor/community "
+            "coordination, equipment inspection dates.\n\n"
+            "EVIDENCE EXTRACTION RULES: Confirm a drill occurred and environmental mitigation was "
+            "evaluated. Flag paper-only plans with no test or no post-drill improvement."
+        ),
+        "required_elements": [
+            "Identified environmental emergency scenarios",
+            "Planned response procedure and assigned roles",
+            "Drill/test conducted with date and participants",
+            "Evaluation of mitigation of adverse environmental impact",
+            "Containment and response equipment provision",
+            "Lessons learned and revision of the emergency plan",
+        ],
+        "allowed_roles": ["iso-14001"],
+    },
+    "iso14001_waste_management": {
+        "name_ar": "تقرير إدارة النفايات والموارد",
+        "name_en": "Waste & Resource Management Report",
+        "description": (
+            "PERSONA: Act as a senior ISO 14001:2015 lead auditor. Evaluate the uploaded PDF "
+            "against Clause 8.1 (operational planning and control) and the organization's "
+            "significant environmental aspects. Use only documented evidence.\n\n"
+            "PURPOSE: Demonstrate control of waste streams — classification, segregation, licensed "
+            "disposal, and tracking — to prevent adverse environmental impact and meet legal "
+            "obligations.\n\n"
+            "WEIGHTED COMPLIANCE CRITERIA (total 100%):\n"
+            "  - Waste streams identified and classified (hazardous/non-hazardous): 20%\n"
+            "  - Quantities generated per stream/period: 15%\n"
+            "  - Segregation and storage controls: 15%\n"
+            "  - Use of licensed transporters/disposal facilities: 20%\n"
+            "  - Disposal manifests / tracking records: 20%\n"
+            "  - Recycling/recovery rate and reduction initiatives: 10%\n\n"
+            "FAILURE CONDITIONS: hazardous waste not classified; unlicensed disposal; no "
+            "manifests; quantities not tracked.\n\n"
+            "OPTIONAL FIELDS: disposal cost, waste-to-landfill diversion target, supplier audit of "
+            "disposal contractor, storage inspection records.\n\n"
+            "EVIDENCE EXTRACTION RULES: Build the waste stream→quantity→disposal route→manifest "
+            "table. Flag hazardous streams without licensed disposal or missing manifests."
+        ),
+        "required_elements": [
+            "Waste streams identified and classified as hazardous/non-hazardous",
+            "Quantities generated per stream and period",
+            "Segregation and storage controls",
+            "Use of licensed transporters and disposal facilities",
+            "Disposal manifests and tracking records",
+            "Recycling/recovery rate and reduction initiatives",
+        ],
+        "allowed_roles": ["iso-14001"],
+    },
 }
 
 
@@ -837,6 +1353,32 @@ REPORT_TYPES: dict = {
 # ---------------------------------------------------------------------------
 for _rt in REPORT_TYPES.values():
     _rt.setdefault("allowed_roles", ["naqaae"])
+
+
+# ---------------------------------------------------------------------------
+# Cross-standard reuse (Annex SL high-level structure).
+# ISO 27001, 45001, and 14001 share the same management-system clauses as
+# ISO 9001 for: nonconformity & corrective action (10.2), internal audit (9.2),
+# management review (9.3), documented information (7.5), competence/training
+# (7.2), and monitoring/KPIs (9.1). Rather than duplicate those report types
+# per standard, we extend the existing ISO 9001 reports' allowed_roles so the
+# same template serves all four quality systems. Standard-specific reports
+# (above) remain gated to their single standard.
+# ---------------------------------------------------------------------------
+_SHARED_ISO_REPORTS = [
+    "iso_ncr",
+    "iso_capa",
+    "iso_internal_audit",
+    "iso_management_review",
+    "iso_document_control",
+    "iso_training_record",
+    "iso_kpi",
+]
+for _key in _SHARED_ISO_REPORTS:
+    _roles = REPORT_TYPES[_key]["allowed_roles"]
+    for _std in ("iso-27001", "iso-45001", "iso-14001"):
+        if _std not in _roles:
+            _roles.append(_std)
 
 
 def get_report_type_context(report_type_key: str) -> str:

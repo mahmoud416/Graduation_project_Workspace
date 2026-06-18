@@ -10,6 +10,7 @@ from bson.errors import InvalidId
 from pymongo import ReturnDocument
 
 from app.db.collections import PROJECTS_COLLECTION, TASK_BOARDS_COLLECTION, USERS_COLLECTION
+from app.dependencies.tenant import is_founder
 from app.models.task_board import TaskBoardModel
 
 
@@ -203,6 +204,25 @@ class TaskBoardService:
     def serialize(board: Dict[str, Any], current_user: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Convert a Mongo document into an API payload."""
         overview = board.get("overview", {})
+        members = board.get("members", [])
+        tasks = board.get("tasks", [])
+
+        # The shared default boards (public / all-sub-admin) hold members and
+        # tasks from every tenant in a single document. Scope them to the
+        # caller's tenant at read time so each institution sees only its own.
+        # Founder is global; regular project boards are already tenant-isolated
+        # via project visibility so they are left untouched.
+        project_id = board.get("project_id")
+        if (
+            project_id in (TaskBoardService.PUBLIC_PROJECT_ID, TaskBoardService.SUBADMIN_PROJECT_ID)
+            and current_user
+            and not is_founder(current_user)
+        ):
+            caller_tenant = current_user.get("tenant_id")
+            if caller_tenant:
+                members = [m for m in members if m.get("tenant_id") == caller_tenant]
+                tasks = [t for t in tasks if t.get("tenant_id") == caller_tenant]
+
         return {
             "_id": str(board.get("_id")) if board.get("_id") else None,
             "project_id": board.get("project_id"),
@@ -212,8 +232,8 @@ class TaskBoardService:
                 "status_badge": overview.get("status_badge", "IN PROGRESS"),
                 "progress": int(overview.get("progress", 0)),
             },
-            "tasks": board.get("tasks", []),
-            "members": TaskBoardService._serialize_members(board.get("members", [])),
+            "tasks": tasks,
+            "members": TaskBoardService._serialize_members(members),
             "resources": TaskBoardService._serialize_resources(board, current_user),
             "comments": TaskBoardService._serialize_comments(board),
             "created_at": board.get("created_at"),
@@ -425,6 +445,7 @@ class TaskBoardService:
             "email": user.get("email"),
             "responsibility": user.get("responsibility"),
             "online": False,
+            "tenant_id": user.get("tenant_id"),
         }
 
     @staticmethod
@@ -714,6 +735,7 @@ class TaskBoardService:
                 "members.$.email": member_payload.get("email"),
                 "members.$.responsibility": member_payload.get("responsibility"),
                 "members.$.online": False,
+                "members.$.tenant_id": member_payload.get("tenant_id"),
                 "updated_at": datetime.utcnow(),
             }
         }

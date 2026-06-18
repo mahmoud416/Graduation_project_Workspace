@@ -20,12 +20,29 @@ interface ITAccount {
     name: string;
     email: string;
     status: 'active' | 'inactive';
+    quality_system?: string;
     created_at?: string;
     last_login?: string;
 }
 
-type SortKey  = 'name' | 'created_at' | 'last_login' | 'status';
+const QUALITY_SYSTEMS = [
+    { value: 'naqaae', label: 'NAQAAE — الاعتماد الأكاديمي المصري' },
+    { value: 'iso-9001', label: 'ISO 9001 — نظام إدارة الجودة' },
+    { value: 'iso-27001', label: 'ISO 27001 — نظام إدارة أمن المعلومات' },
+    { value: 'iso-45001', label: 'ISO 45001 — نظام إدارة السلامة والصحة المهنية' },
+    { value: 'iso-14001', label: 'ISO 14001 — نظام الإدارة البيئية' },
+];
+
+type SortKey  = 'name' | 'created_at' | 'last_login' | 'status' | 'quality_system';
 type SortDir  = 'asc'  | 'desc';
+
+const QS_LABEL: Record<string, string> = {
+    naqaae:      'NAQAAE',
+    'iso-9001':  'ISO 9001',
+    'iso-27001': 'ISO 27001',
+    'iso-45001': 'ISO 45001',
+    'iso-14001': 'ISO 14001',
+};
 
 /* ─── Theme tokens ───────────────────────────────────────────────────────── */
 const T = (d: boolean) => ({
@@ -115,12 +132,12 @@ function Modal({ title, width = 460, onClose, children }: { title: string; width
     return (
         <div style={{ position: 'fixed', inset: 0, zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
             <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.55)', backdropFilter: 'blur(6px)' }} />
-            <div style={{ position: 'relative', zIndex: 1, width: '100%', maxWidth: width, background: t.mbg, border: `1px solid ${t.mbord}`, borderRadius: 16, overflow: 'hidden', boxShadow: t.shadow, animation: 'facSlide .18s ease-out both' }}>
-                <div style={{ padding: '18px 22px', borderBottom: `1px solid ${t.bord}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ position: 'relative', zIndex: 1, width: '100%', maxWidth: width, background: t.mbg, border: `1px solid ${t.mbord}`, borderRadius: 16, boxShadow: t.shadow, animation: 'facSlide .18s ease-out both' }}>
+                <div style={{ padding: '18px 22px', borderBottom: `1px solid ${t.bord}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderRadius: '16px 16px 0 0', overflow: 'hidden' }}>
                     <span style={{ fontSize: 15, fontWeight: 600, color: t.text }}>{title}</span>
                     <button type="button" onClick={onClose} style={{ width: 28, height: 28, borderRadius: 7, background: t.hover, border: `1px solid ${t.bord}`, cursor: 'pointer', color: t.muted, fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>×</button>
                 </div>
-                <div style={{ padding: '20px 22px' }}>{children}</div>
+                <div style={{ padding: '20px 22px', borderRadius: '0 0 16px 16px', overflow: 'visible' }}>{children}</div>
             </div>
         </div>
     );
@@ -168,6 +185,46 @@ function BtnGhost({ label, onClick }: { label: string; onClick: () => void }) {
     );
 }
 
+/* ─── Custom quality-system picker (native <select> ignores option CSS on Linux) ── */
+function QSSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+    const { isDark } = useTheme();
+    const t = T(isDark);
+    const [open, setOpen] = useState(false);
+    const ref = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (!open) return;
+        const h = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+        document.addEventListener('mousedown', h);
+        return () => document.removeEventListener('mousedown', h);
+    }, [open]);
+
+    const selected = QUALITY_SYSTEMS.find(s => s.value === value);
+
+    return (
+        <div ref={ref} style={{ position: 'relative' }}>
+            <button type="button" onClick={() => setOpen(p => !p)}
+                style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: `1px solid ${value ? t.inbd : 'rgba(239,68,68,.4)'}`, background: t.inbg, color: value ? t.text : t.muted, fontSize: 13, fontFamily: 'inherit', outline: 'none', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, textAlign: 'left' }}>
+                <span style={{ flex: 1, textAlign: 'right', direction: 'rtl' }}>{selected ? selected.label : '— اختر نوع النظام —'}</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s', flexShrink: 0 }}><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            {open && (
+                <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, background: t.mbg, border: `1px solid ${t.mbord}`, borderRadius: 10, boxShadow: t.shadow, zIndex: 1200, overflow: 'hidden', padding: '4px 0' }}>
+                    {QUALITY_SYSTEMS.map(s => (
+                        <button key={s.value} type="button"
+                            onClick={() => { onChange(s.value); setOpen(false); }}
+                            style={{ width: '100%', padding: '9px 14px', background: value === s.value ? (isDark ? 'rgba(29,110,245,.18)' : 'rgba(29,110,245,.08)') : 'transparent', border: 'none', color: value === s.value ? BLUE : t.text, fontSize: 13, fontFamily: 'inherit', cursor: 'pointer', textAlign: 'right', direction: 'rtl', fontWeight: value === s.value ? 600 : 400, transition: 'background .1s' }}
+                            onMouseEnter={e => { if (value !== s.value) e.currentTarget.style.background = t.hover; }}
+                            onMouseLeave={e => { if (value !== s.value) e.currentTarget.style.background = 'transparent'; }}>
+                            {s.label}
+                        </button>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
 /* ─── Error banner ───────────────────────────────────────────────────────── */
 function ErrBanner({ msg }: { msg: string }) {
     return <div style={{ padding: '9px 12px', background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.2)', borderRadius: 8, fontSize: 12, color: RED }}>{msg}</div>;
@@ -182,6 +239,7 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
     const [name, setName]   = useState('');
     const [email, setEmail] = useState('');
     const [pwd, setPwd]     = useState('');
+    const [qs, setQs]       = useState('');
     const [loading, setLoading] = useState(false);
     const [err, setErr]     = useState('');
     const pwdOk = pwd.length >= 8;
@@ -189,7 +247,7 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
     const submit = async (e: React.FormEvent) => {
         e.preventDefault(); setErr(''); setLoading(true);
         try {
-            const r = await fetch(`${API}/founder/accounts`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tok()}` }, body: JSON.stringify({ full_name: name, email, password: pwd }) });
+            const r = await fetch(`${API}/founder/accounts`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tok()}` }, body: JSON.stringify({ full_name: name, email, password: pwd, quality_system: qs }) });
             if (!r.ok) { const d = await r.json(); throw new Error(d.detail || 'Failed to create account'); }
             onCreated(await r.json()); onClose();
         } catch (e: any) { setErr(e.message); } finally { setLoading(false); }
@@ -211,10 +269,16 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
                 <Field label="Password" type="password" value={pwd} onChange={setPwd} placeholder="Minimum 8 characters" required
                     hint={pwd.length > 0 && !pwdOk ? 'Password must be at least 8 characters' : undefined} />
 
+                {/* Quality System selector */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: t.sub }}>نوع نظام الجودة <span style={{ color: RED }}>*</span></label>
+                    <QSSelect value={qs} onChange={setQs} />
+                </div>
+
                 {err && <ErrBanner msg={err} />}
                 <div style={{ display: 'flex', gap: 10, marginTop: 2 }}>
                     <BtnGhost label="Cancel" onClick={onClose} />
-                    <BtnPrimary label="Create Account" type="submit" loading={loading} disabled={!name || !email || !pwdOk} />
+                    <BtnPrimary label="Create Account" type="submit" loading={loading} disabled={!name || !email || !pwdOk || !qs} />
                 </div>
             </form>
         </Modal>
@@ -566,9 +630,10 @@ export default function FounderAccountsPage() {
                             {/* Table */}
                             <div style={{ background: t.surf, border: `1px solid ${t.bord}`, borderRadius: 12, overflow: 'visible' }}>
                                 {/* Header row */}
-                                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 100px 100px 36px', gap: 0, padding: '10px 16px', borderBottom: `1px solid ${t.bord}`, background: isDark ? 'rgba(255,255,255,.02)' : 'rgba(0,0,0,.02)', borderRadius: '12px 12px 0 0' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 130px 100px 100px 36px', gap: 0, padding: '10px 16px', borderBottom: `1px solid ${t.bord}`, background: isDark ? 'rgba(255,255,255,.02)' : 'rgba(0,0,0,.02)', borderRadius: '12px 12px 0 0' }}>
                                     {colHd('Name', 'name')}
                                     {colHd('Status', 'status')}
+                                    {colHd('Quality System', 'quality_system')}
                                     {colHd('Created', 'created_at')}
                                     {colHd('Last Login', 'last_login')}
                                     <div />
@@ -602,7 +667,7 @@ export default function FounderAccountsPage() {
                                     </div>
                                 ) : (
                                     pageSlice.map((acc, i) => (
-                                        <div key={acc._id} className="fac-row" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 100px 100px 36px', gap: 0, padding: '11px 16px', borderBottom: i < pageSlice.length - 1 ? `1px solid ${t.bord2}` : 'none', alignItems: 'center' }}>
+                                        <div key={acc._id} className="fac-row" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 130px 100px 100px 36px', gap: 0, padding: '11px 16px', borderBottom: i < pageSlice.length - 1 ? `1px solid ${t.bord2}` : 'none', alignItems: 'center' }}>
                                             {/* Name + email */}
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
                                                 <Avatar name={acc.name} size={32} />
@@ -618,6 +683,11 @@ export default function FounderAccountsPage() {
                                                     ? <span style={{ fontSize: 11, color: t.muted }}>Updating…</span>
                                                     : <StatusBadge status={acc.status} />
                                                 }
+                                            </div>
+
+                                            {/* Quality System */}
+                                            <div style={{ fontSize: 12, color: acc.quality_system ? t.sub : t.muted, fontWeight: acc.quality_system ? 500 : 400 }}>
+                                                {acc.quality_system ? (QS_LABEL[acc.quality_system] ?? acc.quality_system) : '—'}
                                             </div>
 
                                             {/* Created */}

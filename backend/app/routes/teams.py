@@ -32,7 +32,8 @@ async def create_team(
         db,
         name=team_data.name,
         created_by_id=current_user["_id"],
-        description=team_data.description
+        description=team_data.description,
+        tenant_id=current_user.get("tenant_id"),
     )
     
     from app.models.membership import MembershipModel, Role

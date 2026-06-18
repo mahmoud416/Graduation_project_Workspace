@@ -19,7 +19,9 @@ class UserModel:
         sub_admin_id: Optional[str] = None,
         phone: Optional[str] = None,
         status: str = "active",
-        roles: Optional[List[str]] = None
+        roles: Optional[List[str]] = None,
+        quality_system: Optional[str] = None,
+        tenant_id: Optional[str] = None,
     ) -> dict:
         """Create a new user document. Password must already be hashed."""
         normalized_role = (role or "staff").strip().lower()
@@ -40,8 +42,10 @@ class UserModel:
             "admin_id":     admin_id,
             "sub_admin_id": sub_admin_id,
             "phone":        phone,
-            "status":       status or "active",
-            "created_at":   datetime.utcnow(),
-            "last_login":   None,
-            "is_active":    True,
+            "status":         status or "active",
+            "quality_system": quality_system,
+            "tenant_id":      tenant_id,
+            "created_at":     datetime.utcnow(),
+            "last_login":     None,
+            "is_active":      True,
         }

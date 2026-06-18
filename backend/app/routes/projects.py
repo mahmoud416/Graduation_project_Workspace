@@ -20,6 +20,7 @@ from app.models.project import ProjectStatus
 from app.db.mongodb import get_database
 from app.db.collections import PROJECTS_COLLECTION, USERS_COLLECTION
 from app.dependencies.auth import get_current_user
+from app.dependencies.tenant import is_founder, tenant_filter
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
 PUBLIC_GROUP_ID = "public-group"
@@ -60,7 +61,15 @@ def _ensure_admin(current_user):
 def _visibility_filter(current_user) -> dict:
     role = current_user.get("role")
     user_id = current_user.get("_id")
-    if role in ("founder", "admin"):
+    # Founder is global — sees every tenant's projects.
+    if is_founder(current_user):
+        return {}
+    # Admin sees all projects within their own tenant, plus the shared
+    # system cards (public / all-sub-admin) which carry no tenant_id.
+    if role == "admin":
+        tf = tenant_filter(current_user)
+        if tf:
+            return {"$or": [tf, {"_id": {"$in": list(DEFAULT_GROUP_IDS)}}]}
         return {}
     if role == "sub_admin":
         clauses = [{"_id": {"$in": list(DEFAULT_GROUP_IDS)}}]
@@ -173,6 +182,7 @@ async def create_project(
         team_id=_parse_user_id(project_data.team_id, "team_id"),
         due_date=project_data.due_date,
         priority=project_data.priority,
+        tenant_id=current_user.get("tenant_id"),
     )
 
     await TaskBoardService.ensure_board_for_project(db, project)

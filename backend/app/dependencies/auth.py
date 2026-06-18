@@ -107,3 +107,17 @@ async def get_current_user(
         pass  # Never block the request for this
 
     return user
+
+
+async def get_optional_current_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
+    x_user_id: Optional[str] = Header(default=None, alias="X-User-Id"),
+    db=Depends(get_database),
+) -> Optional[Dict[str, Any]]:
+    """Like get_current_user, but returns None instead of raising when there is
+    no valid authentication. Used by endpoints that work both authenticated and
+    anonymously (e.g. /register)."""
+    try:
+        return await get_current_user(credentials, x_user_id, db)
+    except HTTPException:
+        return None

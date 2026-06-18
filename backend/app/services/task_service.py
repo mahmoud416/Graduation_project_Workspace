@@ -28,6 +28,7 @@ class TaskService:
         report_type: Optional[str] = None,
         template_id: Optional[str] = None,
         assign_to_all: bool = False,
+        tenant_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Create a new task with multi-assignee and visibility control.
@@ -73,7 +74,8 @@ class TaskService:
             creator_name=creator_name,
             creator_avatar=creator_avatar,
         )
-        
+        task_doc["tenant_id"] = tenant_id
+
         # Insert task
         result = await db[TASKS_COLLECTION].insert_one(task_doc)
         task_doc["_id"] = result.inserted_id

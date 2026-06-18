@@ -12,6 +12,7 @@ class EntityCreate(BaseModel):
     description: Optional[str] = ""
     quality_framework_ids: Optional[List[str]] = None
     subscription_tier: Optional[str] = "Basic"
+    quality_system: Optional[str] = None
 
 
 class AssignITStaffRequest(BaseModel):
@@ -29,6 +30,7 @@ class EntityResponse(BaseModel):
     team_ids: Optional[List[str]] = []
     quality_framework_ids: Optional[List[str]] = []
     subscription_tier: Optional[str] = "Basic"
+    quality_system: Optional[str] = None
     max_teams: Optional[int] = 5
     ai_quota: Optional[int] = 0
     ai_tokens_used: Optional[int] = 0

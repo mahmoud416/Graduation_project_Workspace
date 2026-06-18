@@ -30,6 +30,7 @@ class ProjectService:
         team_id: Optional[Any] = None,
         due_date: Optional[str] = None,
         priority: Optional[str] = None,
+        tenant_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Insert a new project document."""
         project_doc = ProjectModel.create_document(
@@ -44,6 +45,7 @@ class ProjectService:
             due_date=due_date,
             priority=priority,
         )
+        project_doc["tenant_id"] = tenant_id
         result = await db[PROJECTS_COLLECTION].insert_one(project_doc)
         project_doc["_id"] = result.inserted_id
         return project_doc

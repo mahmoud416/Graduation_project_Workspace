@@ -261,6 +261,7 @@ async def get_report_types(
     current_user: dict = Depends(get_current_user),
 ):
     """Return the list of accreditation report types for task classification. Accessible to all authenticated users."""
+    user_qs = current_user.get("quality_system")
     return [
         {
             "key": key,
@@ -270,6 +271,7 @@ async def get_report_types(
             "required_elements": rt["required_elements"],
         }
         for key, rt in qc_service.REPORT_TYPES.items()
+        if not rt.get("allowed_roles") or (user_qs and user_qs in rt["allowed_roles"])
     ]
 
 
