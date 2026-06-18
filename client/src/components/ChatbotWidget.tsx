@@ -101,16 +101,45 @@ const ChatbotWidget = () => {
         setInput('');
         setTyping(true);
 
+        const botId = idRef.current++;
+        let appended = false;
+
         try {
             const token = localStorage.getItem('token') ?? '';
-            const res = await fetch(`${API_BASE}/chat`, {
+            const res = await fetch(`${API_BASE}/chat/stream`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                 body: JSON.stringify({ message: text }),
             });
-            if (!res.ok) throw new Error('API error');
-            const data = await res.json();
-            setMessages(prev => [...prev, { id: idRef.current++, from: 'bot', text: data.reply, time: now() }]);
+            if (!res.ok || !res.body) throw new Error('API error');
+
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+
+            for (;;) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                const piece = decoder.decode(value, { stream: true });
+                if (!piece) continue;
+
+                if (!appended) {
+                    appended = true;
+                    setTyping(false);
+                    setMessages(prev => [...prev, { id: botId, from: 'bot', text: piece, time: now() }]);
+                } else {
+                    setMessages(prev => prev.map(m =>
+                        m.id === botId ? { ...m, text: m.text + piece } : m
+                    ));
+                }
+            }
+
+            if (!appended) {
+                setMessages(prev => [...prev, {
+                    id: botId, from: 'bot',
+                    text: "I'm having trouble connecting right now. Please try again in a moment.",
+                    time: now(),
+                }]);
+            }
         } catch {
             setMessages(prev => [...prev, {
                 id: idRef.current++, from: 'bot',
