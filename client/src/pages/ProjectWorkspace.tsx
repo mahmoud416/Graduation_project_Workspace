@@ -62,6 +62,7 @@ type CommentPayload = {
   replyToPreview?: string;
   replyToAuthor?:  string;
   mentionedIds?:   string[];
+  taskId?:         string;
 };
 
 type CreateTaskParams = {
@@ -98,7 +99,7 @@ type Task = {
 };
 type Member = { user_id?: string; name: string; role: string; avatar: string; online: boolean; email?: string; responsibility?: string };
 type Resource = { id?: string; _id?: string; file_name: string; uploader_name?: string; created_at?: string; download_url?: string; uploaded_by: string; uploader_role: string };
-type Comment  = { id?: string; _id?: string; user_id?: string; user_name: string; message: string; created_at?: string; reply_to_id?: string; reply_to_preview?: string; reply_to_author?: string; attachments?: { id?: string; _id?: string; file_name: string; download_url?: string }[] };
+type Comment  = { id?: string; _id?: string; user_id?: string; user_name: string; message: string; created_at?: string; task_id?: string; reply_to_id?: string; reply_to_preview?: string; reply_to_author?: string; attachments?: { id?: string; _id?: string; file_name: string; download_url?: string }[] };
 type Overview = { title: string; description: string; status_badge: string; progress: number };
 
 /* ── helpers ─────────────────────────────────────────────────────────────── */
@@ -129,6 +130,11 @@ function fmtTime(iso?: string): string {
 }
 function hdr() { return { Authorization: `Bearer ${localStorage.getItem('token') ?? ''}`, 'X-User-Id': localStorage.getItem('userId') ?? '' }; }
 function taskStatus(t: Task): TaskStatus { if (t.status) return t.status; return t.done ? 'done' : 'todo'; }
+/* only admins / sub-admins / managers may create & manage tasks — staff cannot */
+function isManagerRole(): boolean {
+  const role = (localStorage.getItem('role') ?? '').toLowerCase();
+  return ['admin', 'sub_admin', 'manager'].includes(role);
+}
 
 /* ── Avatar atom ─────────────────────────────────────────────────────────── */
 function Av({ name, size = 28, outline }: { name: string; size?: number; outline?: string }) {
@@ -362,6 +368,7 @@ interface KanbanColProps {
 
 function KanbanColumn({ col, tasks, members, projectId, selectedId, isDark, onSelect, onOpenCreate }: KanbanColProps) {
   const t = T(isDark);
+  const canCreate = isManagerRole();
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 220, borderRight: `1px solid ${t.bord2}`, overflow: 'hidden' }}>
@@ -373,12 +380,14 @@ function KanbanColumn({ col, tasks, members, projectId, selectedId, isDark, onSe
           <span style={{ fontSize: 11, fontWeight: 700, color: t.sub, textTransform: 'uppercase' as const, letterSpacing: '.06em' }}>{col.label}</span>
           <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: `${col.color}14`, color: col.color }}>{tasks.length}</span>
         </div>
-        <button type="button" onClick={onOpenCreate}
-          style={{ width: 22, height: 22, borderRadius: 5, border: `1px solid ${t.bord}`, background: 'transparent', color: t.muted, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, transition: 'all .15s', fontFamily: 'inherit' }}
-          onMouseEnter={e => { e.currentTarget.style.background = `${col.color}14`; e.currentTarget.style.color = col.color; e.currentTarget.style.borderColor = `${col.color}44`; }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = t.muted; e.currentTarget.style.borderColor = t.bord; }}>
-          +
-        </button>
+        {canCreate && (
+          <button type="button" onClick={onOpenCreate}
+            style={{ width: 22, height: 22, borderRadius: 5, border: `1px solid ${t.bord}`, background: 'transparent', color: t.muted, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, transition: 'all .15s', fontFamily: 'inherit' }}
+            onMouseEnter={e => { e.currentTarget.style.background = `${col.color}14`; e.currentTarget.style.color = col.color; e.currentTarget.style.borderColor = `${col.color}44`; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = t.muted; e.currentTarget.style.borderColor = t.bord; }}>
+            +
+          </button>
+        )}
       </div>
 
       {/* card list */}
@@ -387,24 +396,32 @@ function KanbanColumn({ col, tasks, members, projectId, selectedId, isDark, onSe
           <TaskCard key={task.id} task={task} members={members} projectId={projectId} selectedId={selectedId} isDark={isDark} onSelect={onSelect} />
         ))}
         {tasks.length === 0 && (
-          <div onClick={onOpenCreate} style={{ padding: '20px 8px', textAlign: 'center' as const, color: t.muted, fontSize: 11, border: `1.5px dashed ${t.bord2}`, borderRadius: 8, margin: '4px 0', cursor: 'pointer', transition: 'all .15s' }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = `${col.color}55`; e.currentTarget.style.color = col.color; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = t.bord2; e.currentTarget.style.color = t.muted; }}>
-            + Add task
-          </div>
+          canCreate ? (
+            <div onClick={onOpenCreate} style={{ padding: '20px 8px', textAlign: 'center' as const, color: t.muted, fontSize: 11, border: `1.5px dashed ${t.bord2}`, borderRadius: 8, margin: '4px 0', cursor: 'pointer', transition: 'all .15s' }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = `${col.color}55`; e.currentTarget.style.color = col.color; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = t.bord2; e.currentTarget.style.color = t.muted; }}>
+              + Add task
+            </div>
+          ) : (
+            <div style={{ padding: '20px 8px', textAlign: 'center' as const, color: t.muted, fontSize: 11 }}>
+              No tasks
+            </div>
+          )
         )}
       </div>
 
-      {/* + Add task footer */}
-      <div style={{ padding: '6px 8px 8px', flexShrink: 0 }}>
-        <button type="button" onClick={onOpenCreate}
-          style={{ width: '100%', padding: '6px 0', borderRadius: 7, border: `1px dashed ${t.bord}`, background: 'transparent', color: t.muted, fontSize: 11, fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, fontFamily: 'inherit', transition: 'all .15s' }}
-          onMouseEnter={e => { e.currentTarget.style.borderColor = `${col.color}55`; e.currentTarget.style.color = col.color; }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = t.bord; e.currentTarget.style.color = t.muted; }}>
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Add task
-        </button>
-      </div>
+      {/* + Add task footer — managers only */}
+      {canCreate && (
+        <div style={{ padding: '6px 8px 8px', flexShrink: 0 }}>
+          <button type="button" onClick={onOpenCreate}
+            style={{ width: '100%', padding: '6px 0', borderRadius: 7, border: `1px dashed ${t.bord}`, background: 'transparent', color: t.muted, fontSize: 11, fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, fontFamily: 'inherit', transition: 'all .15s' }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = `${col.color}55`; e.currentTarget.style.color = col.color; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = t.bord; e.currentTarget.style.color = t.muted; }}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Add task
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -806,12 +823,14 @@ function ProjectHeader({ overview, members, tasks, isDark, onBack, onAddTask, on
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
           Members
         </button>
-        <button type="button" onClick={onAddTask}
-          style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 14px', borderRadius: 7, border: 'none', background: BLUE, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', boxShadow: '0 2px 10px rgba(29,110,245,.28)', transition: 'opacity .15s' }}
-          onMouseEnter={e => (e.currentTarget.style.opacity = '.85')} onMouseLeave={e => (e.currentTarget.style.opacity = '1')}>
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          New Task
-        </button>
+        {isManagerRole() && (
+          <button type="button" onClick={onAddTask}
+            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 14px', borderRadius: 7, border: 'none', background: BLUE, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', boxShadow: '0 2px 10px rgba(29,110,245,.28)', transition: 'opacity .15s' }}
+            onMouseEnter={e => (e.currentTarget.style.opacity = '.85')} onMouseLeave={e => (e.currentTarget.style.opacity = '1')}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            New Task
+          </button>
+        )}
       </div>
     </div>
   );
@@ -842,9 +861,11 @@ interface BodyProps {
   onAddMember:          (userId: string) => Promise<void>;
   onRemoveMember:       (memberId: string) => Promise<void>;
   onChangeMemberRole:   (memberId: string, role: string) => Promise<void>;
+  onOpenTaskThread:     (taskId: string) => void;
+  detailInitialTab:     DetailTab;
 }
 
-function WorkspaceBody({ tasks, members, resources, comments, reportTypes, projectId, isDark, selectedTaskId, onSelectTask, onOpenCreate, onPatchTask, onDeleteTask, onAddComment, onDeleteComment, onUploadResource, onDeleteResource, onOpenAIReview, onAddMember, onRemoveMember, onChangeMemberRole }: BodyProps) {
+function WorkspaceBody({ tasks, members, resources, comments, reportTypes, projectId, isDark, selectedTaskId, onSelectTask, onOpenCreate, onPatchTask, onDeleteTask, onAddComment, onDeleteComment, onUploadResource, onDeleteResource, onOpenAIReview, onAddMember, onRemoveMember, onChangeMemberRole, onOpenTaskThread, detailInitialTab }: BodyProps) {
   const t = T(isDark);
   const selectedTask = tasks.find(tk => tk.id === selectedTaskId) ?? null;
 
@@ -884,6 +905,7 @@ function WorkspaceBody({ tasks, members, resources, comments, reportTypes, proje
               onUploadResource={onUploadResource}
               onDeleteResource={onDeleteResource}
               onOpenAIReview={() => selectedTask && onOpenAIReview(selectedTask)}
+              initialTab={detailInitialTab}
             />
           )}
         </div>
@@ -897,6 +919,7 @@ function WorkspaceBody({ tasks, members, resources, comments, reportTypes, proje
           onAddComment={onAddComment} onDeleteComment={onDeleteComment}
           onAddMember={onAddMember} onRemoveMember={onRemoveMember} onChangeMemberRole={onChangeMemberRole}
           onDeleteResource={onDeleteResource}
+          onOpenTaskThread={onOpenTaskThread}
         />
       </div>
     </div>
@@ -924,6 +947,7 @@ interface PanelProps {
   onUploadResource: (file: File) => Promise<void>;
   onDeleteResource: (resourceId: string) => Promise<void>;
   onOpenAIReview:   () => void;
+  initialTab?:      DetailTab;
 }
 
 /* ── mention-text renderer ───────────────────────────────────────────── */
@@ -1386,17 +1410,20 @@ function AIReviewPanel({ taskId, projectId, isDark, onSubmitForReview }: {
 /* ══════════════════════════════════════════════════════════════════════════
    TaskDetailPanel — 4-tab panel: Info | Discussion | Files | AI
 ══════════════════════════════════════════════════════════════════════════ */
-function TaskDetailPanel({ task, members, reportTypes, resources, comments, projectId, isDark, onClose, onPatch, onDelete, onAddComment, onDeleteComment, onUploadResource, onDeleteResource, onOpenAIReview }: PanelProps) {
+function TaskDetailPanel({ task, members, reportTypes, resources, comments, projectId, isDark, onClose, onPatch, onDelete, onAddComment, onDeleteComment, onUploadResource, onDeleteResource, onOpenAIReview, initialTab = 'info' }: PanelProps) {
   const t    = T(isDark);
   const prio = PRIO[task.priority ?? 'medium'];
   const status = taskStatus(task);
   const due  = fmtDue(task.due);
 
-  /* ── detail tabs ────────────────────────────────────────────────────── */
-  const [detailTab, setDetailTab] = useState<DetailTab>('info');
+  /* comments scoped to THIS task — never the project-wide chat */
+  const taskComments = useMemo(() => comments.filter(c => c.task_id === task.id), [comments, task.id]);
 
-  /* reset tab when task changes */
-  useEffect(() => { setDetailTab('info'); }, [task.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  /* ── detail tabs ────────────────────────────────────────────────────── */
+  const [detailTab, setDetailTab] = useState<DetailTab>(initialTab);
+
+  /* reset tab when task changes (honour requested initial tab, e.g. opening a thread) */
+  useEffect(() => { setDetailTab(initialTab); }, [task.id, initialTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ── edit-mode draft state ──────────────────────────────────────────── */
   const [editMode,   setEditMode]   = useState(false);
@@ -1487,7 +1514,7 @@ function TaskDetailPanel({ task, members, reportTypes, resources, comments, proj
 
   /* ── current user context (used across tabs) ─────────────────────────── */
   const aiReview    = aiGet(projectId, task.id);
-  const discBadge   = comments.length > 0 ? comments.length : undefined;
+  const discBadge   = taskComments.length > 0 ? taskComments.length : undefined;
   const filesBadge  = resources.length > 0 ? resources.length : undefined;
   const aiBadge     = aiReview ? `${aiReview.score}%` : undefined;
 
@@ -1769,12 +1796,12 @@ function TaskDetailPanel({ task, members, reportTypes, resources, comments, proj
         {/* ── DISCUSSION tab ───────────────────────────────────────────────── */}
         {detailTab === 'discussion' && (
           <DiscussionPanel
-            comments={comments}
+            comments={taskComments}
             members={members}
             currentUserId={currentUserId}
             isMgr={isMgr}
             isDark={isDark}
-            onPost={onAddComment}
+            onPost={p => onAddComment({ ...p, taskId: task.id })}
             onDeleteComment={onDeleteComment}
           />
         )}
@@ -1807,7 +1834,7 @@ function TaskDetailPanel({ task, members, reportTypes, resources, comments, proj
    CollaborationSidebar — Step 4: 4-tab sidebar
    Tabs: Team | Feed | Files | AI
 ══════════════════════════════════════════════════════════════════════════ */
-type SidebarTab = 'team' | 'chat' | 'files' | 'ai';
+type SidebarTab = 'team' | 'chat' | 'threads' | 'files' | 'ai';
 
 /* ── TeamTab ──────────────────────────────────────────────────────────── */
 function TeamTab({ members, comments, isDark, currentUserName, mentions, projectId, isMgr, onAddMember, onRemoveMember, onChangeMemberRole }: {
@@ -2283,8 +2310,62 @@ function AITab({ summaries, tasks, projectId, isDark }: {
   );
 }
 
+/* ── TaskThreadsTab — list of per-task discussions ───────────────────── */
+function TaskThreadsTab({ tasks, comments, isDark, onOpen }: {
+  tasks: Task[]; comments: Comment[]; isDark: boolean; onOpen: (taskId: string) => void;
+}) {
+  const t = T(isDark);
+
+  /* one entry per task that has at least one task-scoped comment */
+  const threads = useMemo(() => {
+    return tasks
+      .map(tk => {
+        const tComments = comments.filter(c => c.task_id === tk.id);
+        if (tComments.length === 0) return null;
+        const last = tComments[tComments.length - 1];
+        return { task: tk, count: tComments.length, last };
+      })
+      .filter((x): x is { task: Task; count: number; last: Comment } => x !== null)
+      .sort((a, b) => (b.last.created_at ?? '').localeCompare(a.last.created_at ?? ''));
+  }, [tasks, comments]);
+
+  if (threads.length === 0) {
+    return (
+      <div style={{ padding: '28px 14px', textAlign: 'center' as const, color: t.muted, fontSize: 12, lineHeight: 1.6 }}>
+        No task discussions yet.<br />
+        <span style={{ fontSize: 11 }}>Open a task and write in its Discussion tab.</span>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: t.muted, textTransform: 'uppercase' as const, letterSpacing: '.08em', marginBottom: 2 }}>
+        Task Discussions · {threads.length}
+      </div>
+      {threads.map(({ task, count, last }) => (
+        <button key={task.id} type="button" onClick={() => onOpen(task.id)}
+          style={{ display: 'flex', flexDirection: 'column', gap: 4, textAlign: 'left' as const, padding: '9px 10px', borderRadius: 8, border: `1px solid ${t.bord}`, background: t.surf, cursor: 'pointer', fontFamily: 'inherit', transition: 'all .15s' }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = `${BLUE}55`; e.currentTarget.style.background = isDark ? 'rgba(29,110,245,.07)' : 'rgba(29,110,245,.04)'; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = t.bord; e.currentTarget.style.background = t.surf; }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={BLUE} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+            <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 700, color: t.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{task.title}</span>
+            <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: `${BLUE}14`, color: BLUE, flexShrink: 0 }}>{count}</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, paddingLeft: 17 }}>
+            <span style={{ fontSize: 10, fontWeight: 600, color: t.sub, flexShrink: 0 }}>{last.user_name}:</span>
+            <span style={{ fontSize: 10, color: t.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{last.message || '📎 attachment'}</span>
+            <span style={{ fontSize: 9, color: t.muted, marginLeft: 'auto', flexShrink: 0 }}>{fmtTime(last.created_at)}</span>
+          </div>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /* ── CollaborationSidebar ─────────────────────────────────────────────── */
-function CollaborationSidebar({ tasks, members, resources, comments, projectId, isDark, onAddComment, onDeleteComment, onAddMember, onRemoveMember, onChangeMemberRole, onDeleteResource }: {
+function CollaborationSidebar({ tasks, members, resources, comments, projectId, isDark, onAddComment, onDeleteComment, onAddMember, onRemoveMember, onChangeMemberRole, onDeleteResource, onOpenTaskThread }: {
   tasks: Task[]; members: Member[]; resources: Resource[]; comments: Comment[];
   projectId: string; isDark: boolean;
   onAddComment:       (p: CommentPayload) => Promise<void>;
@@ -2293,6 +2374,7 @@ function CollaborationSidebar({ tasks, members, resources, comments, projectId, 
   onRemoveMember:     (memberId: string)  => Promise<void>;
   onChangeMemberRole: (memberId: string, role: string) => Promise<void>;
   onDeleteResource:   (id: string)        => Promise<void>;
+  onOpenTaskThread:   (taskId: string)    => void;
 }) {
   const t               = T(isDark);
   const [activeTab, setActiveTab] = useState<SidebarTab>('chat');
@@ -2300,6 +2382,10 @@ function CollaborationSidebar({ tasks, members, resources, comments, projectId, 
   const currentUserId   = localStorage.getItem('userId') ?? '';
   const userRole        = (localStorage.getItem('role') ?? '').toLowerCase();
   const isMgr           = ['admin', 'sub_admin', 'manager'].includes(userRole);
+
+  /* main chat shows ONLY project-wide messages — task discussions live in their task */
+  const generalComments = useMemo(() => comments.filter(c => !c.task_id), [comments]);
+  const threadCount     = useMemo(() => new Set(comments.filter(c => c.task_id).map(c => c.task_id)).size, [comments]);
 
   const aiSummaries = useMemo(() => getAiSummaries(projectId, tasks), [projectId, tasks]);
 
@@ -2312,10 +2398,11 @@ function CollaborationSidebar({ tasks, members, resources, comments, projectId, 
   }, [comments, currentUserName]);
 
   const tabs: { id: SidebarTab; label: string; badge?: number; badgeColor?: string }[] = [
-    { id: 'chat',  label: 'Chat',  badge: comments.length > 0 ? comments.length : undefined, badgeColor: BLUE },
-    { id: 'team',  label: 'Team',  badge: mentions.length > 0 ? mentions.length : undefined, badgeColor: AMB  },
-    { id: 'files', label: 'Files', badge: resources.length > 0 ? resources.length : undefined, badgeColor: PURP },
-    { id: 'ai',    label: 'AI',    badge: aiSummaries.length > 0 ? aiSummaries.length : undefined, badgeColor: GRN  },
+    { id: 'chat',    label: 'Chat',    badge: generalComments.length > 0 ? generalComments.length : undefined, badgeColor: BLUE },
+    { id: 'threads', label: 'Threads', badge: threadCount > 0 ? threadCount : undefined, badgeColor: PURP },
+    { id: 'team',    label: 'Team',    badge: mentions.length > 0 ? mentions.length : undefined, badgeColor: AMB  },
+    { id: 'files',   label: 'Files',   badge: resources.length > 0 ? resources.length : undefined, badgeColor: PURP },
+    { id: 'ai',      label: 'AI',      badge: aiSummaries.length > 0 ? aiSummaries.length : undefined, badgeColor: GRN  },
   ];
 
   return (
@@ -2324,9 +2411,10 @@ function CollaborationSidebar({ tasks, members, resources, comments, projectId, 
       {/* Sidebar header */}
       <div style={{ padding: '11px 14px 0', flexShrink: 0 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: t.text, marginBottom: 10 }}>
-          {activeTab === 'chat'  ? 'Team Chat'
-           : activeTab === 'team'  ? 'Team Members'
-           : activeTab === 'files' ? 'Files'
+          {activeTab === 'chat'    ? 'Team Chat'
+           : activeTab === 'threads' ? 'Task Discussions'
+           : activeTab === 'team'    ? 'Team Members'
+           : activeTab === 'files'   ? 'Files'
            : 'AI Reviews'}
         </div>
       </div>
@@ -2355,7 +2443,7 @@ function CollaborationSidebar({ tasks, members, resources, comments, projectId, 
       {/* Tab content — Chat gets flex layout with pinned compose bar */}
       {activeTab === 'chat' && (
         <DiscussionPanel
-          comments={comments}
+          comments={generalComments}
           members={members}
           currentUserId={currentUserId}
           isMgr={isMgr}
@@ -2367,7 +2455,8 @@ function CollaborationSidebar({ tasks, members, resources, comments, projectId, 
 
       {activeTab !== 'chat' && (
         <div style={{ flex: 1, overflowY: 'auto', scrollbarWidth: 'thin' as const, scrollbarColor: `${t.bord} transparent` }}>
-          {activeTab === 'team'  && <TeamTab  members={members} comments={comments} isDark={isDark} currentUserName={currentUserName} mentions={mentions} projectId={projectId} isMgr={isMgr} onAddMember={onAddMember} onRemoveMember={onRemoveMember} onChangeMemberRole={onChangeMemberRole} />}
+          {activeTab === 'threads' && <TaskThreadsTab tasks={tasks} comments={comments} isDark={isDark} onOpen={onOpenTaskThread} />}
+          {activeTab === 'team'  && <TeamTab  members={members} comments={generalComments} isDark={isDark} currentUserName={currentUserName} mentions={mentions} projectId={projectId} isMgr={isMgr} onAddMember={onAddMember} onRemoveMember={onRemoveMember} onChangeMemberRole={onChangeMemberRole} />}
           {activeTab === 'files' && <FilesTab resources={resources} isDark={isDark} currentUserId={currentUserId} isMgr={isMgr} onDelete={onDeleteResource} />}
           {activeTab === 'ai'    && <AITab    summaries={aiSummaries} tasks={tasks} projectId={projectId} isDark={isDark} />}
         </div>
@@ -2452,6 +2541,20 @@ export default function ProjectWorkspace() {
   const [error,      setError]      = useState<string | null>(null);
   const [toast,      setToast]      = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  /* which detail tab to open the task panel on (e.g. 'discussion' when opening a thread) */
+  const [detailInitialTab, setDetailInitialTab] = useState<DetailTab>('info');
+
+  /* normal task selection opens the Info tab */
+  const handleSelectTask = useCallback((id: string | null) => {
+    setDetailInitialTab('info');
+    setSelectedTaskId(id);
+  }, []);
+
+  /* open a task straight into its Discussion tab (from the sidebar threads list) */
+  const handleOpenTaskThread = useCallback((taskId: string) => {
+    setDetailInitialTab('discussion');
+    setSelectedTaskId(taskId);
+  }, []);
 
   /* create task modal */
   const [createModal,   setCreateModal]   = useState<{ defaultStatus: TaskStatus } | null>(null);
@@ -2566,6 +2669,7 @@ export default function ProjectWorkspace() {
     if (payload.replyToId)      fd.append('reply_to_id',      payload.replyToId);
     if (payload.replyToPreview) fd.append('reply_to_preview', payload.replyToPreview);
     if (payload.replyToAuthor)  fd.append('reply_to_author',  payload.replyToAuthor);
+    if (payload.taskId)         fd.append('task_id',          payload.taskId);
     try {
       const r = await fetch(`${API}/task-boards/${projectId}/comments`, { method: 'POST', headers: hdr(), body: fd });
       if (!r.ok) throw new Error(await r.text() || 'Failed to post');
@@ -2713,7 +2817,7 @@ export default function ProjectWorkspace() {
               projectId={projectId}
               isDark={isDark}
               selectedTaskId={selectedTaskId}
-              onSelectTask={setSelectedTaskId}
+              onSelectTask={handleSelectTask}
               onOpenCreate={col => setCreateModal({ defaultStatus: col })}
               onPatchTask={handlePatchTask}
               onDeleteTask={id => void handleDeleteTask(id)}
@@ -2725,6 +2829,8 @@ export default function ProjectWorkspace() {
               onAddMember={handleAddMember}
               onRemoveMember={handleRemoveMember}
               onChangeMemberRole={handleChangeMemberRole}
+              onOpenTaskThread={handleOpenTaskThread}
+              detailInitialTab={detailInitialTab}
             />
           </>
         )}

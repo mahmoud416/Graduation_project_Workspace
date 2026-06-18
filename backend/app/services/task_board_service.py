@@ -360,6 +360,10 @@ class TaskBoardService:
                 "message": comment.get("message"),
                 "created_at": comment.get("created_at"),
                 "attachments": attachments_payload,
+                "task_id": comment.get("task_id"),
+                "reply_to_id": comment.get("reply_to_id"),
+                "reply_to_preview": comment.get("reply_to_preview"),
+                "reply_to_author": comment.get("reply_to_author"),
             })
         return serialized
 
@@ -536,6 +540,7 @@ class TaskBoardService:
         reply_to_id: Optional[str] = None,
         reply_to_preview: Optional[str] = None,
         reply_to_author: Optional[str] = None,
+        task_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         now = datetime.utcnow()
         normalized_message = (message or "").strip()
@@ -559,6 +564,8 @@ class TaskBoardService:
             "attachments": attachments,
             "created_at": now,
         }
+        if task_id:
+            doc["task_id"] = task_id
         if reply_to_id:
             doc["reply_to_id"] = reply_to_id
             doc["reply_to_preview"] = (reply_to_preview or "")[:200]
@@ -598,9 +605,11 @@ class TaskBoardService:
         reply_to_id: Optional[str] = None,
         reply_to_preview: Optional[str] = None,
         reply_to_author: Optional[str] = None,
+        task_id: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         comment_doc = TaskBoardService._build_comment_doc(
-            message, author, stored_files, reply_to_id, reply_to_preview, reply_to_author
+            message, author, stored_files, reply_to_id, reply_to_preview, reply_to_author,
+            task_id=task_id,
         )
         return await db[TASK_BOARDS_COLLECTION].find_one_and_update(
             {"project_id": project_id},

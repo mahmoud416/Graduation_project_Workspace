@@ -88,6 +88,9 @@ async def add_task_board_todo(
     if not board:
         board = await TaskBoardService.ensure_board_for_project(db, project)
 
+    # Only admins, sub-admins, or board managers may create tasks. Staff cannot.
+    _ensure_task_privileges(project, current_user, board)
+
     submitted_by = str(current_user.get("_id", ""))
     submitted_by_name = current_user.get("name") or current_user.get("email", "")
 
@@ -305,6 +308,7 @@ async def add_task_board_comment(
     reply_to_id: Annotated[Optional[str], Form()] = None,
     reply_to_preview: Annotated[Optional[str], Form()] = None,
     reply_to_author: Annotated[Optional[str], Form()] = None,
+    task_id: Annotated[Optional[str], Form()] = None,
     current_user=Depends(get_current_user),
     db=Depends(get_database),
 ):
@@ -337,6 +341,7 @@ async def add_task_board_comment(
         reply_to_id=reply_to_id or None,
         reply_to_preview=reply_to_preview or None,
         reply_to_author=reply_to_author or None,
+        task_id=task_id or None,
     )
     if not updated:
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Unable to add comment")
