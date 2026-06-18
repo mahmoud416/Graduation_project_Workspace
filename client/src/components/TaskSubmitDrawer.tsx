@@ -29,6 +29,8 @@ interface Props {
 }
 
 const TaskSubmitDrawer = ({ isOpen, taskId, taskTitle, reportType, onClose, onSuccess, onEvaluated }: Props) => {
+    const isOther = reportType === 'other';
+
     const [description, setDescription]       = useState(taskTitle);
     const [submissionNotes, setSubmissionNotes] = useState('');
     const [attachments, setAttachments]        = useState<File[]>([]);
@@ -36,6 +38,7 @@ const TaskSubmitDrawer = ({ isOpen, taskId, taskTitle, reportType, onClose, onSu
     const [result, setResult]                  = useState<EvaluationResult | null>(null);
     const [error, setError]                    = useState<string | null>(null);
     const [isDragging, setIsDragging]          = useState(false);
+    const [otherSubmitted, setOtherSubmitted]  = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleFiles = useCallback((files: FileList | null) => {
@@ -54,6 +57,23 @@ const TaskSubmitDrawer = ({ isOpen, taskId, taskTitle, reportType, onClose, onSu
         setError(null);
         setResult(null);
         try {
+            if (isOther) {
+                // Skip AI evaluation — send empty payload directly to bypass endpoint
+                const data = await evaluateTask({
+                    task_title: description,
+                    task_description: description,
+                    task_id: taskId,
+                    report_type: 'other',
+                    files: [],
+                    image_base64: [],
+                    submission_notes: submissionNotes,
+                });
+                onEvaluated?.(data, taskId);
+                setOtherSubmitted(true);
+                if (onSuccess) setTimeout(() => { onSuccess(); onClose(); }, 2000);
+                return;
+            }
+
             const imageFiles: string[] = [];
             const docFiles: { file_name: string; content: string; file_type: string }[] = [];
             await Promise.all(attachments.map(file =>
@@ -90,6 +110,7 @@ const TaskSubmitDrawer = ({ isOpen, taskId, taskTitle, reportType, onClose, onSu
         setAttachments([]);
         setResult(null);
         setError(null);
+        setOtherSubmitted(false);
         onClose();
     };
 
@@ -114,7 +135,9 @@ const TaskSubmitDrawer = ({ isOpen, taskId, taskTitle, reportType, onClose, onSu
                             </div>
                             <div>
                                 <div style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9', letterSpacing: '-.01em' }}>Submit Task</div>
-                                <div style={{ fontSize: 11, color: '#6366f1', fontWeight: 500, marginTop: 1 }}>AI Quality Check & Submission</div>
+                                <div style={{ fontSize: 11, color: isOther ? '#22d3ee' : '#6366f1', fontWeight: 500, marginTop: 1 }}>
+                                    {isOther ? 'Direct Submission — No AI Check' : 'AI Quality Check & Submission'}
+                                </div>
                             </div>
                         </div>
                         <button type="button" onClick={handleClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: 4, borderRadius: 6, lineHeight: 1, transition: 'color .15s' }}
@@ -151,8 +174,19 @@ const TaskSubmitDrawer = ({ isOpen, taskId, taskTitle, reportType, onClose, onSu
                         />
                     </div>
 
-                    {/* Drop zone */}
-                    <div>
+                    {/* "Other" submitted banner */}
+                    {isOther && otherSubmitted && (
+                        <div style={{ borderRadius: 12, background: 'rgba(34,211,238,.08)', border: '1px solid rgba(34,211,238,.25)', padding: '18px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, textAlign: 'center' }}>
+                            <svg width="36" height="36" fill="none" stroke="#22d3ee" strokeWidth="1.8" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            <div style={{ fontSize: 14, fontWeight: 700, color: '#e2e8f0' }}>Task Submitted</div>
+                            <div style={{ fontSize: 12, color: '#94a3b8' }}>Moved to QC Review. The reviewer will check it shortly.</div>
+                        </div>
+                    )}
+
+                    {/* Drop zone — hidden for "other" tasks */}
+                    {!isOther && <div>
                         <label style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.08em', color: '#475569', textTransform: 'uppercase', display: 'block', marginBottom: 7 }}>Attachments <span style={{ color: '#ef4444' }}>*</span></label>
                         <div
                             onDragOver={e  => { e.preventDefault(); setIsDragging(true); }}
@@ -198,7 +232,7 @@ const TaskSubmitDrawer = ({ isOpen, taskId, taskTitle, reportType, onClose, onSu
                                 ))}
                             </div>
                         )}
-                    </div>
+                    </div>}
 
                     {/* Error */}
                     {error && (
@@ -218,8 +252,12 @@ const TaskSubmitDrawer = ({ isOpen, taskId, taskTitle, reportType, onClose, onSu
                                 <style>{`@keyframes drawer-spin { to { stroke-dashoffset: -125.6 } }`}</style>
                             </div>
                             <div style={{ textAlign: 'center' }}>
-                                <div style={{ fontSize: 13, fontWeight: 600, color: '#cbd5e1' }}>Evaluating against standards…</div>
-                                <div style={{ fontSize: 11, color: '#475569', marginTop: 4 }}>This may take a few seconds</div>
+                                <div style={{ fontSize: 13, fontWeight: 600, color: '#cbd5e1' }}>
+                                    {isOther ? 'Submitting task…' : 'Evaluating against standards…'}
+                                </div>
+                                <div style={{ fontSize: 11, color: '#475569', marginTop: 4 }}>
+                                    {isOther ? 'Moving to QC Review' : 'This may take a few seconds'}
+                                </div>
                             </div>
                         </div>
                     )}
@@ -302,26 +340,41 @@ const TaskSubmitDrawer = ({ isOpen, taskId, taskTitle, reportType, onClose, onSu
 
                 {/* ── Footer / CTA ── */}
                 <div style={{ padding: '14px 22px 18px', borderTop: '1px solid rgba(255,255,255,.07)', flexShrink: 0, background: 'rgba(0,0,0,.2)' }}>
-                    <button type="button" onClick={handleAnalyzeAndSubmit}
-                        disabled={loading || !description.trim() || attachments.length === 0}
-                        style={{ width: '100%', height: 44, borderRadius: 11, border: 'none', background: loading || !description.trim() || attachments.length === 0 ? 'rgba(99,102,241,.3)' : 'linear-gradient(135deg,#6366f1,#4f46e5)', color: 'white', fontSize: 13, fontWeight: 700, cursor: loading || !description.trim() || attachments.length === 0 ? 'not-allowed' : 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: '0 4px 14px rgba(99,102,241,.35)', transition: 'opacity .15s, transform .15s' }}
-                        onMouseEnter={e => { if (!loading && description.trim() && attachments.length > 0) (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-1px)'; }}
-                        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.transform = ''; }}>
-                        {loading ? (
-                            <>
-                                <div style={{ width: 14, height: 14, border: '2px solid rgba(255,255,255,.3)', borderTopColor: 'white', borderRadius: '50%', animation: 'drawer-btn-spin .8s linear infinite' }}/>
-                                <style>{`@keyframes drawer-btn-spin { to { transform: rotate(360deg) } }`}</style>
-                                Analyzing…
-                            </>
-                        ) : (
-                            <>
-                                <svg width="16" height="16" fill="none" stroke="white" strokeWidth="2.2" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                                </svg>
-                                Evaluate &amp; Submit
-                            </>
-                        )}
-                    </button>
+                    {(() => {
+                        const disabled = loading || !description.trim() || (!isOther && attachments.length === 0) || otherSubmitted;
+                        const btnBg = disabled
+                            ? (isOther ? 'rgba(34,211,238,.2)' : 'rgba(99,102,241,.3)')
+                            : (isOther ? 'linear-gradient(135deg,#06b6d4,#0891b2)' : 'linear-gradient(135deg,#6366f1,#4f46e5)');
+                        return (
+                            <button type="button" onClick={handleAnalyzeAndSubmit}
+                                disabled={disabled}
+                                style={{ width: '100%', height: 44, borderRadius: 11, border: 'none', background: btnBg, color: 'white', fontSize: 13, fontWeight: 700, cursor: disabled ? 'not-allowed' : 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: isOther ? '0 4px 14px rgba(6,182,212,.3)' : '0 4px 14px rgba(99,102,241,.35)', transition: 'opacity .15s, transform .15s' }}
+                                onMouseEnter={e => { if (!disabled) (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-1px)'; }}
+                                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.transform = ''; }}>
+                                {loading ? (
+                                    <>
+                                        <div style={{ width: 14, height: 14, border: '2px solid rgba(255,255,255,.3)', borderTopColor: 'white', borderRadius: '50%', animation: 'drawer-btn-spin .8s linear infinite' }}/>
+                                        <style>{`@keyframes drawer-btn-spin { to { transform: rotate(360deg) } }`}</style>
+                                        {isOther ? 'Submitting…' : 'Analyzing…'}
+                                    </>
+                                ) : otherSubmitted ? (
+                                    <>
+                                        <svg width="16" height="16" fill="none" stroke="white" strokeWidth="2.2" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/>
+                                        </svg>
+                                        Submitted
+                                    </>
+                                ) : (
+                                    <>
+                                        <svg width="16" height="16" fill="none" stroke="white" strokeWidth="2.2" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d={isOther ? 'M12 19l9 2-9-18-9 18 9-2zm0 0v-8' : 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z'}/>
+                                        </svg>
+                                        {isOther ? 'Submit Task' : 'Evaluate & Submit'}
+                                    </>
+                                )}
+                            </button>
+                        );
+                    })()}
                 </div>
 
             </div>

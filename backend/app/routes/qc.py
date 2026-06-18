@@ -178,7 +178,7 @@ async def analyze_task_with_ai(
     db=Depends(get_database),
 ):
     from app.services import qc_service as _qc_svc
-    if report_type and report_type not in _qc_svc.REPORT_TYPES:
+    if report_type and report_type != "other" and report_type not in _qc_svc.REPORT_TYPES:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
             detail="Unknown report type. Use GET /quality/report-types for valid keys.",

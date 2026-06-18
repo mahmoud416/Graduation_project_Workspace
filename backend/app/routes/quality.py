@@ -262,7 +262,7 @@ async def get_report_types(
 ):
     """Return the list of accreditation report types for task classification. Accessible to all authenticated users."""
     user_qs = current_user.get("quality_system")
-    return [
+    types = [
         {
             "key": key,
             "name_ar": rt["name_ar"],
@@ -273,6 +273,14 @@ async def get_report_types(
         for key, rt in qc_service.REPORT_TYPES.items()
         if not rt.get("allowed_roles") or (user_qs and user_qs in rt["allowed_roles"])
     ]
+    types.append({
+        "key": "other",
+        "name_ar": "أخرى",
+        "name_en": "Other",
+        "description": "General task not tied to a specific report type — skips AI evaluation and submits directly to QC Review.",
+        "required_elements": [],
+    })
+    return types
 
 
 # ---------------------------------------------------------------------------
@@ -289,11 +297,68 @@ async def evaluate_task(
     Run AI quality evaluation against all active rules.
     Optionally links the result to a task_id.
     """
-    if body.report_type and body.report_type not in qc_service.REPORT_TYPES:
+    if body.report_type and body.report_type != "other" and body.report_type not in qc_service.REPORT_TYPES:
         raise HTTPException(
             status_code=400,
             detail="Unknown report type. Use GET /quality/report-types for valid keys.",
         )
+
+    # "other" tasks skip AI evaluation entirely — submit straight to QC_REVIEW
+    if body.report_type == "other":
+        bypass = {
+            "compliance_score": 100,
+            "passed_standards": [],
+            "failed_standards": [],
+            "suggestions": [],
+            "files_analyzed": [],
+            "_mode": "other_bypass",
+            "report_type_key": "other",
+            "report_type_name_ar": "أخرى",
+            "report_type_name_en": "Other",
+            "report_type_compliance": {
+                "is_compliant": True,
+                "missing_elements": [],
+                "compliance_note": "Task type 'Other' — no AI evaluation required.",
+            },
+        }
+        if body.task_id:
+            try:
+                eval_doc = {
+                    "task_id": ObjectId(body.task_id),
+                    "task_title": body.task_title,
+                    "evaluated_by": current_user["_id"],
+                    "rules_count": 0,
+                    "compliance_score": 100,
+                    "passed_standards": [],
+                    "failed_standards": [],
+                    "suggestions": [],
+                    "files_analyzed": [],
+                    "report_type": "other",
+                    "report_type_compliance": bypass["report_type_compliance"],
+                    "ai_mode": "other_bypass",
+                    "submission_notes": body.submission_notes,
+                    "created_at": datetime.utcnow(),
+                }
+                inserted = await db[QUALITY_EVALUATIONS_COLLECTION].insert_one(eval_doc)
+                bypass["evaluation_id"] = str(inserted.inserted_id)
+                await db[TASKS_COLLECTION].update_one(
+                    {"_id": ObjectId(body.task_id)},
+                    {"$set": {
+                        "qc_evaluation_id": inserted.inserted_id,
+                        "status": "QC_REVIEW",
+                        "qc_status": "pending",
+                        "qc_reviewed_by": None,
+                        "qc_reviewed_at": None,
+                        "report_type": "other",
+                        "report_type_compliant": True,
+                        "aiScore": 100,
+                        "submission_notes": body.submission_notes,
+                        "updated_at": datetime.utcnow(),
+                    }},
+                )
+            except Exception:
+                bypass["evaluation_id"] = "other_bypass"
+        return bypass
 
     for f in body.files:
         if len(f.get("content", "")) > MAX_FILE_SIZE_B64:

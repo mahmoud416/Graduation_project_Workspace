@@ -85,6 +85,7 @@ const DEFAULT_RT: ReportType[] = [
   { key: 'survey_analysis',       name_en: 'Survey Analysis',       name_ar: 'تحليل الاستبيان'  },
   { key: 'exam_results_analysis', name_en: 'Exam Results Analysis', name_ar: 'تحليل نتائج الاختبار' },
   { key: 'qa_unit_annual',        name_en: 'QA Annual Report',      name_ar: 'تقرير جودة سنوي'  },
+  { key: 'other',                 name_en: 'Other',                 name_ar: 'أخرى'             },
 ];
 
 type Task = {
