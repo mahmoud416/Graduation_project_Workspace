@@ -430,10 +430,32 @@ function CreateProjectModal({ teams, allUsers, initialTeamId, onClose, onCreated
     const [projStatus, setProjStatus] = useState('ACTIVE');
     const [subAdminIds, setSubAdminIds] = useState<string[]>([]); const [staffIds, setStaffIds] = useState<string[]>([]);
     const [dueDate, setDueDate] = useState('');
+    const [teamAutoFilled, setTeamAutoFilled] = useState(false);
     const subAdmins = allUsers.filter(u => ['sub_admin', 'subadmin', 'manager'].includes(u.role));
     const staffList = allUsers.filter(u => u.role === 'staff');
     const toggleId  = (id: string, list: string[], setList: (l: string[]) => void) =>
         setList(list.includes(id) ? list.filter(x => x !== id) : [...list, id]);
+
+    const handleTeamChange = async (newTeamId: string) => {
+        setTeamId(newTeamId);
+        if (!newTeamId) { setTeamAutoFilled(false); return; }
+        try {
+            const r = await fetch(`${API}/teams/${newTeamId}/members`, { headers: ah() });
+            if (!r.ok) return;
+            const members: any[] = await r.json();
+            const newSubAdmins = members
+                .filter(m => ['subadmin','sub_admin','manager'].includes(m.role?.toLowerCase()))
+                .map(m => m.user_id);
+            const newStaff = members
+                .filter(m => m.role?.toLowerCase() === 'member')
+                .map(m => m.user_id);
+            setSubAdminIds(newSubAdmins);
+            setStaffIds(newStaff);
+            setTeamAutoFilled(true);
+        } catch { /* silently ignore */ }
+    };
+
+    useEffect(() => { if (initialTeamId) void handleTeamChange(initialTeamId); }, []);
     const STEPS = ['Details', 'Assign Team', 'Schedule'];
     const submit = async () => {
         setErr(''); setLoading(true);
@@ -492,11 +514,17 @@ function CreateProjectModal({ teams, allUsers, initialTeamId, onClose, onCreated
                     </FieldWrap>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                         <FieldWrap label="Team" isDark={isDark}>
-                            <select value={teamId} onChange={e => setTeamId(e.target.value)} style={{ ...f, background: isDark ? '#0f1220' : '#fff' }}
+                            <select value={teamId} onChange={e => void handleTeamChange(e.target.value)} style={{ ...f, background: isDark ? '#0f1220' : '#fff' }}
                                 onFocus={e => (e.currentTarget.style.borderColor = BLUE)} onBlur={e => (e.currentTarget.style.borderColor = t.inbd)}>
                                 <option value="">No team</option>
                                 {teams.map(tm => <option key={tm.id} value={tm.id}>{tm.name}</option>)}
                             </select>
+                            {teamAutoFilled && teamId && (
+                                <div style={{ marginTop: 5, fontSize: 11, color: GRN, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                                    Members auto-filled from team — you can adjust in step 2
+                                </div>
+                            )}
                         </FieldWrap>
                         <FieldWrap label="Status" isDark={isDark}>
                             <select value={projStatus} onChange={e => setProjStatus(e.target.value)} style={{ ...f, background: isDark ? '#0f1220' : '#fff' }}
@@ -1198,17 +1226,184 @@ function ProjectRow({ project, team, allUsers, isDark, role, onClick, onEdit, on
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════
+   EDIT TEAM MEMBERS MODAL — add / remove members with role assignment
+══════════════════════════════════════════════════════════════════════════════ */
+function EditTeamMembersModal({ team, isDark, allUsers, onClose, onSaved }: {
+    team: Team; isDark: boolean; allUsers: any[];
+    onClose: () => void; onSaved: () => void;
+}) {
+    const t = T(isDark);
+    const [currentMembers, setCurrentMembers] = useState<any[]>([]);
+    const [managerIds,  setManagerIds]  = useState<string[]>([]);
+    const [subAdminIds, setSubAdminIds] = useState<string[]>([]);
+    const [staffIds,    setStaffIds]    = useState<string[]>([]);
+    const [loading,     setLoading]     = useState(true);
+    const [saving,      setSaving]      = useState(false);
+    const [err,         setErr]         = useState('');
+
+    const managers  = allUsers.filter(u => ['admin', 'manager'].includes(u.role));
+    const subAdmins = allUsers.filter(u => ['sub_admin', 'subadmin'].includes(u.role));
+    const staff     = allUsers.filter(u => u.role === 'staff' || u.role === 'member');
+
+    useEffect(() => {
+        fetch(`${API}/teams/${team.id}/members`, { headers: ah() })
+            .then(r => r.json())
+            .then((members: any[]) => {
+                setCurrentMembers(members);
+                setManagerIds(members.filter(m => ['admin','manager'].includes(m.role?.toLowerCase())).map(m => m.user_id));
+                setSubAdminIds(members.filter(m => ['subadmin','sub_admin'].includes(m.role?.toLowerCase())).map(m => m.user_id));
+                setStaffIds(members.filter(m => m.role?.toLowerCase() === 'member').map(m => m.user_id));
+            })
+            .catch(() => setErr('Could not load members'))
+            .finally(() => setLoading(false));
+    }, [team.id]);
+
+    const toggle = (id: string, list: string[], setList: (l: string[]) => void) =>
+        setList(list.includes(id) ? list.filter(x => x !== id) : [...list, id]);
+
+    const save = async () => {
+        setSaving(true); setErr('');
+        try {
+            const desired = [
+                ...managerIds.map(id => ({ id, role: 'manager' })),
+                ...subAdminIds.map(id => ({ id, role: 'subadmin' })),
+                ...staffIds.map(id => ({ id, role: 'member' })),
+            ];
+            const currentIds = currentMembers.map(m => m.user_id);
+            const desiredIds = desired.map(d => d.id);
+
+            const toAdd    = desired.filter(d => !currentIds.includes(d.id));
+            const toRemove = currentMembers.filter(m => !desiredIds.includes(m.user_id) && !['admin'].includes(m.role?.toLowerCase()));
+
+            for (const m of toRemove) {
+                await fetch(`${API}/teams/${team.id}/members/${m.user_id}`, { method: 'DELETE', headers: ah() });
+            }
+            for (const m of toAdd) {
+                await fetch(`${API}/teams/${team.id}/members`, {
+                    method: 'POST', headers: ah(),
+                    body: JSON.stringify({ user_id: m.id, role: m.role })
+                });
+            }
+            onSaved(); onClose();
+        } catch { setErr('Failed to save changes'); }
+        finally { setSaving(false); }
+    };
+
+    const totalSelected = managerIds.length + subAdminIds.length + staffIds.length;
+
+    const UserPick = ({ users, selected, onToggle, roleLabel, color }: { users: any[]; selected: string[]; onToggle: (id: string) => void; roleLabel: string; color: string }) => (
+        <div style={{ marginBottom: 14 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: t.muted, textTransform: 'uppercase', letterSpacing: '.07em' }}>{roleLabel}</span>
+                <span style={{ fontSize: 11, color, fontWeight: 600 }}>{selected.length} selected</span>
+            </div>
+            <div style={{ maxHeight: 140, overflowY: 'auto', border: `1px solid ${t.bord}`, borderRadius: 8 }}>
+                {users.length === 0 ? <div style={{ padding: 10, fontSize: 12, color: t.muted, textAlign: 'center' }}>No users</div>
+                : users.map(u => { const uid = u._id ?? u.id; const sel = selected.includes(uid); return (
+                    <div key={uid} onClick={() => onToggle(uid)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', cursor: 'pointer', borderBottom: `1px solid ${t.bord2}`, background: sel ? `${color}08` : 'transparent', transition: 'background .1s' }}
+                        onMouseEnter={e => { if (!sel) e.currentTarget.style.background = t.hover; }}
+                        onMouseLeave={e => { if (!sel) e.currentTarget.style.background = 'transparent'; }}>
+                        <UAv name={u.name || u.email || 'U'} size={26} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 500, color: t.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.name || 'Unnamed'}</div>
+                            <div style={{ fontSize: 11, color: t.muted }}>{u.email}</div>
+                        </div>
+                        {sel && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                    </div>);
+                })}
+            </div>
+        </div>
+    );
+
+    return (
+        <ModalShell title={`Edit Members · ${team.name}`} subtitle={`${totalSelected} member${totalSelected !== 1 ? 's' : ''} selected`} onClose={onClose} isDark={isDark} wide>
+            <div style={{ padding: '20px 24px' }}>
+                {loading ? (
+                    <div style={{ textAlign: 'center', padding: 24, color: t.muted, fontSize: 13 }}>Loading…</div>
+                ) : (
+                    <>
+                        <UserPick users={managers}  selected={managerIds}  onToggle={id => toggle(id, managerIds,  setManagerIds)}  roleLabel="Managers (Admin)" color={BLUE} />
+                        <UserPick users={subAdmins} selected={subAdminIds} onToggle={id => toggle(id, subAdminIds, setSubAdminIds)} roleLabel="Sub Admins"        color={PURP} />
+                        <UserPick users={staff}     selected={staffIds}    onToggle={id => toggle(id, staffIds,    setStaffIds)}    roleLabel="Staff Members"     color={GRN}  />
+                        {err && <ErrBanner msg={err} />}
+                        <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+                            <button type="button" onClick={onClose} style={{ flex: 1, padding: '9px 0', borderRadius: 8, border: `1px solid ${t.bord}`, background: 'transparent', color: t.sub, fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+                            <button type="button" onClick={save} disabled={saving} style={{ flex: 2, padding: '9px 0', borderRadius: 8, border: 'none', background: saving ? `${BLUE}50` : BLUE, color: 'white', fontSize: 13, fontWeight: 600, cursor: saving ? 'default' : 'pointer', fontFamily: 'inherit' }}>
+                                {saving ? 'Saving…' : 'Save Changes'}
+                            </button>
+                        </div>
+                    </>
+                )}
+            </div>
+        </ModalShell>
+    );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   EDIT TEAM DETAILS MODAL — rename + description
+══════════════════════════════════════════════════════════════════════════════ */
+function EditTeamModal({ team, isDark, onClose, onSaved }: {
+    team: Team; isDark: boolean; onClose: () => void; onSaved: () => void;
+}) {
+    const t = T(isDark); const f = fld(t);
+    const [name, setName] = useState(team.name);
+    const [desc, setDesc] = useState(team.description ?? '');
+    const [saving, setSaving] = useState(false);
+    const [err,    setErr]    = useState('');
+
+    const save = async () => {
+        if (!name.trim()) { setErr('Name is required'); return; }
+        setSaving(true); setErr('');
+        try {
+            const r = await fetch(`${API}/teams/${team.id}`, {
+                method: 'PUT', headers: ah(),
+                body: JSON.stringify({ name: name.trim(), description: desc.trim() })
+            });
+            if (!r.ok) { const d = await r.json(); throw new Error(d.detail || 'Failed'); }
+            onSaved(); onClose();
+        } catch (e: unknown) { setErr(e instanceof Error ? e.message : 'Failed'); }
+        finally { setSaving(false); }
+    };
+
+    return (
+        <ModalShell title="Edit Team" subtitle={team.name} onClose={onClose} isDark={isDark}>
+            <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <FieldWrap label="Team Name" required isDark={isDark}>
+                    <input value={name} onChange={e => setName(e.target.value)} style={f}
+                        onFocus={e => (e.currentTarget.style.borderColor = BLUE)} onBlur={e => (e.currentTarget.style.borderColor = t.inbd)} />
+                </FieldWrap>
+                <FieldWrap label="Description" isDark={isDark}>
+                    <textarea value={desc} onChange={e => setDesc(e.target.value)} rows={3}
+                        style={{ ...f, resize: 'vertical' as const }}
+                        onFocus={e => (e.currentTarget.style.borderColor = BLUE)} onBlur={e => (e.currentTarget.style.borderColor = t.inbd)} />
+                </FieldWrap>
+                {err && <ErrBanner msg={err} />}
+                <div style={{ display: 'flex', gap: 10 }}>
+                    <button type="button" onClick={onClose} style={{ flex: 1, padding: '9px 0', borderRadius: 8, border: `1px solid ${t.bord}`, background: 'transparent', color: t.sub, fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+                    <button type="button" onClick={save} disabled={saving || !name.trim()} style={{ flex: 2, padding: '9px 0', borderRadius: 8, border: 'none', background: (saving || !name.trim()) ? `${BLUE}50` : BLUE, color: 'white', fontSize: 13, fontWeight: 600, cursor: (saving || !name.trim()) ? 'default' : 'pointer', fontFamily: 'inherit' }}>
+                        {saving ? 'Saving…' : 'Save Changes'}
+                    </button>
+                </div>
+            </div>
+        </ModalShell>
+    );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
    TEAM CARD
 ══════════════════════════════════════════════════════════════════════════════ */
-function TeamCard({ team, teamStats, isDark, onViewProjects, onCreateProject, onViewMembers, canCreate }: {
+function TeamCard({ team, teamStats, isDark, onViewProjects, onCreateProject, onViewMembers, onEditMembers, onEditDetails, onDelete, canCreate }: {
     team: Team;
     teamStats?: { total: number; active: number; lastActivity?: string };
     isDark: boolean;
     onViewProjects: () => void; onCreateProject: () => void; onViewMembers: () => void;
+    onEditMembers?: () => void; onEditDetails?: () => void; onDelete?: () => void;
     canCreate?: boolean;
 }) {
     const t = T(isDark); const color = teamColor(team.name);
     const [hover, setHover] = useState(false);
+    const [menuOpen, setMenuOpen] = useState(false);
 
     const statusLabel = team.status === 'active' ? 'Active' : team.status === 'inactive' ? 'Inactive' : 'No Projects';
     const statusColor = team.status === 'active' ? GRN : team.status === 'inactive' ? AMB : t.muted;
@@ -1219,10 +1414,10 @@ function TeamCard({ team, teamStats, isDark, onViewProjects, onCreateProject, on
     const createdDate   = team.created_at ? fmtDate(team.created_at) : null;
 
     return (
-        <div onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
-            style={{ background: t.surf, border: `1px solid ${hover ? `${color}35` : t.bord}`, borderTop: `3px solid ${color}`, borderRadius: 10, padding: '20px', display: 'flex', flexDirection: 'column', gap: 14, transition: 'all .2s', boxShadow: hover ? `0 6px 24px rgba(0,0,0,.08)` : '0 1px 3px rgba(0,0,0,.04)', transform: hover ? 'translateY(-2px)' : 'none' }}>
+        <div onMouseEnter={() => setHover(true)} onMouseLeave={() => { setHover(false); setMenuOpen(false); }}
+            style={{ background: t.surf, border: `1px solid ${hover ? `${color}35` : t.bord}`, borderTop: `3px solid ${color}`, borderRadius: 10, padding: '20px', display: 'flex', flexDirection: 'column', gap: 14, transition: 'all .2s', boxShadow: hover ? `0 6px 24px rgba(0,0,0,.08)` : '0 1px 3px rgba(0,0,0,.04)', transform: hover ? 'translateY(-2px)' : 'none', position: 'relative' }}>
 
-            {/* Header: name + status badge */}
+            {/* Header: name + status badge + 3-dot menu */}
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
                 <div style={{ width: 42, height: 42, borderRadius: 11, background: `${color}14`, border: `1.5px solid ${color}28`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 700, color, flexShrink: 0 }}>{initials(team.name)}</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -1236,6 +1431,31 @@ function TeamCard({ team, teamStats, isDark, onViewProjects, onCreateProject, on
                         </div>
                     )}
                 </div>
+                {canCreate !== false && (
+                <div style={{ position: 'relative', flexShrink: 0 }}>
+                    <button type="button" onClick={e => { e.stopPropagation(); setMenuOpen(o => !o); }}
+                        style={{ width: 26, height: 26, borderRadius: 6, border: `1px solid ${menuOpen ? color : t.bord}`, background: menuOpen ? `${color}12` : 'transparent', color: menuOpen ? color : t.muted, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 15, fontWeight: 700, fontFamily: 'inherit', lineHeight: 1 }}>
+                        ···
+                    </button>
+                    {menuOpen && (
+                        <div style={{ position: 'absolute', top: '110%', right: 0, zIndex: 200, minWidth: 170, background: t.surf, border: `1px solid ${t.bord}`, borderRadius: 10, boxShadow: t.shadow, overflow: 'hidden', animation: 'wsSlide .12s ease-out both' }}>
+                            {[
+                                { label: 'Edit Members',  action: onEditMembers  },
+                                { label: 'Edit Details',  action: onEditDetails  },
+                                { label: 'Delete Team',   action: onDelete, danger: true },
+                            ].map(({ label, action, danger }) => (
+                                <button key={label} type="button" disabled={!action}
+                                    onClick={e => { e.stopPropagation(); setMenuOpen(false); action?.(); }}
+                                    style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', padding: '9px 14px', background: 'transparent', border: 'none', color: danger ? RED : t.sub, fontSize: 13, fontWeight: 500, cursor: action ? 'pointer' : 'default', fontFamily: 'inherit', textAlign: 'left', transition: 'background .1s' }}
+                                    onMouseEnter={e => (e.currentTarget.style.background = danger ? `${RED}0c` : t.hover)}
+                                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                                    {label}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+                )}
             </div>
 
             {/* Stats row */}
@@ -1471,6 +1691,10 @@ const Projects = () => {
     const [deleteTarget,   setDeleteTarget]   = useState<WsProject | null>(null);
     const [editTarget,     setEditTarget]     = useState<WsProject | null>(null);
     const [viewMembersTeam, setViewMembersTeam] = useState<Team | null>(null);
+    const [editMembersTeam, setEditMembersTeam] = useState<Team | null>(null);
+    const [editDetailsTeam, setEditDetailsTeam] = useState<Team | null>(null);
+    const [deleteTeamTarget, setDeleteTeamTarget] = useState<Team | null>(null);
+    const [deletingTeam,    setDeletingTeam]    = useState(false);
     const [deleting,       setDeleting]       = useState(false);
     const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
 
@@ -1535,6 +1759,16 @@ const Projects = () => {
     }, [projects, teamFilter, statusFilter, priorityFilter, managerFilter, search, sortBy]);
 
     const teamFor = (p: WsProject) => p.team_id ? teams.find(tm => tm.id === p.team_id) : undefined;
+
+    const handleDeleteTeam = async (team: Team) => {
+        if (!window.confirm(`Delete team "${team.name}"? This cannot be undone.`)) return;
+        setDeletingTeam(true);
+        try {
+            const r = await fetch(`${API}/teams/${team.id}`, { method: 'DELETE', headers: ah() });
+            if (!r.ok && r.status !== 204) throw new Error('Failed');
+            fetchTeams(); setToast({ msg: 'Team deleted', ok: true });
+        } catch { setToast({ msg: 'Delete failed', ok: false }); } finally { setDeletingTeam(false); }
+    };
 
     const handleDelete = async () => {
         if (!deleteTarget) return; setDeleting(true);
@@ -1780,6 +2014,9 @@ const Projects = () => {
                                                 onViewProjects={() => { resetFilters(); setTeamFilter(tm.id); setTab('projects'); }}
                                                 onCreateProject={() => { setCreateInitTeam(tm.id); setShowCreateProject(true); }}
                                                 onViewMembers={() => setViewMembersTeam(tm)}
+                                                onEditMembers={() => setEditMembersTeam(tm)}
+                                                onEditDetails={() => setEditDetailsTeam(tm)}
+                                                onDelete={() => void handleDeleteTeam(tm)}
                                             />
                                         ))}
                                     </div>
@@ -1855,6 +2092,9 @@ const Projects = () => {
                                             onViewProjects={() => { resetFilters(); setTeamFilter(tm.id); setTab('projects'); }}
                                             onCreateProject={() => { setCreateInitTeam(tm.id); setShowCreateProject(true); }}
                                             onViewMembers={() => setViewMembersTeam(tm)}
+                                            onEditMembers={() => setEditMembersTeam(tm)}
+                                            onEditDetails={() => setEditDetailsTeam(tm)}
+                                            onDelete={() => void handleDeleteTeam(tm)}
                                         />
                                     ))}
                                 </div>
@@ -1885,6 +2125,16 @@ const Projects = () => {
             )}
             {viewMembersTeam && (
                 <TeamMembersModal team={viewMembersTeam} isDark={isDark} onClose={() => setViewMembersTeam(null)} />
+            )}
+            {editMembersTeam && (
+                <EditTeamMembersModal team={editMembersTeam} isDark={isDark} allUsers={allUsers}
+                    onClose={() => setEditMembersTeam(null)}
+                    onSaved={() => { fetchTeams(); setToast({ msg: 'Members updated', ok: true }); }} />
+            )}
+            {editDetailsTeam && (
+                <EditTeamModal team={editDetailsTeam} isDark={isDark}
+                    onClose={() => setEditDetailsTeam(null)}
+                    onSaved={() => { fetchTeams(); setToast({ msg: 'Team updated', ok: true }); }} />
             )}
             {toast && <Toast msg={toast.msg} ok={toast.ok} onDone={() => setToast(null)} />}
         </div>

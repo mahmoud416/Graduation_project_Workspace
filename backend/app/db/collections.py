@@ -62,11 +62,12 @@ async def create_indexes(db):
     await _safe_create_index(db[USERS_COLLECTION], "email", unique=True)
     await _safe_create_index(db[USERS_COLLECTION], [("role", 1)])
 
-    # memberships — compound unique per project
+    # memberships — unique per project; team-only memberships (no project_id) are excluded
     await _safe_create_index(
         db[MEMBERSHIPS_COLLECTION],
         [("user_id", 1), ("project_id", 1)],
-        unique=True
+        unique=True,
+        partialFilterExpression={"project_id": {"$exists": True}}
     )
     await _safe_create_index(db[MEMBERSHIPS_COLLECTION], "project_id")
     await _safe_create_index(db[MEMBERSHIPS_COLLECTION], "managed_by")

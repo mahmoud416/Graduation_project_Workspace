@@ -66,9 +66,55 @@ async def register(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
+def _parse_user_agent(ua: str) -> str:
+    """Return a human-friendly browser + OS label."""
+    if not ua:
+        return "Unknown Browser"
+    u = ua.lower()
+
+    if "edg/" in u or "edge/" in u:
+        browser = "Microsoft Edge"
+    elif "brave/" in u:
+        browser = "Brave"
+    elif "opr/" in u or "opera/" in u:
+        browser = "Opera"
+    elif "chrome/" in u and "safari/" in u:
+        browser = "Chrome"
+    elif "firefox/" in u:
+        browser = "Firefox"
+    elif "safari/" in u:
+        browser = "Safari"
+    else:
+        browser = "Browser"
+
+    if "iphone" in u:
+        os_name = "iPhone"
+    elif "ipad" in u:
+        os_name = "iPad"
+    elif "android" in u:
+        os_name = "Android"
+    elif "windows nt 10" in u or "windows nt 11" in u:
+        os_name = "Windows 10/11"
+    elif "windows nt 6.3" in u:
+        os_name = "Windows 8.1"
+    elif "windows nt 6.1" in u:
+        os_name = "Windows 7"
+    elif "windows" in u:
+        os_name = "Windows"
+    elif "mac os x" in u:
+        os_name = "macOS"
+    elif "linux" in u:
+        os_name = "Linux"
+    else:
+        os_name = "Unknown OS"
+
+    return f"{browser} on {os_name}"
+
+
 @router.post("/login")
 async def login(
     credentials: UserLogin,
+    request: Request,
     db=Depends(get_database)
 ):
     """Login with email and password. Returns JWT token."""
@@ -84,6 +130,10 @@ async def login(
             detail="Incorrect email or password"
         )
 
+    raw_ua   = request.headers.get("user-agent", "")
+    friendly = _parse_user_agent(raw_ua)
+    ip_addr  = request.headers.get("x-forwarded-for", request.client.host if request.client else "")
+
     now = datetime.now(timezone.utc)
     await db[USER_SESSIONS_COLLECTION].insert_one({
         "user_id": str(user["_id"]),
@@ -92,7 +142,10 @@ async def login(
         "role": user.get("role"),
         "login_time": now,
         "last_active": now,
-        "duration_minutes": 0
+        "duration_minutes": 0,
+        "user_agent": friendly,
+        "raw_user_agent": raw_ua,
+        "ip_address": ip_addr,
     })
 
     await db[AUDIT_LOGS_COLLECTION].insert_one({
