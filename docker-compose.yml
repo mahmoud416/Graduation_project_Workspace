@@ -1,0 +1,63 @@
+# ──────────────────────────────────────────────────────────────
+# Orbit Workspace — full stack (backend + frontend + MongoDB)
+# Usage:  docker compose up --build
+# ──────────────────────────────────────────────────────────────
+
+services:
+  mongo:
+    image: mongo:7
+    container_name: orbit-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+    image: mahmoud416/orbit-backend:latest
+    container_name: orbit-backend
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    environment:
+      MONGODB_URL: mongodb://mongo:27017
+      MONGODB_DB_NAME: orbitdb
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me-in-production}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.0-flash}
+      ALLOWED_ORIGINS: http://localhost:5173,http://localhost:8080,http://localhost
+      DEBUG: "false"
+    ports:
+      - "8000:8000"
+    volumes:
+      - backend_uploads:/app/uploads
+      - backend_chroma:/app/chroma_data
+
+  frontend:
+    build:
+      context: ./client
+      args:
+        # In compose the SPA talks to the backend through Nginx's reverse proxy,
+        # so relative paths are used.
+        VITE_API_URL: ""
+        VITE_API_BASE: /api/v1
+    image: mahmoud416/orbit-frontend:latest
+    container_name: orbit-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+
+volumes:
+  mongo_data:
+  backend_uploads:
+  backend_chroma:

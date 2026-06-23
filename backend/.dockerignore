@@ -1,0 +1,24 @@
+# Python
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Local secrets & data
+.env
+*.log
+backend.log
+uploads/*
+chroma_data/*
+credentials/
+
+# Tooling
+.git
+.gitignore
+.vscode
+.claude
+tests/
+test_*.py
+README.md
