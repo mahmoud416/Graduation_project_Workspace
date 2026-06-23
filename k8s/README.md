@@ -4,14 +4,21 @@ Docker images, GitHub Actions CI/CD, and Kubernetes manifests for the full stack
 (FastAPI backend + React/Vite frontend, MongoDB Atlas in production).
 
 Docker Hub account: **mahmoud416**
-- Backend image: `mahmoud416/orbit-backend`
-- Frontend image: `mahmoud416/orbit-frontend`
+- Landing image:  `mahmoud416/orbit-landing` (Next.js marketing site — the first page)
+- Frontend image: `mahmoud416/orbit-frontend` (React product app)
+- Backend image:  `mahmoud416/orbit-backend`
+
+### Routing
+- `orbit.example.com`      → landing (marketing) — the entry point
+- `app.orbit.example.com`  → product app (`/login`, `/dashboard`, …) + API/WS
+- The landing "Login / Get Started" buttons link to `app.orbit.example.com/login`
+  via the `NEXT_PUBLIC_APP_URL` build arg (baked at image build time).
 
 ---
 
 ## 1. Local development (Docker Compose)
 
-Runs backend + frontend + a local MongoDB:
+Runs landing + frontend + backend + a local MongoDB:
 
 ```bash
 # from repo root
@@ -20,8 +27,9 @@ export GEMINI_API_KEY="your-key"
 docker compose up --build
 ```
 
-- Frontend → http://localhost:8080
-- Backend  → http://localhost:8000 (docs at /docs)
+- Landing  → http://localhost:8080  ← open this first
+- Frontend → http://localhost:8081  (the "Login" button on the landing points here)
+- Backend  → http://localhost:8000  (docs at /docs)
 - MongoDB  → localhost:27017
 
 The frontend container's Nginx reverse-proxies `/api` and `/ws` to the backend,

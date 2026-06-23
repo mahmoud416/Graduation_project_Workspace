@@ -55,7 +55,22 @@ services:
     depends_on:
       - backend
     ports:
-      - "8080:80"
+      - "8081:80"
+
+  # Marketing landing page — the first page users open.
+  landing:
+    build:
+      context: ./landing
+      args:
+        # "Login / Get Started" buttons point here (the product app).
+        NEXT_PUBLIC_APP_URL: http://localhost:8081
+    image: mahmoud416/orbit-landing:latest
+    container_name: orbit-landing
+    restart: unless-stopped
+    depends_on:
+      - frontend
+    ports:
+      - "8080:3000"
 
 volumes:
   mongo_data:

@@ -8,6 +8,7 @@ resources:
   - backend-config.yaml
   - backend.yaml
   - frontend.yaml
+  - landing.yaml
   - ingress.yaml
   - hpa.yaml
 
@@ -16,4 +17,6 @@ resources:
 #   - name: mahmoud416/orbit-backend
 #     newTag: v1.0.0
 #   - name: mahmoud416/orbit-frontend
+#     newTag: v1.0.0
+#   - name: mahmoud416/orbit-landing
 #     newTag: v1.0.0

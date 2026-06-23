@@ -11,10 +11,23 @@ metadata:
 spec:
   ingressClassName: nginx
   # tls:
-  #   - hosts: ["orbit.example.com"]
+  #   - hosts: ["orbit.example.com", "app.orbit.example.com"]
   #     secretName: orbit-tls
   rules:
+    # ── Marketing landing page (the first page users open) ──────
     - host: orbit.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: landing
+                port:
+                  number: 80
+
+    # ── Product app + API (the "Login" button lands here) ───────
+    - host: app.orbit.example.com
       http:
         paths:
           # REST API → backend
